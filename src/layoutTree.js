@@ -154,7 +154,39 @@ export function layoutTree(people) {
     }
   });
 
+  const childrenByParents = new Map();
+  people.forEach(person => {
+    const parentIds = [...(person.parentIds || [])].filter(id => positions.has(id)).sort();
+    if (!parentIds.length) return;
+    const key = parentIds.join('|');
+    if (!childrenByParents.has(key)) childrenByParents.set(key, { parentIds, children: [] });
+    childrenByParents.get(key).children.push(person);
+  });
+  const familyBranches = [...childrenByParents.values()].map(({ parentIds, children }) => {
+    const parents = parentIds.map(id => positions.get(id));
+    const orderedChildren = children.map(person => positions.get(person.id)).sort((a, b) => a.x - b.x);
+    const partnerEdge = edges.find(edge => edge.kind === 'partner' && parentIds.includes(edge.fromId) && parentIds.includes(edge.toId));
+    const sourceX = partnerEdge
+      ? (partnerEdge.x1 + partnerEdge.x2) / 2
+      : parents.reduce((sum, parent) => sum + parent.x + parent.w / 2, 0) / parents.length;
+    const sourceY = partnerEdge
+      ? (partnerEdge.y1 + partnerEdge.y2) / 2
+      : parents.length > 1
+        ? parents.reduce((sum, parent) => sum + parent.y + parent.h / 2, 0) / parents.length
+        : parents[0].y + 76;
+    const childTop = Math.min(...orderedChildren.map(child => child.y));
+    return {
+      parentIds,
+      children: children.slice().sort((a, b) => positions.get(a.id).x - positions.get(b.id).x).map(person => person.id),
+      sourceX,
+      sourceY,
+      branchY: Math.min(childTop - 24, sourceY + 44),
+      childXs: orderedChildren.map(child => child.x + child.w / 2),
+      childTops: orderedChildren.map(child => child.y)
+    };
+  });
+
   const width = Math.max(800, ...[...positions.values()].map(position => position.x + position.w + 60));
   const height = Math.max(300, ...[...positions.values()].map(position => position.y + position.h + 100));
-  return { positions, edges, width, height, originX, originY, generationCount: maxLevel + 1 };
+  return { positions, edges, familyBranches, width, height, originX, originY, generationCount: maxLevel + 1 };
 }
