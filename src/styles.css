@@ -100,3 +100,5 @@
 .person-form-body::-webkit-scrollbar-track{background:var(--surface-soft);border-radius:6px}
 .person-form-body::-webkit-scrollbar-thumb{background:var(--muted);border:1px solid var(--surface);border-radius:6px}
 .person-form-body::-webkit-scrollbar-thumb:hover{background:var(--text-soft)}
+.family-branch-links .family-route{fill:none;stroke:var(--line);stroke-width:1.25}
+.family-branch-links .family-role{font-size:8px}
