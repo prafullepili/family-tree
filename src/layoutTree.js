@@ -133,7 +133,7 @@ export function layoutTree(people) {
       seenPartners.add(key);
       const left = partner.x < current.x ? partner : current;
       const right = partner.x < current.x ? current : partner;
-      edges.push({ kind: 'partner', fromId: person.id, toId: partnerId, x1: left.x + left.w, y1: left.y + left.h / 2, x2: right.x, y2: right.y + right.h / 2 });
+      edges.push({ kind: 'partner', fromId: left === current ? person.id : partnerId, toId: left === current ? partnerId : person.id, x1: left.x + left.w, y1: left.y + left.h / 2, x2: right.x, y2: right.y + right.h / 2 });
     });
   });
 
