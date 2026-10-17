@@ -14,6 +14,7 @@ const PersonSchema = new mongoose.Schema({
   parentIds: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Person' }], validate: [v => v.length <= 2, 'A person can have at most two parents'] },
   partnerIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Person' }],
   notes: { type: String, trim: true, default: '' },
+  seedKey: { type: String, default: undefined, index: true },
   treeX: { type: Number, default: null },
   treeY: { type: Number, default: null }
 }, { timestamps: true });

@@ -53,4 +53,10 @@
 .tree-scroll{overscroll-behavior:contain;user-select:none}
 .tree-board{margin:0}
 .tree-person,.tree-person-card{touch-action:none}
+.tree-toolbar-actions{display:flex;align-items:center;gap:8px}
+.reset-layout-button{height:29px;display:flex;align-items:center;gap:6px;padding:0 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text-soft);font-size:11px!important}
+.reset-layout-button:hover{border-color:var(--accent);background:var(--accent-bg);color:var(--accent)}
+.stress-test-button{height:29px;display:flex;align-items:center;gap:6px;padding:0 9px;border:1px solid color-mix(in srgb,#bf8a49 40%,var(--border));border-radius:7px;background:color-mix(in srgb,#bf8a49 8%,var(--surface));color:var(--text-soft);font-size:11px!important}
+.stress-test-button:hover{border-color:#bf8a49;background:color-mix(in srgb,#bf8a49 16%,var(--surface));color:var(--text)}
 @media(max-width:1050px){.family-app.sidebar-open.details-open,.family-app.sidebar-open.details-closed{grid-template-columns:220px minmax(0,1fr)}.family-app.sidebar-closed.details-open,.family-app.sidebar-closed.details-closed{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:520px){.tree-toolbar-actions{gap:5px}.reset-layout-button,.stress-test-button{width:30px;justify-content:center;padding:0}.reset-layout-button span,.stress-test-button span{display:none}}
