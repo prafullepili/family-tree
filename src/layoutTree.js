@@ -372,7 +372,8 @@ export function layoutTree(people) {
       children: children.slice().sort((a, b) => positions.get(a.id).x - positions.get(b.id).x).map(person => person.id),
       sourceX,
       sourceY,
-      branchY: Math.min(childTop - 24, sourceY + 44),
+      // Keep the child bus comfortably clear of the partner connector and its label.
+      branchY: Math.min(childTop - 24, sourceY + 60),
       childXs: orderedChildren.map(child => child.x + child.w / 2),
       childTops: orderedChildren.map(child => child.y)
     };
