@@ -33,6 +33,29 @@ function connectRectangles(from, to) {
   return { x1, y1, x2, y2, c1x, c1y, c2x, c2y, fromSide, toSide, labelX, labelY };
 }
 
+function connectParentChild(parent, child) {
+  const parentCenter = parent.x + parent.w / 2;
+  const childCenter = child.x + child.w / 2;
+  const childBelow = child.y >= parent.y + parent.h;
+  const childAbove = child.y + child.h <= parent.y;
+  if (!childBelow && !childAbove) return connectRectangles(parent, child);
+
+  const direction = childBelow ? 1 : -1;
+  const x1 = Math.max(parent.x + 18, Math.min(parent.x + parent.w - 18, childCenter));
+  const y1 = childBelow ? parent.y + parent.h : parent.y;
+  const x2 = Math.max(child.x + 18, Math.min(child.x + child.w - 18, parentCenter));
+  const y2 = childBelow ? child.y : child.y + child.h;
+  const verticalGap = Math.abs(y2 - y1);
+  const reach = Math.min(72, Math.max(20, verticalGap * 0.42));
+  const c1x = x1;
+  const c1y = y1 + direction * reach;
+  const c2x = x2;
+  const c2y = y2 - direction * reach;
+  const labelX = (x1 + 3 * c1x + 3 * c2x + x2) / 8;
+  const labelY = (y1 + 3 * c1y + 3 * c2y + y2) / 8 - 9;
+  return { x1, y1, x2, y2, c1x, c1y, c2x, c2y, fromSide: childBelow ? 'bottom' : 'top', toSide: childBelow ? 'top' : 'bottom', labelX, labelY };
+}
+
 export function layoutTree(people) {
   const representative = new Map(people.map(person => [person.id, person.id]));
   function find(id) {
@@ -259,7 +282,7 @@ export function layoutTree(people) {
     (person.parentIds || []).forEach(parentId => {
       const parent = positions.get(parentId);
       const child = positions.get(person.id);
-      if (parent && child) edges.push({ kind: 'parent', fromId: parentId, toId: person.id, ...connectRectangles(parent, child) });
+      if (parent && child) edges.push({ kind: 'parent', fromId: parentId, toId: person.id, ...connectParentChild(parent, child) });
     });
     (person.partnerIds || []).forEach(partnerId => {
       const partner = positions.get(partnerId);
