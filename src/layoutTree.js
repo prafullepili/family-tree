@@ -1,3 +1,38 @@
+function connectRectangles(from, to) {
+  const fromCenter = { x: from.x + from.w / 2, y: from.y + from.h / 2 };
+  const toCenter = { x: to.x + to.w / 2, y: to.y + to.h / 2 };
+  let dx = toCenter.x - fromCenter.x;
+  let dy = toCenter.y - fromCenter.y;
+  if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) dy = 1;
+  const fromScaleX = (from.w / 2) / Math.max(Math.abs(dx), 0.001);
+  const fromScaleY = (from.h / 2) / Math.max(Math.abs(dy), 0.001);
+  const toScaleX = (to.w / 2) / Math.max(Math.abs(dx), 0.001);
+  const toScaleY = (to.h / 2) / Math.max(Math.abs(dy), 0.001);
+  const fromHorizontal = fromScaleX < fromScaleY;
+  const toHorizontal = toScaleX < toScaleY;
+  const fromScale = Math.min(fromScaleX, fromScaleY);
+  const toScale = Math.min(toScaleX, toScaleY);
+  const x1 = fromCenter.x + dx * fromScale;
+  const y1 = fromCenter.y + dy * fromScale;
+  const x2 = toCenter.x - dx * toScale;
+  const y2 = toCenter.y - dy * toScale;
+  const fromSide = fromHorizontal ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'bottom' : 'top');
+  const toSide = toHorizontal ? (dx > 0 ? 'left' : 'right') : (dy > 0 ? 'top' : 'bottom');
+  const normals = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] };
+  const reach = Math.max(24, Math.min(100, Math.hypot(dx, dy) * 0.32));
+  const [fromNX, fromNY] = normals[fromSide];
+  const [toNX, toNY] = normals[toSide];
+  const c1x = x1 + fromNX * reach;
+  const c1y = y1 + fromNY * reach;
+  const c2x = x2 + toNX * reach;
+  const c2y = y2 + toNY * reach;
+  const t = 0.5;
+  const u = 1 - t;
+  const labelX = u ** 3 * x1 + 3 * u ** 2 * t * c1x + 3 * u * t ** 2 * c2x + t ** 3 * x2;
+  const labelY = u ** 3 * y1 + 3 * u ** 2 * t * c1y + 3 * u * t ** 2 * c2y + t ** 3 * y2 - 9;
+  return { x1, y1, x2, y2, c1x, c1y, c2x, c2y, fromSide, toSide, labelX, labelY };
+}
+
 export function layoutTree(people) {
   const representative = new Map(people.map(person => [person.id, person.id]));
   function find(id) {
@@ -124,7 +159,7 @@ export function layoutTree(people) {
     (person.parentIds || []).forEach(parentId => {
       const parent = positions.get(parentId);
       const child = positions.get(person.id);
-      if (parent && child) edges.push({ kind: 'parent', fromId: parentId, toId: person.id, x1: parent.x + parent.w / 2, y1: parent.y + parent.h, x2: child.x + child.w / 2, y2: child.y });
+      if (parent && child) edges.push({ kind: 'parent', fromId: parentId, toId: person.id, ...connectRectangles(parent, child) });
     });
     (person.partnerIds || []).forEach(partnerId => {
       const partner = positions.get(partnerId);
@@ -132,9 +167,9 @@ export function layoutTree(people) {
       const key = [partnerId, person.id].sort().join(':');
       if (!partner || !current || seenPartners.has(key)) return;
       seenPartners.add(key);
-      const left = partner.x < current.x ? partner : current;
-      const right = partner.x < current.x ? current : partner;
-      edges.push({ kind: 'partner', fromId: left === current ? person.id : partnerId, toId: left === current ? partnerId : person.id, x1: left.x + left.w, y1: left.y + left.h / 2, x2: right.x, y2: right.y + right.h / 2 });
+      const from = partner.x + partner.w / 2 < current.x + current.w / 2 ? partner : current;
+      const to = from === current ? partner : current;
+      edges.push({ kind: 'partner', fromId: from === current ? person.id : partnerId, toId: from === current ? partnerId : person.id, ...connectRectangles(from, to) });
     });
   });
 
@@ -150,7 +185,7 @@ export function layoutTree(people) {
     for (let index = 0; index < ordered.length - 1; index++) {
       const left = positions.get(ordered[index].id);
       const right = positions.get(ordered[index + 1].id);
-      edges.push({ kind: 'sibling', fromId: ordered[index].id, toId: ordered[index + 1].id, x1: left.x + left.w, y1: left.y + left.h / 2, x2: right.x, y2: right.y + right.h / 2 });
+      edges.push({ kind: 'sibling', fromId: ordered[index].id, toId: ordered[index + 1].id, ...connectRectangles(left, right) });
     }
   });
 
