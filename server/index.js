@@ -57,6 +57,13 @@ app.patch('/api/people/layout/positions', async (req, res, next) => { try {
   if (operations.length) await Person.bulkWrite(operations);
   res.json({ modifiedCount: operations.length });
 } catch (e) { next(e); } });
+app.delete('/api/people/batch', async (req, res, next) => { try {
+  const ids = Array.isArray(req.body?.ids) ? [...new Set(req.body.ids.filter(Boolean))] : [];
+  if (!ids.length) return res.status(400).json({ error: 'At least one person id is required.' });
+  const result = await Person.deleteMany({ _id: { $in: ids } });
+  await Person.updateMany({ $or: [{ parentIds: { $in: ids } }, { partnerIds: { $in: ids } }] }, { $pull: { parentIds: { $in: ids }, partnerIds: { $in: ids } } });
+  res.json({ deletedCount: result.deletedCount });
+} catch (e) { next(e); } });
 async function syncPartners(person) {
   await Person.updateMany({ partnerIds: person._id }, { $pull: { partnerIds: person._id } });
   if (person.partnerIds.length) await Person.updateMany({ _id: { $in: person.partnerIds } }, { $addToSet: { partnerIds: person._id } });
