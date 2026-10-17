@@ -123,7 +123,7 @@ export function layoutTree(people) {
     (person.parentIds || []).forEach(parentId => {
       const parent = positions.get(parentId);
       const child = positions.get(person.id);
-      if (parent && child) edges.push({ kind: 'parent', x1: parent.x + parent.w / 2, y1: parent.y + parent.h, x2: child.x + child.w / 2, y2: child.y });
+      if (parent && child) edges.push({ kind: 'parent', fromId: parentId, toId: person.id, x1: parent.x + parent.w / 2, y1: parent.y + parent.h, x2: child.x + child.w / 2, y2: child.y });
     });
     (person.partnerIds || []).forEach(partnerId => {
       const partner = positions.get(partnerId);
@@ -133,7 +133,7 @@ export function layoutTree(people) {
       seenPartners.add(key);
       const left = partner.x < current.x ? partner : current;
       const right = partner.x < current.x ? current : partner;
-      edges.push({ kind: 'partner', x1: left.x + left.w, y1: left.y + left.h / 2, x2: right.x, y2: right.y + right.h / 2 });
+      edges.push({ kind: 'partner', fromId: person.id, toId: partnerId, x1: left.x + left.w, y1: left.y + left.h / 2, x2: right.x, y2: right.y + right.h / 2 });
     });
   });
 
