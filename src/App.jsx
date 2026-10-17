@@ -1,154 +1,1759 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Search, GitFork, UsersRound, Sun, Moon, X, MapPin, CalendarDays, Pencil, Trash2, Eye, EyeOff, ZoomIn, ZoomOut, Maximize2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Heart, Camera, Link2, RotateCcw, Move, Info } from 'lucide-react';
+import {
+  Plus,
+  Search,
+  GitFork,
+  UsersRound,
+  Sun,
+  Moon,
+  X,
+  MapPin,
+  CalendarDays,
+  Pencil,
+  Trash2,
+  Eye,
+  EyeOff,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  Heart,
+  Camera,
+  Link2,
+  RotateCcw,
+  Move,
+  Info,
+} from 'lucide-react';
 import { initialPeople } from './demoFamily.js';
 import { layoutTree } from './layoutTree.js';
 
-const fullName=p=>[p?.firstName,p?.lastName].filter(Boolean).join(' ')||'Unnamed person';
-const initials=p=>`${p?.firstName?.[0]||''}${p?.lastName?.[0]||''}`.toUpperCase()||'?';
-const year=date=>date?new Date(date).getUTCFullYear():'—';
-function relationshipLabel(role,relative,person){if(role==='Parent')return relative?.gender==='male'?'Father':relative?.gender==='female'?'Mother':'Parent';if(role==='Child')return relative?.gender==='male'?'Son':relative?.gender==='female'?'Daughter':'Child';if(role==='Partner'){if(person?.gender==='male'&&relative?.gender==='female')return 'Wife';if(person?.gender==='female'&&relative?.gender==='male')return 'Husband'}return role;}
-function partnerRelationship(person,partnerId){return (person?.partnerRelationships||[]).find(link=>String(link.partnerId)===String(partnerId))?.label||''}
-function partnerDisplayLabel(person,relative){const stored=partnerRelationship(person,relative?.id);return ['','Husband','Wife','Spouse'].includes(stored)?relationshipLabel('Partner',relative,person)||stored||'Partner':stored}
-function descendantIds(people,personId){const childrenByParent=new Map();people.forEach(person=>(person.parentIds||[]).forEach(parentId=>{if(!childrenByParent.has(parentId))childrenByParent.set(parentId,[]);childrenByParent.get(parentId).push(person.id)}));const found=new Set();const queue=[personId];while(queue.length){const parentId=queue.shift();(childrenByParent.get(parentId)||[]).forEach(childId=>{if(childId!==personId&&!found.has(childId)){found.add(childId);queue.push(childId)}})}return [...found]}
-function getMoveBranch(people,personId){const ids=new Set([personId,...descendantIds(people,personId)]);const partnerIds=new Set();people.forEach(person=>{if(ids.has(person.id))(person.partnerIds||[]).forEach(id=>partnerIds.add(id))});partnerIds.forEach(id=>{if(people.some(person=>person.id===id))ids.add(id)});return people.filter(person=>ids.has(person.id))}
-function linkLabelPoint(edge){return{x:edge.labelX,y:edge.labelY}}
-function applyDragPositions(people,drag){if(!drag.familyPositions)return people.map(person=>person.id===drag.id?{...person,treeX:drag.lastX,treeY:drag.lastY}:person);const dx=drag.lastX-drag.x,dy=drag.lastY-drag.y;const starts=new Map(drag.familyPositions.map(position=>[position.id,position]));return people.map(person=>{const start=starts.get(person.id);return start?{...person,treeX:start.x+dx,treeY:start.y+dy}:person})}
-function getFamilyGroups(people){const byId=new Map(people.map(person=>[person.id,person]));const links=new Map(people.map(person=>[person.id,new Set()]));people.forEach(person=>[...(person.parentIds||[]),...(person.partnerIds||[])].forEach(id=>{if(byId.has(id)){links.get(person.id).add(id);links.get(id).add(person.id)}}));const seen=new Set();const groups=[];people.forEach(person=>{if(seen.has(person.id))return;const ids=[];const queue=[person.id];seen.add(person.id);while(queue.length){const id=queue.shift();ids.push(id);(links.get(id)||[]).forEach(next=>{if(!seen.has(next)){seen.add(next);queue.push(next)}})}const members=ids.map(id=>byId.get(id));const surnames=new Map();members.forEach(member=>{const name=member.lastName?.trim();if(name)surnames.set(name,(surnames.get(name)||0)+1)});const surname=[...surnames].sort((a,b)=>b[1]-a[1])[0]?.[0]||members[0]?.firstName||'Family';groups.push({id:members[0]?.id,name:`${surname} family`,people:members})});return groups.sort((a,b)=>a.name.localeCompare(b.name))}
-function fromApi(p){return {...p,id:String(p._id),parentIds:(p.parentIds||[]).map(x=>String(x._id||x)),partnerIds:(p.partnerIds||[]).map(x=>String(x._id||x)),partnerRelationships:(p.partnerRelationships||[]).map(link=>({partnerId:String(link.partnerId?._id||link.partnerId),label:link.label||''})),treeX:p.treeX,treeY:p.treeY,color:['sage','rose','blue','peach','lavender','yellow','mint','pink'][(p.firstName?.charCodeAt(0)||0)%8]}}
-function PersonAvatar({person,size='small'}){return <div className={`person-avatar ${size} ${person?.color||'sage'}`}>{person?.photoUrl?<img src={person.photoUrl} alt=""/>:<span>{initials(person)}</span>}</div>}
-function FamilyBranchLinks({branches,people}){
-  const byId=new Map(people.map(person=>[person.id,person]));
-  return <g className="family-branch-links">{branches.map((branch,index)=>{
-    const bus=`M${branch.sourceX} ${branch.sourceY} V${branch.branchY}`;
-    return <g key={`family-branch-${index}`}><path className="connector family-route" d={bus}/>{branch.childXs.map((x,i)=>{
-      const child=byId.get(branch.children[i]);
-      const label=child?.gender==='male'?'Son':child?.gender==='female'?'Daughter':'Child';
-      const childTop=branch.childTops[i];
-      const curvesLeft=x<branch.sourceX;
-      const curve=curvesLeft?`M${x} ${childTop} C${x} ${childTop-42} ${branch.sourceX} ${branch.branchY+24} ${branch.sourceX} ${branch.branchY}`:`M${branch.sourceX} ${branch.branchY} C${branch.sourceX} ${branch.branchY+24} ${x} ${childTop-42} ${x} ${childTop}`;
-      const labelX=(x+branch.sourceX)/2;
-      const labelY=(childTop+branch.branchY)/2-7;
-      return <g key={branch.children[i]}><path className="connector family-route family-drop" d={curve} markerStart={curvesLeft?'url(#family-link-arrow)':undefined} markerEnd={!curvesLeft?'url(#family-link-arrow)':undefined}/><text className="connector-relation family-role" x={labelX} y={labelY} textAnchor="middle" dominantBaseline="central"><title>{label}</title>{label}</text></g>
-    })}</g>
-  })}</g>
+const fullName = (p) => [p?.firstName, p?.lastName].filter(Boolean).join(' ') || 'Unnamed person';
+const initials = (p) => `${p?.firstName?.[0] || ''}${p?.lastName?.[0] || ''}`.toUpperCase() || '?';
+const year = (date) => (date ? new Date(date).getUTCFullYear() : '—');
+function relationshipLabel(role, relative, person) {
+  if (role === 'Parent') return relative?.gender === 'male' ? 'Father' : relative?.gender === 'female' ? 'Mother' : 'Parent';
+  if (role === 'Child') return relative?.gender === 'male' ? 'Son' : relative?.gender === 'female' ? 'Daughter' : 'Child';
+  if (role === 'Partner') {
+    if (person?.gender === 'male' && relative?.gender === 'female') return 'Wife';
+    if (person?.gender === 'female' && relative?.gender === 'male') return 'Husband';
+  }
+  return role;
+}
+function partnerRelationship(person, partnerId) {
+  return (person?.partnerRelationships || []).find((link) => String(link.partnerId) === String(partnerId))?.label || '';
+}
+function partnerDisplayLabel(person, relative) {
+  const stored = partnerRelationship(person, relative?.id);
+  return ['', 'Husband', 'Wife', 'Spouse'].includes(stored) ? relationshipLabel('Partner', relative, person) || stored || 'Partner' : stored;
+}
+function descendantIds(people, personId) {
+  const childrenByParent = new Map();
+  people.forEach((person) =>
+    (person.parentIds || []).forEach((parentId) => {
+      if (!childrenByParent.has(parentId)) childrenByParent.set(parentId, []);
+      childrenByParent.get(parentId).push(person.id);
+    }),
+  );
+  const found = new Set();
+  const queue = [personId];
+  while (queue.length) {
+    const parentId = queue.shift();
+    (childrenByParent.get(parentId) || []).forEach((childId) => {
+      if (childId !== personId && !found.has(childId)) {
+        found.add(childId);
+        queue.push(childId);
+      }
+    });
+  }
+  return [...found];
+}
+function getMoveBranch(people, personId) {
+  const ids = new Set([personId, ...descendantIds(people, personId)]);
+  const partnerIds = new Set();
+  people.forEach((person) => {
+    if (ids.has(person.id)) (person.partnerIds || []).forEach((id) => partnerIds.add(id));
+  });
+  partnerIds.forEach((id) => {
+    if (people.some((person) => person.id === id)) ids.add(id);
+  });
+  return people.filter((person) => ids.has(person.id));
+}
+function linkLabelPoint(edge) {
+  return { x: edge.labelX, y: edge.labelY };
+}
+function applyDragPositions(people, drag) {
+  if (!drag.familyPositions) return people.map((person) => (person.id === drag.id ? { ...person, treeX: drag.lastX, treeY: drag.lastY } : person));
+  const dx = drag.lastX - drag.x,
+    dy = drag.lastY - drag.y;
+  const starts = new Map(drag.familyPositions.map((position) => [position.id, position]));
+  return people.map((person) => {
+    const start = starts.get(person.id);
+    return start ? { ...person, treeX: start.x + dx, treeY: start.y + dy } : person;
+  });
+}
+function getFamilyGroups(people) {
+  const byId = new Map(people.map((person) => [person.id, person]));
+  const links = new Map(people.map((person) => [person.id, new Set()]));
+  people.forEach((person) =>
+    [...(person.parentIds || []), ...(person.partnerIds || [])].forEach((id) => {
+      if (byId.has(id)) {
+        links.get(person.id).add(id);
+        links.get(id).add(person.id);
+      }
+    }),
+  );
+  const seen = new Set();
+  const groups = [];
+  people.forEach((person) => {
+    if (seen.has(person.id)) return;
+    const ids = [];
+    const queue = [person.id];
+    seen.add(person.id);
+    while (queue.length) {
+      const id = queue.shift();
+      ids.push(id);
+      (links.get(id) || []).forEach((next) => {
+        if (!seen.has(next)) {
+          seen.add(next);
+          queue.push(next);
+        }
+      });
+    }
+    const members = ids.map((id) => byId.get(id));
+    const surnames = new Map();
+    members.forEach((member) => {
+      const name = member.lastName?.trim();
+      if (name) surnames.set(name, (surnames.get(name) || 0) + 1);
+    });
+    const surname = [...surnames].sort((a, b) => b[1] - a[1])[0]?.[0] || members[0]?.firstName || 'Family';
+    groups.push({ id: members[0]?.id, name: `${surname} family`, people: members });
+  });
+  return groups.sort((a, b) => a.name.localeCompare(b.name));
+}
+function fromApi(p) {
+  return {
+    ...p,
+    id: String(p._id),
+    parentIds: (p.parentIds || []).map((x) => String(x._id || x)),
+    partnerIds: (p.partnerIds || []).map((x) => String(x._id || x)),
+    partnerRelationships: (p.partnerRelationships || []).map((link) => ({
+      partnerId: String(link.partnerId?._id || link.partnerId),
+      label: link.label || '',
+    })),
+    treeX: p.treeX,
+    treeY: p.treeY,
+    color: ['sage', 'rose', 'blue', 'peach', 'lavender', 'yellow', 'mint', 'pink'][(p.firstName?.charCodeAt(0) || 0) % 8],
+  };
+}
+function PersonAvatar({ person, size = 'small' }) {
+  return <div className={`person-avatar ${size} ${person?.color || 'sage'}`}>{person?.photoUrl ? <img src={person.photoUrl} alt="" /> : <span>{initials(person)}</span>}</div>;
+}
+function FamilyBranchLinks({ branches, people }) {
+  const byId = new Map(people.map((person) => [person.id, person]));
+  return (
+    <g className="family-branch-links">
+      {branches.map((branch, index) => {
+        const bus = `M${branch.sourceX} ${branch.sourceY} V${branch.branchY}`;
+        return (
+          <g key={`family-branch-${index}`}>
+            <path className="connector family-route" d={bus} />
+            {branch.childXs.map((x, i) => {
+              const child = byId.get(branch.children[i]);
+              const label = child?.gender === 'male' ? 'Son' : child?.gender === 'female' ? 'Daughter' : 'Child';
+              const childTop = branch.childTops[i];
+              const curvesLeft = x < branch.sourceX;
+              const curve = curvesLeft
+                ? `M${x} ${childTop} C${x} ${childTop - 42} ${branch.sourceX} ${branch.branchY + 24} ${branch.sourceX} ${branch.branchY}`
+                : `M${branch.sourceX} ${branch.branchY} C${branch.sourceX} ${branch.branchY + 24} ${x} ${childTop - 42} ${x} ${childTop}`;
+              const labelX = (x + branch.sourceX) / 2;
+              const labelY = (childTop + branch.branchY) / 2 - 7;
+              return (
+                <g key={branch.children[i]}>
+                  <path
+                    className="connector family-route family-drop"
+                    d={curve}
+                    markerStart={curvesLeft ? 'url(#family-link-arrow)' : undefined}
+                    markerEnd={!curvesLeft ? 'url(#family-link-arrow)' : undefined}
+                  />
+                  <text className="connector-relation family-role" x={labelX} y={labelY} textAnchor="middle" dominantBaseline="central">
+                    <title>{label}</title>
+                    {label}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+        );
+      })}
+    </g>
+  );
 }
 
-export default function App(){
-  const [people,setPeople]=useState(initialPeople);
-  const memberList=useRef(null);
-  const [selectedFamilyId,setSelectedFamilyId]=useState('');const [familyPickerOpen,setFamilyPickerOpen]=useState(false);const [familyQuery,setFamilyQuery]=useState('');const [linkStyle,setLinkStyle]=useState(()=>['direct','classic'].includes(localStorage.getItem('kinfolk-link-style'))?localStorage.getItem('kinfolk-link-style'):'classic');const hoverSelectTimer=useRef(0);const [moveFamily,setMoveFamily]=useState(false);const moveFamilyRef=useRef(false);
-  const [selectedId,setSelectedId]=useState('p5');const [selectedNodeIds,setSelectedNodeIds]=useState([]);const [theme,setTheme]=useState(()=>localStorage.getItem('kinfolk-theme')||'light');const [sidebarOpen,setSidebarOpen]=useState(()=>window.innerWidth>800);const [detailsOpen,setDetailsOpen]=useState(false);const [mobileDetailsOpen,setMobileDetailsOpen]=useState(false);const [detailsWidth,setDetailsWidth]=useState(()=>{const saved=Number(localStorage.getItem('kinfolk-details-width'));return Number.isFinite(saved)&&saved>=286&&saved<=620?saved:390});const detailsResize=useRef(null);const [zoom,setZoom]=useState(1);const [fitAfterReset,setFitAfterReset]=useState(false);const [query,setQuery]=useState('');const [modal,setModal]=useState(null);const [addMenuId,setAddMenuId]=useState('');const [toast,setToast]=useState('');const [apiState,setApiState]=useState('checking');const [confirmDelete,setConfirmDelete]=useState(false);const [deleteDescendants,setDeleteDescendants]=useState(()=>localStorage.getItem('kinfolk-delete-descendants')==='true');const drag=useRef(null);const pinch=useRef(null);const zoomFrame=useRef(0);const pendingZoom=useRef(null);const zoomValue=useRef(1);const pendingZoomAnchor=useRef(null);const treeScroll=useRef(null);const previousOrigin=useRef(null);
-  const families=useMemo(()=>getFamilyGroups(people),[people]);const selectedFamily=selectedFamilyId==='__all__'?null:families.find(group=>group.id===selectedFamilyId)||[...families].sort((a,b)=>b.people.length-a.people.length)[0];const familyPeople=selectedFamilyId==='__all__'?people:(selectedFamily?.people||people);
-  const selected=people.find(p=>p.id===selectedId)||null;const byId=id=>people.find(p=>p.id===id);const layout=useMemo(()=>layoutTree(familyPeople),[familyPeople]);const filtered=useMemo(()=>{const matches=familyPeople.filter(p=>fullName(p).toLowerCase().includes(query.toLowerCase()));return matches},[query,familyPeople]);const selectedDescendants=selected?descendantIds(people,selected.id):[];
-  const deleteShortcutState=useRef(null);deleteShortcutState.current={selectedId,selectedNodeIds,confirmDelete,modal,familyPeople};
-  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('kinfolk-theme',theme)},[theme]);
-  useEffect(()=>{localStorage.setItem('kinfolk-details-width',String(detailsWidth))},[detailsWidth]);
-  function beginDetailsResize(event){if(window.innerWidth<=1050)return;event.preventDefault();detailsResize.current={startX:event.clientX,startWidth:detailsWidth};event.currentTarget.setPointerCapture(event.pointerId)}
-  function moveDetailsResize(event){if(!detailsResize.current)return;setDetailsWidth(Math.max(286,Math.min(620,detailsResize.current.startWidth+detailsResize.current.startX-event.clientX)))}
-  function endDetailsResize(){detailsResize.current=null}
-  function handleDetailsResizeKey(event){const delta=event.key==='ArrowLeft'?16:event.key==='ArrowRight'?-16:0;if(delta){event.preventDefault();setDetailsWidth(width=>Math.max(286,Math.min(620,width+delta)))}else if(event.key==='Home'||event.key==='End'){event.preventDefault();setDetailsWidth(event.key==='Home'?286:620)}}
-  useEffect(()=>{localStorage.setItem('kinfolk-link-style',linkStyle)},[linkStyle]);
-  useLayoutEffect(()=>{zoomValue.current=zoom;const anchor=pendingZoomAnchor.current;if(!anchor)return;const viewport=treeScroll.current;if(viewport){const rect=viewport.getBoundingClientRect();viewport.scrollLeft=Math.max(0,anchor.x*zoom-(anchor.clientX-rect.left));viewport.scrollTop=Math.max(0,anchor.y*zoom-(anchor.clientY-rect.top))}pendingZoomAnchor.current=null},[zoom]);
-  useEffect(()=>{const viewport=treeScroll.current;if(!viewport)return;const onWheel=e=>{if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();e.stopPropagation();const baseZoom=pendingZoom.current?.nextZoom??zoomValue.current;zoomAround(e.clientX,e.clientY,Math.max(.35,Math.min(2,baseZoom*Math.exp(-e.deltaY*.01))))};viewport.addEventListener('wheel',onWheel,{passive:false});return()=>viewport.removeEventListener('wheel',onWheel)},[zoomAround]);
-  useEffect(()=>{if(!sidebarOpen||!selectedId)return;memberList.current?.querySelector('.member-list-item.active')?.scrollIntoView({block:'nearest',behavior:'smooth'})},[selectedId,sidebarOpen]);
-  useEffect(()=>{setSelectedNodeIds([])},[selectedFamilyId]);
-  useEffect(()=>{if(!fitAfterReset)return;const viewport=treeScroll.current;if(!viewport)return;const availableWidth=Math.max(1,viewport.clientWidth-48);const availableHeight=Math.max(1,viewport.clientHeight-48);const fittedZoom=Math.max(.35,Math.min(1,availableWidth/layout.width,availableHeight/layout.height));zoomValue.current=fittedZoom;setZoom(fittedZoom);requestAnimationFrame(()=>{viewport.scrollLeft=0;viewport.scrollTop=0});setFitAfterReset(false)},[fitAfterReset,layout.width,layout.height]);
-  useEffect(()=>()=>{if(hoverSelectTimer.current)clearTimeout(hoverSelectTimer.current)},[]);
-  useEffect(()=>{localStorage.setItem('kinfolk-delete-descendants',String(deleteDescendants))},[deleteDescendants]);
-  useEffect(()=>{setPeople(previous=>{const removed=new Set(previous.filter(person=>String(person.id).startsWith('stress-')).map(person=>person.id));if(!removed.size)return previous;return previous.filter(person=>!removed.has(person.id)).map(person=>({...person,parentIds:(person.parentIds||[]).filter(id=>!removed.has(id)),partnerIds:(person.partnerIds||[]).filter(id=>!removed.has(id))}))})},[]);
-  useEffect(()=>{const previous=previousOrigin.current;if(previous&&drag.current?.moved&&treeScroll.current){treeScroll.current.scrollLeft+=(layout.originX-previous.x)*zoom;treeScroll.current.scrollTop+=(layout.originY-previous.y)*zoom}previousOrigin.current={x:layout.originX,y:layout.originY}},[layout.originX,layout.originY,zoom]);
-  useEffect(()=>{if(apiState!=='demo')return;const timer=setTimeout(()=>localStorage.setItem('kinfolk-demo-people',JSON.stringify(people)),250);return()=>clearTimeout(timer)},[people,apiState]);
-  useEffect(()=>{let active=true;(async()=>{try{let ready=false;for(let i=0;i<8;i++){const h=await fetch('/api/health');if(!h.ok)throw Error();const state=await h.json();if(!state.configured){if(active)setApiState('demo');return}if(state.database==='connected'){ready=true;break}if(i<7)await new Promise(r=>setTimeout(r,1000))}if(!ready)throw Error();const seeded=await fetch('/api/people/seed-extended',{method:'POST'});if(!seeded.ok)throw Error();const response=await fetch('/api/people');if(!response.ok)throw Error();const rows=(await response.json()).map(fromApi);if(active){setPeople(rows);setSelectedId(rows[0]?.id||'');setApiState('connected')}}catch{if(active)setApiState('demo')}})();return()=>{active=false}},[]);
-  function notify(text){setToast(text);setTimeout(()=>setToast(''),2600)}
-  function findOpenTreePosition(kind,reference){const anchor=layout.positions.get(reference.id);if(!anchor)return{};const width=196,height=82,gap=kind==='partner'?184:kind==='sibling'?120:44,levelStep=190,stepSize=width+gap;const y=anchor.rawY+(kind==='child'?levelStep:kind==='parent'?-levelStep:0);const occupied=[...layout.positions.values()];const candidates=[];if(kind==='sibling'||kind==='partner'){for(let step=1;step<=occupied.length+1;step++)candidates.push(anchor.rawX+step*stepSize)}else{for(let step=0;step<=occupied.length;step++){const offset=step*stepSize;if(step===0)candidates.push(anchor.rawX);else candidates.push(anchor.rawX+offset,anchor.rawX-offset)}}const x=candidates.find(candidate=>occupied.every(position=>Math.abs(y-position.rawY)>=height+20||candidate>=position.rawX+position.w+gap||candidate+width+gap<=position.rawX));return{treeX:x??anchor.rawX+stepSize,treeY:y}}
-  async function refreshPeople(){const r=await fetch('/api/people');if(!r.ok)throw Error('Could not reload your family tree');return(await r.json()).map(fromApi)}
-  async function saveMember(values){const prior=modal.person;const placement=!prior&&modal.parent&&['parent','partner','child','sibling'].includes(modal.kind)?findOpenTreePosition(modal.kind,modal.parent):{};const payload={...values,...placement,parentIds:(values.parentIds||[]).filter(id=>people.some(p=>p.id===id&&p._id)),partnerIds:(values.partnerIds||[]).filter(id=>people.some(p=>p.id===id&&p._id)),partnerRelationships:(values.partnerRelationships||[]).filter(link=>(values.partnerIds||[]).includes(link.partnerId)&&people.some(p=>p.id===link.partnerId&&p._id))};
-    if(apiState==='connected'){try{const r=await fetch(prior?`/api/people/${prior._id}`:'/api/people',{method:prior?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await r.json();if(!r.ok)throw Error(data.error||'Could not save this person');const saved=fromApi(data);if(!prior&&modal.kind==='parent'&&modal.parent?._id){const link=await fetch(`/api/people/${modal.parent._id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({parentIds:[...(modal.parent.parentIds||[]),saved.id]})});if(!link.ok)throw Error('Person saved, but the parent link could not be saved')}const rows=await refreshPeople();setPeople(rows);setSelectedId(saved.id);setModal(null);notify(prior?'Person updated':'Person added to the tree')}catch(e){notify(e.message)}return}
-    const id=prior?.id||`local-${Date.now()}`;const newPerson={...prior,...values,...placement,id,_id:null,color:prior?.color||['sage','rose','blue','peach','lavender','yellow','mint','pink'][people.length%8]};let rows=prior?people.map(p=>p.id===id?newPerson:p):[...people,newPerson];rows=rows.map(p=>{if(p.id===id)return p;const next=(values.partnerIds||[]).includes(p.id);const relationship=(values.partnerRelationships||[]).find(link=>link.partnerId===p.id)?.label;const partnerRelationships=(p.partnerRelationships||[]).filter(link=>link.partnerId!==id);if(next)return {...p,partnerIds:[...new Set([...(p.partnerIds||[]),id])],partnerRelationships:relationship?[...partnerRelationships,{partnerId:id,label:relationship}]:partnerRelationships};if((prior?.partnerIds||[]).includes(p.id))return {...p,partnerIds:(p.partnerIds||[]).filter(x=>x!==id),partnerRelationships};return p});if(!prior&&modal.kind==='parent'&&modal.parent)rows=rows.map(p=>p.id===modal.parent.id?{...p,parentIds:[...new Set([...(p.parentIds||[]),id])]}:p);setPeople(rows);setSelectedId(id);setModal(null);notify(prior?'Person updated for this browser':'Person added for this browser');
+export default function App() {
+  const [people, setPeople] = useState(initialPeople);
+  const memberList = useRef(null);
+  const [selectedFamilyId, setSelectedFamilyId] = useState('');
+  const [familyPickerOpen, setFamilyPickerOpen] = useState(false);
+  const [familyQuery, setFamilyQuery] = useState('');
+  const [linkStyle, setLinkStyle] = useState(() => (['direct', 'classic'].includes(localStorage.getItem('kinfolk-link-style')) ? localStorage.getItem('kinfolk-link-style') : 'classic'));
+  const hoverSelectTimer = useRef(0);
+  const [moveFamily, setMoveFamily] = useState(false);
+  const moveFamilyRef = useRef(false);
+  const [selectedId, setSelectedId] = useState('p5');
+  const [selectedNodeIds, setSelectedNodeIds] = useState([]);
+  const [theme, setTheme] = useState(() => localStorage.getItem('kinfolk-theme') || 'light');
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 800);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
+  const [detailsWidth, setDetailsWidth] = useState(() => {
+    const saved = Number(localStorage.getItem('kinfolk-details-width'));
+    return Number.isFinite(saved) && saved >= 286 && saved <= 620 ? saved : 390;
+  });
+  const detailsResize = useRef(null);
+  const [zoom, setZoom] = useState(1);
+  const [fitAfterReset, setFitAfterReset] = useState(false);
+  const [query, setQuery] = useState('');
+  const [modal, setModal] = useState(null);
+  const [addMenuId, setAddMenuId] = useState('');
+  const [toast, setToast] = useState('');
+  const [apiState, setApiState] = useState('checking');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteDescendants, setDeleteDescendants] = useState(() => localStorage.getItem('kinfolk-delete-descendants') === 'true');
+  const drag = useRef(null);
+  const pinch = useRef(null);
+  const zoomFrame = useRef(0);
+  const pendingZoom = useRef(null);
+  const zoomValue = useRef(1);
+  const pendingZoomAnchor = useRef(null);
+  const treeScroll = useRef(null);
+  const previousOrigin = useRef(null);
+  const families = useMemo(() => getFamilyGroups(people), [people]);
+  const selectedFamily = selectedFamilyId === '__all__' ? null : families.find((group) => group.id === selectedFamilyId) || [...families].sort((a, b) => b.people.length - a.people.length)[0];
+  const familyPeople = selectedFamilyId === '__all__' ? people : selectedFamily?.people || people;
+  const selected = people.find((p) => p.id === selectedId) || null;
+  const byId = (id) => people.find((p) => p.id === id);
+  const layout = useMemo(() => layoutTree(familyPeople), [familyPeople]);
+  const filtered = useMemo(() => {
+    const matches = familyPeople.filter((p) => fullName(p).toLowerCase().includes(query.toLowerCase()));
+    return matches;
+  }, [query, familyPeople]);
+  const selectedDescendants = selected ? descendantIds(people, selected.id) : [];
+  const deleteShortcutState = useRef(null);
+  deleteShortcutState.current = { selectedId, selectedNodeIds, confirmDelete, modal, familyPeople };
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('kinfolk-theme', theme);
+  }, [theme]);
+  useEffect(() => {
+    localStorage.setItem('kinfolk-details-width', String(detailsWidth));
+  }, [detailsWidth]);
+  function beginDetailsResize(event) {
+    if (window.innerWidth <= 1050) return;
+    event.preventDefault();
+    detailsResize.current = { startX: event.clientX, startWidth: detailsWidth };
+    event.currentTarget.setPointerCapture(event.pointerId);
   }
-  async function removePerson(){
-    if(!selected)return;
-    const isBulkSelection=selectedNodeIds.length>1;
-    try{
-      const removalIds=new Set(isBulkSelection?selectedNodeIds:[selected.id,...(deleteDescendants?selectedDescendants:[])]);
-      const removedPeople=people.filter(person=>removalIds.has(person.id));
-      const rows=people.filter(person=>!removalIds.has(person.id)).map(person=>{
-        const position=layout.positions.get(person.id);
-        return {...person,parentIds:(person.parentIds||[]).filter(id=>!removalIds.has(id)),partnerIds:(person.partnerIds||[]).filter(id=>!removalIds.has(id)),partnerRelationships:(person.partnerRelationships||[]).filter(link=>!removalIds.has(link.partnerId)),treeX:position?position.x-60:person.treeX,treeY:position?position.y-56:person.treeY};
-      });
-      if(apiState==='connected'){
-        const positions=rows.filter(person=>person._id).map(person=>({id:person._id,treeX:person.treeX,treeY:person.treeY}));
-        const saved=await fetch('/api/people/layout/positions',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({positions})});
-        if(!saved.ok)throw Error('Could not preserve the current tree layout');
-        const ids=removedPeople.filter(person=>person._id).map(person=>person._id);
-        if(ids.length){const response=await fetch('/api/people/batch',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});if(!response.ok)throw Error('Could not delete the selected people');}
+  function moveDetailsResize(event) {
+    if (!detailsResize.current) return;
+    setDetailsWidth(Math.max(286, Math.min(620, detailsResize.current.startWidth + detailsResize.current.startX - event.clientX)));
+  }
+  function endDetailsResize() {
+    detailsResize.current = null;
+  }
+  function handleDetailsResizeKey(event) {
+    const delta = event.key === 'ArrowLeft' ? 16 : event.key === 'ArrowRight' ? -16 : 0;
+    if (delta) {
+      event.preventDefault();
+      setDetailsWidth((width) => Math.max(286, Math.min(620, width + delta)));
+    } else if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      setDetailsWidth(event.key === 'Home' ? 286 : 620);
+    }
+  }
+  useEffect(() => {
+    localStorage.setItem('kinfolk-link-style', linkStyle);
+  }, [linkStyle]);
+  useLayoutEffect(() => {
+    zoomValue.current = zoom;
+    const anchor = pendingZoomAnchor.current;
+    if (!anchor) return;
+    const viewport = treeScroll.current;
+    if (viewport) {
+      const rect = viewport.getBoundingClientRect();
+      viewport.scrollLeft = Math.max(0, anchor.x * zoom - (anchor.clientX - rect.left));
+      viewport.scrollTop = Math.max(0, anchor.y * zoom - (anchor.clientY - rect.top));
+    }
+    pendingZoomAnchor.current = null;
+  }, [zoom]);
+  useEffect(() => {
+    const viewport = treeScroll.current;
+    if (!viewport) return;
+    const onWheel = (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const baseZoom = pendingZoom.current?.nextZoom ?? zoomValue.current;
+      zoomAround(e.clientX, e.clientY, Math.max(0.35, Math.min(2, baseZoom * Math.exp(-e.deltaY * 0.01))));
+    };
+    viewport.addEventListener('wheel', onWheel, { passive: false });
+    return () => viewport.removeEventListener('wheel', onWheel);
+  }, [zoomAround]);
+  useEffect(() => {
+    if (!sidebarOpen || !selectedId) return;
+    memberList.current?.querySelector('.member-list-item.active')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selectedId, sidebarOpen]);
+  useEffect(() => {
+    setSelectedNodeIds([]);
+  }, [selectedFamilyId]);
+  useEffect(() => {
+    if (!fitAfterReset) return;
+    const viewport = treeScroll.current;
+    if (!viewport) return;
+    const availableWidth = Math.max(1, viewport.clientWidth - 48);
+    const availableHeight = Math.max(1, viewport.clientHeight - 48);
+    const fittedZoom = Math.max(0.35, Math.min(1, availableWidth / layout.width, availableHeight / layout.height));
+    zoomValue.current = fittedZoom;
+    setZoom(fittedZoom);
+    requestAnimationFrame(() => {
+      viewport.scrollLeft = 0;
+      viewport.scrollTop = 0;
+    });
+    setFitAfterReset(false);
+  }, [fitAfterReset, layout.width, layout.height]);
+  useEffect(
+    () => () => {
+      if (hoverSelectTimer.current) clearTimeout(hoverSelectTimer.current);
+    },
+    [],
+  );
+  useEffect(() => {
+    localStorage.setItem('kinfolk-delete-descendants', String(deleteDescendants));
+  }, [deleteDescendants]);
+  useEffect(() => {
+    setPeople((previous) => {
+      const removed = new Set(previous.filter((person) => String(person.id).startsWith('stress-')).map((person) => person.id));
+      if (!removed.size) return previous;
+      return previous
+        .filter((person) => !removed.has(person.id))
+        .map((person) => ({
+          ...person,
+          parentIds: (person.parentIds || []).filter((id) => !removed.has(id)),
+          partnerIds: (person.partnerIds || []).filter((id) => !removed.has(id)),
+        }));
+    });
+  }, []);
+  useEffect(() => {
+    const previous = previousOrigin.current;
+    if (previous && drag.current?.moved && treeScroll.current) {
+      treeScroll.current.scrollLeft += (layout.originX - previous.x) * zoom;
+      treeScroll.current.scrollTop += (layout.originY - previous.y) * zoom;
+    }
+    previousOrigin.current = { x: layout.originX, y: layout.originY };
+  }, [layout.originX, layout.originY, zoom]);
+  useEffect(() => {
+    if (apiState !== 'demo') return;
+    const timer = setTimeout(() => localStorage.setItem('kinfolk-demo-people', JSON.stringify(people)), 250);
+    return () => clearTimeout(timer);
+  }, [people, apiState]);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        let ready = false;
+        for (let i = 0; i < 8; i++) {
+          const h = await fetch('/api/health');
+          if (!h.ok) throw Error();
+          const state = await h.json();
+          if (!state.configured) {
+            if (active) setApiState('demo');
+            return;
+          }
+          if (state.database === 'connected') {
+            ready = true;
+            break;
+          }
+          if (i < 7) await new Promise((r) => setTimeout(r, 1000));
+        }
+        if (!ready) throw Error();
+        const seeded = await fetch('/api/people/seed-extended', { method: 'POST' });
+        if (!seeded.ok) throw Error();
+        const response = await fetch('/api/people');
+        if (!response.ok) throw Error();
+        const rows = (await response.json()).map(fromApi);
+        if (active) {
+          setPeople(rows);
+          setSelectedId(rows[0]?.id || '');
+          setApiState('connected');
+        }
+      } catch {
+        if (active) setApiState('demo');
       }
-      setPeople(rows);setSelectedId(rows[0]?.id||'');setSelectedNodeIds([]);setConfirmDelete(false);
-      notify(`Removed ${removedPeople.length} ${removedPeople.length===1?'person':'people'}; others stayed in place`);
-    }catch(error){notify(error.message)}
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+  function notify(text) {
+    setToast(text);
+    setTimeout(() => setToast(''), 2600);
   }
-  useEffect(()=>{if(!confirmDelete||!selected)return;const onKeyDown=event=>{if(event.repeat)return;if(event.key==='Enter'){event.preventDefault();event.stopPropagation();removePerson()}else if(event.key==='Escape'){event.preventDefault();setConfirmDelete(false)}};window.addEventListener('keydown',onKeyDown);return()=>window.removeEventListener('keydown',onKeyDown)},[confirmDelete,selectedId,selectedNodeIds,deleteDescendants,people,apiState,layout]);
-  useEffect(()=>{
-    const onKeyDown=event=>{
-      const state=deleteShortcutState.current;
-      if(!state||state.confirmDelete||state.modal||event.repeat||event.altKey)return;
-      const target=event.target;
-      if(target?.isContentEditable||['INPUT','TEXTAREA','SELECT'].includes(target?.tagName)||target?.closest?.('[contenteditable="true"]'))return;
-      const key=String(event.key||'').toLowerCase();
-      if((event.ctrlKey||event.metaKey)&&key==='a'){
-        if(!state.familyPeople.length)return;
-        event.preventDefault();event.stopImmediatePropagation();
-        const ids=state.familyPeople.map(person=>person.id);
-        setSelectedNodeIds(ids);setSelectedId(ids[0]||'');setDetailsOpen(false);setMobileDetailsOpen(false);
+  function findOpenTreePosition(kind, reference) {
+    const anchor = layout.positions.get(reference.id);
+    if (!anchor) return {};
+    const width = 196,
+      height = 82,
+      gap = kind === 'partner' ? 184 : kind === 'sibling' ? 120 : 44,
+      levelStep = 190,
+      stepSize = width + gap;
+    const y = anchor.rawY + (kind === 'child' ? levelStep : kind === 'parent' ? -levelStep : 0);
+    const occupied = [...layout.positions.values()];
+    const candidates = [];
+    if (kind === 'sibling' || kind === 'partner') {
+      for (let step = 1; step <= occupied.length + 1; step++) candidates.push(anchor.rawX + step * stepSize);
+    } else {
+      for (let step = 0; step <= occupied.length; step++) {
+        const offset = step * stepSize;
+        if (step === 0) candidates.push(anchor.rawX);
+        else candidates.push(anchor.rawX + offset, anchor.rawX - offset);
+      }
+    }
+    const x = candidates.find((candidate) =>
+      occupied.every((position) => Math.abs(y - position.rawY) >= height + 20 || candidate >= position.rawX + position.w + gap || candidate + width + gap <= position.rawX),
+    );
+    return { treeX: x ?? anchor.rawX + stepSize, treeY: y };
+  }
+  async function refreshPeople() {
+    const r = await fetch('/api/people');
+    if (!r.ok) throw Error('Could not reload your family tree');
+    return (await r.json()).map(fromApi);
+  }
+  async function saveMember(values) {
+    const prior = modal.person;
+    const placement = !prior && modal.parent && ['parent', 'partner', 'child', 'sibling'].includes(modal.kind) ? findOpenTreePosition(modal.kind, modal.parent) : {};
+    const payload = {
+      ...values,
+      ...placement,
+      parentIds: (values.parentIds || []).filter((id) => people.some((p) => p.id === id && p._id)),
+      partnerIds: (values.partnerIds || []).filter((id) => people.some((p) => p.id === id && p._id)),
+      partnerRelationships: (values.partnerRelationships || []).filter((link) => (values.partnerIds || []).includes(link.partnerId) && people.some((p) => p.id === link.partnerId && p._id)),
+    };
+    if (apiState === 'connected') {
+      try {
+        const r = await fetch(prior ? `/api/people/${prior._id}` : '/api/people', {
+          method: prior ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await r.json();
+        if (!r.ok) throw Error(data.error || 'Could not save this person');
+        const saved = fromApi(data);
+        if (!prior && modal.kind === 'parent' && modal.parent?._id) {
+          const link = await fetch(`/api/people/${modal.parent._id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ parentIds: [...(modal.parent.parentIds || []), saved.id] }),
+          });
+          if (!link.ok) throw Error('Person saved, but the parent link could not be saved');
+        }
+        const rows = await refreshPeople();
+        setPeople(rows);
+        setSelectedId(saved.id);
+        setModal(null);
+        notify(prior ? 'Person updated' : 'Person added to the tree');
+      } catch (e) {
+        notify(e.message);
+      }
+      return;
+    }
+    const id = prior?.id || `local-${Date.now()}`;
+    const newPerson = {
+      ...prior,
+      ...values,
+      ...placement,
+      id,
+      _id: null,
+      color: prior?.color || ['sage', 'rose', 'blue', 'peach', 'lavender', 'yellow', 'mint', 'pink'][people.length % 8],
+    };
+    let rows = prior ? people.map((p) => (p.id === id ? newPerson : p)) : [...people, newPerson];
+    rows = rows.map((p) => {
+      if (p.id === id) return p;
+      const next = (values.partnerIds || []).includes(p.id);
+      const relationship = (values.partnerRelationships || []).find((link) => link.partnerId === p.id)?.label;
+      const partnerRelationships = (p.partnerRelationships || []).filter((link) => link.partnerId !== id);
+      if (next)
+        return {
+          ...p,
+          partnerIds: [...new Set([...(p.partnerIds || []), id])],
+          partnerRelationships: relationship ? [...partnerRelationships, { partnerId: id, label: relationship }] : partnerRelationships,
+        };
+      if ((prior?.partnerIds || []).includes(p.id))
+        return {
+          ...p,
+          partnerIds: (p.partnerIds || []).filter((x) => x !== id),
+          partnerRelationships,
+        };
+      return p;
+    });
+    if (!prior && modal.kind === 'parent' && modal.parent) rows = rows.map((p) => (p.id === modal.parent.id ? { ...p, parentIds: [...new Set([...(p.parentIds || []), id])] } : p));
+    setPeople(rows);
+    setSelectedId(id);
+    setModal(null);
+    notify(prior ? 'Person updated for this browser' : 'Person added for this browser');
+  }
+  async function removePerson() {
+    if (!selected) return;
+    const isBulkSelection = selectedNodeIds.length > 1;
+    try {
+      const removalIds = new Set(isBulkSelection ? selectedNodeIds : [selected.id, ...(deleteDescendants ? selectedDescendants : [])]);
+      const removedPeople = people.filter((person) => removalIds.has(person.id));
+      const rows = people
+        .filter((person) => !removalIds.has(person.id))
+        .map((person) => {
+          const position = layout.positions.get(person.id);
+          return {
+            ...person,
+            parentIds: (person.parentIds || []).filter((id) => !removalIds.has(id)),
+            partnerIds: (person.partnerIds || []).filter((id) => !removalIds.has(id)),
+            partnerRelationships: (person.partnerRelationships || []).filter((link) => !removalIds.has(link.partnerId)),
+            treeX: position ? position.x - 60 : person.treeX,
+            treeY: position ? position.y - 56 : person.treeY,
+          };
+        });
+      if (apiState === 'connected') {
+        const positions = rows.filter((person) => person._id).map((person) => ({ id: person._id, treeX: person.treeX, treeY: person.treeY }));
+        const saved = await fetch('/api/people/layout/positions', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ positions }),
+        });
+        if (!saved.ok) throw Error('Could not preserve the current tree layout');
+        const ids = removedPeople.filter((person) => person._id).map((person) => person._id);
+        if (ids.length) {
+          const response = await fetch('/api/people/batch', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids }),
+          });
+          if (!response.ok) throw Error('Could not delete the selected people');
+        }
+      }
+      setPeople(rows);
+      setSelectedId(rows[0]?.id || '');
+      setSelectedNodeIds([]);
+      setConfirmDelete(false);
+      notify(`Removed ${removedPeople.length} ${removedPeople.length === 1 ? 'person' : 'people'}; others stayed in place`);
+    } catch (error) {
+      notify(error.message);
+    }
+  }
+  useEffect(() => {
+    if (!confirmDelete || !selected) return;
+    const onKeyDown = (event) => {
+      if (event.repeat) return;
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        removePerson();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        setConfirmDelete(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [confirmDelete, selectedId, selectedNodeIds, deleteDescendants, people, apiState, layout]);
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      const state = deleteShortcutState.current;
+      if (!state || state.confirmDelete || state.modal || event.repeat || event.altKey) return;
+      const target = event.target;
+      if (target?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName) || target?.closest?.('[contenteditable="true"]')) return;
+      const key = String(event.key || '').toLowerCase();
+      if ((event.ctrlKey || event.metaKey) && key === 'a') {
+        if (!state.familyPeople.length) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const ids = state.familyPeople.map((person) => person.id);
+        setSelectedNodeIds(ids);
+        setSelectedId(ids[0] || '');
+        setDetailsOpen(false);
+        setMobileDetailsOpen(false);
         return;
       }
-      const code=String(event.code||'').toLowerCase();
-      if(!['delete','del','backspace'].includes(key)&&!['delete','numpaddecimal'].includes(code)&&event.keyCode!==46)return;
-      if(event.ctrlKey||event.metaKey||!state.selectedId)return;
-      event.preventDefault();event.stopImmediatePropagation();setConfirmDelete(true);
+      const code = String(event.code || '').toLowerCase();
+      if (!['delete', 'del', 'backspace'].includes(key) && !['delete', 'numpaddecimal'].includes(code) && event.keyCode !== 46) return;
+      if (event.ctrlKey || event.metaKey || !state.selectedId) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setConfirmDelete(true);
     };
-    window.addEventListener('keydown',onKeyDown,true);
-    return()=>window.removeEventListener('keydown',onKeyDown,true);
-  },[]);
-  async function resetLayout(){try{if(apiState==='connected'){const r=await fetch('/api/people/layout/reset',{method:'PATCH'});if(!r.ok)throw Error('Could not reset the saved layout')}setPeople(prev=>prev.map(p=>({...p,treeX:null,treeY:null})));if(treeScroll.current){treeScroll.current.scrollLeft=0;treeScroll.current.scrollTop=0}setFitAfterReset(true);notify('Family tree arranged and fitted to canvas')}catch(e){notify(e.message)}}
-  function focusPersonInTree(id){requestAnimationFrame(()=>requestAnimationFrame(()=>{const viewport=treeScroll.current;if(!viewport)return;const node=[...viewport.querySelectorAll('.tree-person')].find(item=>item.dataset.personId===id);if(!node)return;const nodeRect=node.getBoundingClientRect();const viewportRect=viewport.getBoundingClientRect();viewport.scrollTo({left:viewport.scrollLeft+nodeRect.left+nodeRect.width/2-viewportRect.left-viewport.clientWidth/2,top:viewport.scrollTop+nodeRect.top+nodeRect.height/2-viewportRect.top-viewport.clientHeight/2,behavior:'smooth'})}))}
-  function zoomAround(clientX,clientY,nextZoom){pendingZoom.current={clientX,clientY,nextZoom};if(zoomFrame.current)return;zoomFrame.current=requestAnimationFrame(()=>{zoomFrame.current=0;const request=pendingZoom.current;pendingZoom.current=null;if(!request||Math.abs(request.nextZoom-zoomValue.current)<.0001)return;const viewport=treeScroll.current;const surface=viewport?.querySelector('.tree-zoom-surface');if(viewport&&surface){const surfaceRect=surface.getBoundingClientRect();pendingZoomAnchor.current={x:(request.clientX-surfaceRect.left)/zoomValue.current,y:(request.clientY-surfaceRect.top)/zoomValue.current,clientX:request.clientX,clientY:request.clientY}}setZoom(request.nextZoom)})}
-  function zoomTo(nextZoom){const viewport=treeScroll.current;if(!viewport){setZoom(nextZoom);return}const rect=viewport.getBoundingClientRect();zoomAround(rect.left+rect.width/2,rect.top+rect.height/2,nextZoom)}
-  function handleTouchStart(e){if(e.touches.length!==2)return;e.preventDefault();drag.current=null;const [a,b]=e.touches;pinch.current={distance:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),zoom:zoomValue.current};}
-  function handleTouchMove(e){if(e.touches.length!==2||!pinch.current)return;e.preventDefault();const [a,b]=e.touches;const centerX=(a.clientX+b.clientX)/2;const centerY=(a.clientY+b.clientY)/2;const distance=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);zoomAround(centerX,centerY,Math.max(.35,Math.min(2,pinch.current.zoom*distance/pinch.current.distance)))}
-  function handleTouchEnd(e){if(e.touches.length<2)pinch.current=null}
-  function selectPerson(personId){setSelectedId(personId);setSelectedNodeIds([])}
-  function openAddPersonForm(kind='root',parent=null){setAddMenuId('');setModal({kind,parent,inline:true});setDetailsOpen(true);if(window.innerWidth<=1050){setSidebarOpen(false);setMobileDetailsOpen(true)}}
-  function addRelatedPerson(kind,person){openAddPersonForm(kind,person)}
-  function openPersonDetails(personId){selectPerson(personId);setDetailsOpen(true);if(window.innerWidth<=1050){setSidebarOpen(false);setMobileDetailsOpen(true)}}
-  function beginNodeHover(personId,event){if(event.pointerType!=='mouse')return;if(hoverSelectTimer.current)clearTimeout(hoverSelectTimer.current);hoverSelectTimer.current=window.setTimeout(()=>{selectPerson(personId);const card=[...(treeScroll.current?.querySelectorAll('.tree-person')||[])].find(node=>node.dataset.personId===personId)?.querySelector('.tree-person-card');card?.focus({preventScroll:true})},1000)}
-  function endNodeHover(){if(hoverSelectTimer.current)clearTimeout(hoverSelectTimer.current);hoverSelectTimer.current=0}
-  function clearSelection(){setSelectedId('');setSelectedNodeIds([]);setDetailsOpen(false);setMobileDetailsOpen(false)}
-  function startDrag(e,p,pos){if(e.button!==0)return;e.preventDefault();e.stopPropagation();const wasSelected=selectedId===p.id;const viewport=treeScroll.current;e.currentTarget.setPointerCapture(e.pointerId);const gesture={mode:wasSelected?'person':'select',id:p.id,personId:p._id,pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,x:pos.rawX,y:pos.rawY,zoom,scrollLeft:viewport?.scrollLeft||0,scrollTop:viewport?.scrollTop||0,moved:false,held:false,frame:0,holdTimer:0,familyPositions:wasSelected&&moveFamilyRef.current?getMoveBranch(familyPeople,p.id).map(person=>{const position=layout.positions.get(person.id);return position?{id:person.id,personId:person._id,x:position.rawX,y:position.rawY}:null}).filter(Boolean):null};drag.current=gesture;gesture.holdTimer=window.setTimeout(()=>{if(drag.current===gesture&&!gesture.moved)gesture.held=true},520);}
-  function startPan(e){if(e.button!==0||e.target.closest('.tree-person,.connector-hit,button,input,textarea,select,[role="button"]'))return;const viewport=treeScroll.current;if(!viewport)return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);drag.current={mode:'pan',pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,scrollLeft:viewport.scrollLeft,scrollTop:viewport.scrollTop,moved:false};}
-  useEffect(()=>{function onMove(e){const d=drag.current;if(!d||e.pointerId!==d.pointerId)return;const dx=e.clientX-d.startX,dy=e.clientY-d.startY;if(!d.moved&&Math.abs(dx)+Math.abs(dy)<2)return;d.moved=true;d.held=false;if(d.holdTimer){clearTimeout(d.holdTimer);d.holdTimer=0}e.preventDefault();if(d.mode==='select')d.mode='pan';if(d.mode==='pan'){const viewport=treeScroll.current;if(viewport){viewport.scrollLeft=d.scrollLeft-dx;viewport.scrollTop=d.scrollTop-dy}return}const moveX=dx/d.zoom,moveY=dy/d.zoom;d.lastX=d.x+moveX;d.lastY=d.y+moveY;if(!d.frame)d.frame=requestAnimationFrame(()=>{d.frame=0;setPeople(prev=>applyDragPositions(prev,d))})}
-    async function onUp(e){const d=drag.current;if(!d||e.pointerId!==d.pointerId)return;drag.current=null;if(d.holdTimer)clearTimeout(d.holdTimer);if(d.frame)cancelAnimationFrame(d.frame);if(d.mode==='pan'){if(!d.moved)clearSelection();return}if(d.held&&!d.moved){openPersonDetails(d.id);return}if(d.mode==='select'||!d.moved){const card=[...(treeScroll.current?.querySelectorAll('.tree-person')||[])].find(node=>node.dataset.personId===d.id)?.querySelector('.tree-person-card');card?.focus({preventScroll:true});setSelectedId(d.id);setSelectedNodeIds([]);return}setPeople(prev=>applyDragPositions(prev,d));if(d.familyPositions){const dx=d.lastX-d.x,dy=d.lastY-d.y;const positions=d.familyPositions.filter(position=>position.personId).map(position=>({id:position.personId,treeX:position.x+dx,treeY:position.y+dy}));if(positions.length){try{const response=await fetch('/api/people/layout/positions',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({positions})});if(!response.ok)throw Error();notify('Family positions saved')}catch{notify('Family moved for this session; positions could not be saved')}}else notify('Family moved')}else if(d.personId){try{const r=await fetch(`/api/people/${d.personId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({treeX:d.lastX,treeY:d.lastY})});if(!r.ok)throw Error();notify('Position saved')}catch{notify('Moved for this session; the position could not be saved')}}}
-    window.addEventListener('pointermove',onMove,{passive:false});window.addEventListener('pointerup',onUp);window.addEventListener('pointercancel',onUp);return()=>{window.removeEventListener('pointermove',onMove);window.removeEventListener('pointerup',onUp);window.removeEventListener('pointercancel',onUp);if(drag.current?.holdTimer)clearTimeout(drag.current.holdTimer);if(drag.current?.frame)cancelAnimationFrame(drag.current.frame)}},[])
-  const treeName=selectedFamilyId==='__all__'?'All families':selectedFamily?.name||'Your family';
-  return <div className={`family-app theme-${theme} ${sidebarOpen?'sidebar-open':'sidebar-closed'} ${detailsOpen?'details-open':'details-closed'} ${modal?.inline?'editing-person':''}`} style={{'--details-width':`${detailsWidth}px`}}>
-    {sidebarOpen&&<><button className="sidebar-scrim" onClick={()=>setSidebarOpen(false)} aria-label="Close sidebar"/><aside className="simple-sidebar"><div className="simple-brand"><div className="simple-brand-mark"><GitFork size={18}/></div><span>kinfolk</span><button className="plain-icon hide-sidebar" onClick={()=>setSidebarOpen(false)} aria-label="Close sidebar"><PanelLeftClose size={17}/></button></div><div className="sidebar-family"><span className="sidebar-family-mark">{treeName[0]||'F'}</span><div><strong>{treeName}</strong><small>{familyPeople.length} {familyPeople.length===1?'person':'people'}</small></div></div>{families.length>1&&<div className="family-picker-label"><span>FAMILY</span><div className="family-picker-control" onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setFamilyPickerOpen(false)}}><label className="family-picker-search"><Search size={13}/><input value={familyPickerOpen?familyQuery:(selectedFamilyId==='__all__'?(families.length===2?'Both families':'All families'):(selectedFamily?.name||''))} placeholder="Search families" onFocus={()=>{setFamilyPickerOpen(true);setFamilyQuery('')}} onChange={e=>{setFamilyQuery(e.target.value);setFamilyPickerOpen(true)}} aria-label="Search and select a family" aria-expanded={familyPickerOpen}/>{familyPickerOpen&&familyQuery&&<button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>setFamilyQuery('')} aria-label="Clear family search"><X size={12}/></button>}</label>{familyPickerOpen&&<div className="family-picker-options"><button type="button" className={selectedFamilyId==='__all__'?'active':''} onClick={()=>{setSelectedFamilyId('__all__');setSelectedId('');setFamilyPickerOpen(false);setFamilyQuery('');setDetailsOpen(false);setMobileDetailsOpen(false);if(treeScroll.current){treeScroll.current.scrollLeft=0;treeScroll.current.scrollTop=0}}}>{families.length===2?'Both families':'All families'} · {people.length}</button>{families.filter(group=>group.name.toLowerCase().includes(familyQuery.toLowerCase())).map(group=><button type="button" key={group.id} className={selectedFamilyId===group.id||(!selectedFamilyId&&selectedFamily?.id===group.id)?'active':''} onClick={()=>{setSelectedFamilyId(group.id);setSelectedId('');setFamilyPickerOpen(false);setFamilyQuery('');setDetailsOpen(false);setMobileDetailsOpen(false);if(treeScroll.current){treeScroll.current.scrollLeft=0;treeScroll.current.scrollTop=0}}}>{group.name} · {group.people.length}</button>)}{!families.some(group=>group.name.toLowerCase().includes(familyQuery.toLowerCase()))&&<span>No matching families</span>}</div>}</div></div>}<div className="side-caption">FAMILY MEMBERS</div><label className="sidebar-search"><Search size={14}/><input placeholder="Find a person" value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<button onClick={()=>setQuery('')}><X size={12}/></button>}</label><div className="member-list" ref={memberList}>{filtered.map(p=><button key={p.id} className={`member-list-item ${selectedId===p.id||selectedNodeIds.includes(p.id)?'active':''}`} onClick={e=>{e.currentTarget.focus();selectPerson(p.id);setDetailsOpen(true);if(window.innerWidth<800){setSidebarOpen(false);setMobileDetailsOpen(true)}focusPersonInTree(p.id)}}><PersonAvatar person={p}/><span>{fullName(p)}</span></button>)}{!filtered.length&&<div className="empty-list">No people yet</div>}</div><div className="sidebar-bottom"><div className="storage-status"><span className={`status-light ${apiState}`}/><span>{apiState==='connected'?'Saved to MongoDB':apiState==='checking'?'Connecting…':'Saved in this browser'}</span></div><button className="theme-toggle" onClick={()=>setTheme(theme==='light'?'dark':'light')}>{theme==='light'?<Moon size={16}/>:<Sun size={16}/>}<span>Switch to {theme==='light'?'dark':'light'} mode</span></button></div></aside></>}
-    <main className="simple-main"><header className="simple-topbar"><div className="topbar-left"><button className="plain-icon open-sidebar" onClick={()=>{const next=!sidebarOpen;setSidebarOpen(next);if(next&&window.innerWidth<=1050)setMobileDetailsOpen(false)}} aria-label={sidebarOpen?'Hide family members':'Show family members'} title={sidebarOpen?'Hide family members':'Show family members'}>{sidebarOpen?<PanelLeftClose size={18}/>:<PanelLeftOpen size={18}/>}</button><div className="top-info-wrap"><button className="plain-icon top-info-button" aria-label="Family tree help"><Info size={17}/></button><div className="top-info-tooltip" role="tooltip">Select a node to view details. Drag a selected node to move it, or drag empty canvas to pan. Use Ctrl + mouse wheel or trackpad pinch to zoom. Use Ctrl+A to select this family, then Delete to remove the selection. Use the + on a node to add a family member.</div></div><div className="topbar-title"><span>FAMILY TREE</span><h1>{treeName}</h1></div></div><div className="topbar-actions"><button className="top-theme-toggle" onClick={()=>setTheme(theme==='light'?'dark':'light')} aria-label="Toggle color mode">{theme==='light'?<Moon size={17}/>:<Sun size={17}/>}</button><button className="right-panel-toggle" onClick={()=>{if(window.innerWidth<=1050){setSidebarOpen(false);setDetailsOpen(true);setMobileDetailsOpen(!mobileDetailsOpen)}else setDetailsOpen(!detailsOpen)}} aria-label={(window.innerWidth<=1050?mobileDetailsOpen:detailsOpen)?'Hide person details':'Show person details'}>{(window.innerWidth<=1050?mobileDetailsOpen:detailsOpen)?<PanelRightClose size={17}/>:<PanelRightOpen size={17}/>}</button><button className="add-person-button" onClick={()=>openAddPersonForm()}><Plus size={16}/><span>Add person</span></button></div></header>
-      <div className="tree-toolbar-simple"><label className="link-style-toolbar-field"><span>LINK STYLE</span><select className="link-style-select" value={linkStyle} onChange={e=>setLinkStyle(e.target.value)}><option value="direct">Direct links</option><option value="classic">Classic branches</option></select></label><div className="tree-count"><UsersRound size={15}/><span>{familyPeople.length} {familyPeople.length===1?'person':'people'}</span><span className="toolbar-dot">·</span><span>{layout.generationCount} generations</span></div><div className="tree-toolbar-actions"><button className={`move-family-button ${moveFamily?'active':''}`} onClick={()=>{moveFamilyRef.current=!moveFamilyRef.current;setMoveFamily(moveFamilyRef.current)}} aria-pressed={moveFamily} title={moveFamily?'Drag a selected node to move it and its descendants':'Enable descendant-branch movement'}><Move size={14}/><span>{moveFamily?'Move descendants: on':'Move descendants'}</span></button><button className="reset-layout-button" onClick={resetLayout} aria-label="Reset all people to automatic layout" title="Reset all people to automatic layout"><RotateCcw size={14}/><span>Reset layout</span></button><div className="zoom-tools"><button onClick={()=>zoomTo(Math.max(.35,+(zoomValue.current-.1).toFixed(2)))} aria-label="Zoom out"><ZoomOut size={16}/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>zoomTo(Math.min(2,+(zoomValue.current+.1).toFixed(2)))} aria-label="Zoom in"><ZoomIn size={16}/></button><i/><button onClick={()=>zoomTo(1)} aria-label="Fit tree"><Maximize2 size={15}/></button></div></div></div>
-      <section className="simple-canvas"><div className="canvas-help"><span className="help-grab">↕</span> Tap or hover for 2 seconds to select; hold for details. On laptop, use the eye icon. {moveFamily?'Drag a selected person to move them, their descendants, and their partners.':'Drag a selected node to move it; otherwise drag to pan.'}</div><div className="tree-scroll" ref={treeScroll} onPointerDown={startPan} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd}><div className="tree-zoom-surface" style={{width:layout.width*zoom,height:layout.height*zoom}}><div className="tree-board" style={{width:layout.width,height:layout.height,transform:`scale(${zoom})`,transformOrigin:'top left'}}>
-        <svg className="connector-svg" width={layout.width} height={layout.height} aria-label="Family relationships"><defs><marker id="family-link-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 Z" fill="var(--line)"/></marker><marker id="partner-link-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)"/></marker></defs>{linkStyle!=='direct'&&<FamilyBranchLinks branches={layout.familyBranches} people={familyPeople}/>}{layout.edges.filter(edge=>linkStyle==='direct'||edge.kind!=='parent').map((edge,i)=>{const d=edge.path||(linkStyle==='classic'&&(edge.kind==='partner'||edge.kind==='sibling')?`M${edge.x1} ${edge.y1} L${edge.x2} ${edge.y2}`:`M${edge.x1} ${edge.y1} C${edge.c1x} ${edge.c1y} ${edge.c2x} ${edge.c2y} ${edge.x2} ${edge.y2}`);const from=byId(edge.fromId),to=byId(edge.toId);const relation=edge.kind==='parent'?relationshipLabel('Parent',from,to):edge.kind==='sibling'?'Sibling':relationshipLabel('Partner',from,to)||'Partner';const reverseRelation=edge.kind==='parent'?relationshipLabel('Child',to,from):edge.kind==='sibling'?'Sibling':relationshipLabel('Partner',to,from)||'Partner';const description=`${fullName(from)} · ${relation} · ${fullName(to)}`;const linkId=`${edge.kind}-${edge.fromId}-${edge.toId}`;const relationLabelPoint=linkLabelPoint(edge,.5);const storedPartnerRelation=edge.kind==='partner'?(partnerRelationship(from,to?.id)||partnerRelationship(to,from?.id)):'';const genderedPartnerPair=(from?.gender==='male'&&to?.gender==='female')||(from?.gender==='female'&&to?.gender==='male');const usesDefaultPartnerRole=['','Husband','Wife','Spouse'].includes(storedPartnerRelation);const visibleRelation=edge.kind==='sibling'?'Sibling':edge.kind==='partner'&&genderedPartnerPair&&usesDefaultPartnerRole?'Husband · Wife':storedPartnerRelation||`${relation} · ${reverseRelation}`;return <g key={`${linkId}-${i}`}><path className={`connector ${edge.kind}`} d={d} markerStart={`url(#${edge.kind==='partner'?'partner-link-arrow':'family-link-arrow'})`} markerEnd={`url(#${edge.kind==='partner'?'partner-link-arrow':'family-link-arrow'})`}/><text className="connector-relation" x={relationLabelPoint.x} y={relationLabelPoint.y} textAnchor="middle" dominantBaseline="central"><title>{fullName(from)} · {visibleRelation} · {fullName(to)}</title>{visibleRelation}</text></g>})}</svg>
-        {familyPeople.map(person=>{const pos=layout.positions.get(person.id);const isDetailsVisible=detailsOpen&&selectedId===person.id;return <div key={person.id} data-person-id={person.id} className={`tree-person ${selectedId===person.id||selectedNodeIds.includes(person.id)?'selected':''}`} style={{left:pos.x,top:pos.y}} onPointerDown={e=>startDrag(e,person,pos)} onPointerEnter={e=>beginNodeHover(person.id,e)} onPointerLeave={endNodeHover}><button className="tree-person-card" aria-label={`Select ${fullName(person)}; press and hold to open details; drag selected node to move`} onContextMenu={e=>e.preventDefault()} onClick={e=>{if(e.detail===0)openPersonDetails(person.id)}}><PersonAvatar person={person} size="large"/><span className="tree-person-copy"><strong>{fullName(person)}</strong><small>{year(person.birthDate)}{person.deathDate?` — ${year(person.deathDate)}`:' —'}</small></span><span className="drag-grip">⠿</span></button><button className="tree-node-info" title={isDetailsVisible?`Hide ${fullName(person)} details`:`View ${fullName(person)} details`} aria-label={isDetailsVisible?`Hide ${fullName(person)} details`:`View ${fullName(person)} details`} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();if(isDetailsVisible){setDetailsOpen(false);setMobileDetailsOpen(false)}else openPersonDetails(person.id)}}>{isDetailsVisible?<EyeOff size={13}/>:<Eye size={13}/>}</button><div className="tree-node-about-wrap"><button className="tree-node-about" aria-label={`Information about ${fullName(person)}`} onPointerDown={e=>e.stopPropagation()}><Info size={13}/></button><div className="tree-node-about-tooltip" onPointerDown={e=>e.stopPropagation()}><strong>{fullName(person)}</strong><span>Gender: {person.gender&&person.gender!=="unspecified"?person.gender:"Not specified"}</span><span>Born: {person.birthDate?year(person.birthDate):"Not added"}</span>{person.birthPlace&&<span>Place: {person.birthPlace}</span>}{person.occupation&&<span>Occupation: {person.occupation}</span>}</div></div><button className="tree-node-delete" title={`Delete ${fullName(person)}`} aria-label={`Delete ${fullName(person)}`} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();setSelectedId(person.id);setSelectedNodeIds([]);setConfirmDelete(true)}}><Trash2 size={13}/></button><button className="tree-node-add" title={`Add a family member related to ${fullName(person)}`} aria-label={`Add a family member related to ${fullName(person)}`} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();setAddMenuId(addMenuId===person.id?'':person.id)}}><Plus size={15}/></button>{addMenuId===person.id&&<div className="node-add-menu" onPointerDown={e=>e.stopPropagation()}><button onClick={()=>addRelatedPerson('parent',person)}>Add parent</button><button onClick={()=>addRelatedPerson('partner',person)}>Add partner</button><button onClick={()=>addRelatedPerson('child',person)}>Add child</button><button onClick={()=>addRelatedPerson('sibling',person)}>Add sibling</button></div>}</div>})}
-        {!familyPeople.length&&<div className="tree-empty"><div className="tree-empty-icon"><GitFork size={26}/></div><h2>Start your family tree</h2><p>Add a person, then link parents and partners to build the branches.</p><button className="add-person-button" onClick={()=>openAddPersonForm()}><Plus size={16}/>Add first person</button></div>}
-      </div></div></div><div className="canvas-zoom-controls"><button onClick={()=>zoomTo(Math.min(2,+(zoomValue.current+.1).toFixed(2)))} aria-label="Zoom in"><Plus size={17}/></button><button onClick={()=>zoomTo(Math.max(.35,+(zoomValue.current-.1).toFixed(2)))} aria-label="Zoom out"><span>−</span></button><button onClick={()=>zoomTo(1)} aria-label="Reset zoom"><Maximize2 size={15}/></button></div></section>
-    </main>
-    {mobileDetailsOpen&&<button className="details-scrim" onClick={clearSelection} aria-label="Close person details and clear selection"/>}{detailsOpen&&<aside className={`simple-details ${mobileDetailsOpen?'show-mobile':''} ${modal?.inline?'editing-person':''}`}><div className="details-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize details panel" aria-valuenow={detailsWidth} tabIndex={0} onKeyDown={handleDetailsResizeKey} onPointerDown={beginDetailsResize} onPointerMove={moveDetailsResize} onPointerUp={endDetailsResize} onPointerCancel={endDetailsResize}/>{modal?.inline&&(!modal.person||modal.person.id===selected?.id)?<PersonModal key={modal.person?.id||modal.kind||'new'} modal={modal} people={people} onClose={()=>{setModal(null);if(!selected){setDetailsOpen(false);setMobileDetailsOpen(false)}}} onSave={saveMember}/>:selected?<><div className="details-heading"><span>PERSON DETAILS</span><div><button className="plain-icon mobile-details-close" onClick={()=>setMobileDetailsOpen(false)} aria-label="Close details"><X size={17}/></button><button className="plain-icon" onClick={()=>setModal({person:selected,inline:true})} aria-label="Edit person"><Pencil size={15}/></button></div></div><div className="selected-profile"><PersonAvatar person={selected} size="profile"/><h2>{fullName(selected)}</h2><span className="person-years">{year(selected.birthDate)}{selected.deathDate?` — ${year(selected.deathDate)}`:' —'}</span></div><div className="details-fields"><div className="detail-field"><CalendarDays size={15}/><span><small>Born</small><strong>{selected.birthDate?new Date(`${selected.birthDate}T00:00:00`).toLocaleDateString(undefined,{day:'numeric',month:'long',year:'numeric'}):'Not added'}</strong></span></div><div className="detail-field"><MapPin size={15}/><span><small>Birthplace</small><strong>{selected.birthPlace||'Not added'}</strong></span></div>{selected.deathDate&&<div className="detail-field"><CalendarDays size={15}/><span><small>Died</small><strong>{new Date(`${selected.deathDate}T00:00:00`).toLocaleDateString(undefined,{day:'numeric',month:'long',year:'numeric'})}</strong></span></div>}{selected.occupation&&<div className="detail-field"><Heart size={15}/><span><small>Occupation</small><strong>{selected.occupation}</strong></span></div>}</div><div className="details-bio"><label>ABOUT</label><p>{selected.bio||'Add a short story or memory about this person.'}</p></div><div className="details-links"><label>FAMILY LINKS</label>{[...(selected.parentIds||[]).map(id=>({id,role:'Parent'})),...(selected.partnerIds||[]).map(id=>({id,role:'Partner',label:partnerDisplayLabel(selected,byId(id))})),...people.filter(p=>(p.parentIds||[]).includes(selected.id)).map(p=>({id:p.id,role:'Child'})),...people.filter(p=>p.id!==selected.id&&(p.parentIds||[]).some(parentId=>(selected.parentIds||[]).includes(parentId))).map(p=>({id:p.id,role:'Sibling'}))].map((link,i)=>byId(link.id)&&<button key={`${link.role}-${link.id}-${i}`} onClick={()=>openPersonDetails(link.id)}><PersonAvatar person={byId(link.id)}/><span><strong>{fullName(byId(link.id))}</strong><small>{link.label||relationshipLabel(link.role,byId(link.id),selected)}</small></span></button>)}<button className="link-edit-button" onClick={()=>setModal({person:selected,inline:true})}><Link2 size={14}/> Edit links</button><button className="remove-person-button" onClick={()=>setConfirmDelete(true)}><Trash2 size={14}/> Remove person</button></div></>:<div className="details-empty"><UsersRound size={23}/><p>Select a person in the tree to see details.</p></div>}</aside>}
-    {modal&&!modal.inline&&<PersonModal key={modal.person?.id||modal.kind||'new'} modal={modal} people={people} onClose={()=>setModal(null)} onSave={saveMember}/>}{confirmDelete&&selected&&<div className="simple-modal-backdrop"><div className="delete-dialog"><h2>{selectedNodeIds.length>1?`Remove ${selectedNodeIds.length} selected people?`:`Remove ${fullName(selected)}?`}</h2><p>{selectedNodeIds.length>1?'This will permanently remove the selected family members and their links.':deleteDescendants?`This will also delete ${selectedDescendants.length} descendant${selectedDescendants.length===1?'':'s'} and their links.`:'This also removes their links from the tree.'}</p>{selectedNodeIds.length<=1&&<label className="delete-descendants-option"><input type="checkbox" checked={deleteDescendants} onChange={e=>setDeleteDescendants(e.target.checked)}/><span>Also delete all descendants ({selectedDescendants.length})</span></label>}<div><button onClick={()=>setConfirmDelete(false)}>Cancel</button><button className="danger-action" onClick={removePerson}>Remove {selectedNodeIds.length>1?'selected people':'person'}</button></div></div></div>}{toast&&<div className="simple-toast">{toast}</div>}
-  </div>
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, []);
+  async function resetLayout() {
+    try {
+      if (apiState === 'connected') {
+        const r = await fetch('/api/people/layout/reset', { method: 'PATCH' });
+        if (!r.ok) throw Error('Could not reset the saved layout');
+      }
+      setPeople((prev) => prev.map((p) => ({ ...p, treeX: null, treeY: null })));
+      if (treeScroll.current) {
+        treeScroll.current.scrollLeft = 0;
+        treeScroll.current.scrollTop = 0;
+      }
+      setFitAfterReset(true);
+      notify('Family tree arranged and fitted to canvas');
+    } catch (e) {
+      notify(e.message);
+    }
+  }
+  function focusPersonInTree(id) {
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const viewport = treeScroll.current;
+        if (!viewport) return;
+        const node = [...viewport.querySelectorAll('.tree-person')].find((item) => item.dataset.personId === id);
+        if (!node) return;
+        const nodeRect = node.getBoundingClientRect();
+        const viewportRect = viewport.getBoundingClientRect();
+        viewport.scrollTo({
+          left: viewport.scrollLeft + nodeRect.left + nodeRect.width / 2 - viewportRect.left - viewport.clientWidth / 2,
+          top: viewport.scrollTop + nodeRect.top + nodeRect.height / 2 - viewportRect.top - viewport.clientHeight / 2,
+          behavior: 'smooth',
+        });
+      }),
+    );
+  }
+  function zoomAround(clientX, clientY, nextZoom) {
+    pendingZoom.current = { clientX, clientY, nextZoom };
+    if (zoomFrame.current) return;
+    zoomFrame.current = requestAnimationFrame(() => {
+      zoomFrame.current = 0;
+      const request = pendingZoom.current;
+      pendingZoom.current = null;
+      if (!request || Math.abs(request.nextZoom - zoomValue.current) < 0.0001) return;
+      const viewport = treeScroll.current;
+      const surface = viewport?.querySelector('.tree-zoom-surface');
+      if (viewport && surface) {
+        const surfaceRect = surface.getBoundingClientRect();
+        pendingZoomAnchor.current = {
+          x: (request.clientX - surfaceRect.left) / zoomValue.current,
+          y: (request.clientY - surfaceRect.top) / zoomValue.current,
+          clientX: request.clientX,
+          clientY: request.clientY,
+        };
+      }
+      setZoom(request.nextZoom);
+    });
+  }
+  function zoomTo(nextZoom) {
+    const viewport = treeScroll.current;
+    if (!viewport) {
+      setZoom(nextZoom);
+      return;
+    }
+    const rect = viewport.getBoundingClientRect();
+    zoomAround(rect.left + rect.width / 2, rect.top + rect.height / 2, nextZoom);
+  }
+  function handleTouchStart(e) {
+    if (e.touches.length !== 2) return;
+    e.preventDefault();
+    drag.current = null;
+    const [a, b] = e.touches;
+    pinch.current = {
+      distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+      zoom: zoomValue.current,
+    };
+  }
+  function handleTouchMove(e) {
+    if (e.touches.length !== 2 || !pinch.current) return;
+    e.preventDefault();
+    const [a, b] = e.touches;
+    const centerX = (a.clientX + b.clientX) / 2;
+    const centerY = (a.clientY + b.clientY) / 2;
+    const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    zoomAround(centerX, centerY, Math.max(0.35, Math.min(2, (pinch.current.zoom * distance) / pinch.current.distance)));
+  }
+  function handleTouchEnd(e) {
+    if (e.touches.length < 2) pinch.current = null;
+  }
+  function selectPerson(personId) {
+    setSelectedId(personId);
+    setSelectedNodeIds([]);
+  }
+  function openAddPersonForm(kind = 'root', parent = null) {
+    setAddMenuId('');
+    setModal({ kind, parent, inline: true });
+    setDetailsOpen(true);
+    if (window.innerWidth <= 1050) {
+      setSidebarOpen(false);
+      setMobileDetailsOpen(true);
+    }
+  }
+  function addRelatedPerson(kind, person) {
+    openAddPersonForm(kind, person);
+  }
+  function openPersonDetails(personId) {
+    selectPerson(personId);
+    setDetailsOpen(true);
+    if (window.innerWidth <= 1050) {
+      setSidebarOpen(false);
+      setMobileDetailsOpen(true);
+    }
+  }
+  function beginNodeHover(personId, event) {
+    if (event.pointerType !== 'mouse') return;
+    if (hoverSelectTimer.current) clearTimeout(hoverSelectTimer.current);
+    hoverSelectTimer.current = window.setTimeout(() => {
+      selectPerson(personId);
+      const card = [...(treeScroll.current?.querySelectorAll('.tree-person') || [])].find((node) => node.dataset.personId === personId)?.querySelector('.tree-person-card');
+      card?.focus({ preventScroll: true });
+    }, 1000);
+  }
+  function endNodeHover() {
+    if (hoverSelectTimer.current) clearTimeout(hoverSelectTimer.current);
+    hoverSelectTimer.current = 0;
+  }
+  function clearSelection() {
+    setSelectedId('');
+    setSelectedNodeIds([]);
+    setDetailsOpen(false);
+    setMobileDetailsOpen(false);
+  }
+  function startDrag(e, p, pos) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const wasSelected = selectedId === p.id;
+    const viewport = treeScroll.current;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const gesture = {
+      mode: wasSelected ? 'person' : 'select',
+      id: p.id,
+      personId: p._id,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      x: pos.rawX,
+      y: pos.rawY,
+      zoom,
+      scrollLeft: viewport?.scrollLeft || 0,
+      scrollTop: viewport?.scrollTop || 0,
+      moved: false,
+      held: false,
+      frame: 0,
+      holdTimer: 0,
+      familyPositions:
+        wasSelected && moveFamilyRef.current
+          ? getMoveBranch(familyPeople, p.id)
+              .map((person) => {
+                const position = layout.positions.get(person.id);
+                return position ? { id: person.id, personId: person._id, x: position.rawX, y: position.rawY } : null;
+              })
+              .filter(Boolean)
+          : null,
+    };
+    drag.current = gesture;
+    gesture.holdTimer = window.setTimeout(() => {
+      if (drag.current === gesture && !gesture.moved) gesture.held = true;
+    }, 520);
+  }
+  function startPan(e) {
+    if (e.button !== 0 || e.target.closest('.tree-person,.connector-hit,button,input,textarea,select,[role="button"]')) return;
+    const viewport = treeScroll.current;
+    if (!viewport) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = {
+      mode: 'pan',
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+      moved: false,
+    };
+  }
+  useEffect(() => {
+    function onMove(e) {
+      const d = drag.current;
+      if (!d || e.pointerId !== d.pointerId) return;
+      const dx = e.clientX - d.startX,
+        dy = e.clientY - d.startY;
+      if (!d.moved && Math.abs(dx) + Math.abs(dy) < 2) return;
+      d.moved = true;
+      d.held = false;
+      if (d.holdTimer) {
+        clearTimeout(d.holdTimer);
+        d.holdTimer = 0;
+      }
+      e.preventDefault();
+      if (d.mode === 'select') d.mode = 'pan';
+      if (d.mode === 'pan') {
+        const viewport = treeScroll.current;
+        if (viewport) {
+          viewport.scrollLeft = d.scrollLeft - dx;
+          viewport.scrollTop = d.scrollTop - dy;
+        }
+        return;
+      }
+      const moveX = dx / d.zoom,
+        moveY = dy / d.zoom;
+      d.lastX = d.x + moveX;
+      d.lastY = d.y + moveY;
+      if (!d.frame)
+        d.frame = requestAnimationFrame(() => {
+          d.frame = 0;
+          setPeople((prev) => applyDragPositions(prev, d));
+        });
+    }
+    async function onUp(e) {
+      const d = drag.current;
+      if (!d || e.pointerId !== d.pointerId) return;
+      drag.current = null;
+      if (d.holdTimer) clearTimeout(d.holdTimer);
+      if (d.frame) cancelAnimationFrame(d.frame);
+      if (d.mode === 'pan') {
+        if (!d.moved) clearSelection();
+        return;
+      }
+      if (d.held && !d.moved) {
+        openPersonDetails(d.id);
+        return;
+      }
+      if (d.mode === 'select' || !d.moved) {
+        const card = [...(treeScroll.current?.querySelectorAll('.tree-person') || [])].find((node) => node.dataset.personId === d.id)?.querySelector('.tree-person-card');
+        card?.focus({ preventScroll: true });
+        setSelectedId(d.id);
+        setSelectedNodeIds([]);
+        return;
+      }
+      setPeople((prev) => applyDragPositions(prev, d));
+      if (d.familyPositions) {
+        const dx = d.lastX - d.x,
+          dy = d.lastY - d.y;
+        const positions = d.familyPositions
+          .filter((position) => position.personId)
+          .map((position) => ({
+            id: position.personId,
+            treeX: position.x + dx,
+            treeY: position.y + dy,
+          }));
+        if (positions.length) {
+          try {
+            const response = await fetch('/api/people/layout/positions', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ positions }),
+            });
+            if (!response.ok) throw Error();
+            notify('Family positions saved');
+          } catch {
+            notify('Family moved for this session; positions could not be saved');
+          }
+        } else notify('Family moved');
+      } else if (d.personId) {
+        try {
+          const r = await fetch(`/api/people/${d.personId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ treeX: d.lastX, treeY: d.lastY }),
+          });
+          if (!r.ok) throw Error();
+          notify('Position saved');
+        } catch {
+          notify('Moved for this session; the position could not be saved');
+        }
+      }
+    }
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      if (drag.current?.holdTimer) clearTimeout(drag.current.holdTimer);
+      if (drag.current?.frame) cancelAnimationFrame(drag.current.frame);
+    };
+  }, []);
+  const treeName = selectedFamilyId === '__all__' ? 'All families' : selectedFamily?.name || 'Your family';
+  return (
+    <div
+      className={`family-app theme-${theme} ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'} ${detailsOpen ? 'details-open' : 'details-closed'} ${modal?.inline ? 'editing-person' : ''}`}
+      style={{ '--details-width': `${detailsWidth}px` }}
+    >
+      {sidebarOpen && (
+        <>
+          <button className="sidebar-scrim" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" />
+          <aside className="simple-sidebar">
+            <div className="simple-brand">
+              <div className="simple-brand-mark">
+                <GitFork size={18} />
+              </div>
+              <span>kinfolk</span>
+              <button className="plain-icon hide-sidebar" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">
+                <PanelLeftClose size={17} />
+              </button>
+            </div>
+            <div className="sidebar-family">
+              <span className="sidebar-family-mark">{treeName[0] || 'F'}</span>
+              <div>
+                <strong>{treeName}</strong>
+                <small>
+                  {familyPeople.length} {familyPeople.length === 1 ? 'person' : 'people'}
+                </small>
+              </div>
+            </div>
+            {families.length > 1 && (
+              <div className="family-picker-label">
+                <span>FAMILY</span>
+                <div
+                  className="family-picker-control"
+                  onBlur={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget)) setFamilyPickerOpen(false);
+                  }}
+                >
+                  <label className="family-picker-search">
+                    <Search size={13} />
+                    <input
+                      value={familyPickerOpen ? familyQuery : selectedFamilyId === '__all__' ? (families.length === 2 ? 'Both families' : 'All families') : selectedFamily?.name || ''}
+                      placeholder="Search families"
+                      onFocus={() => {
+                        setFamilyPickerOpen(true);
+                        setFamilyQuery('');
+                      }}
+                      onChange={(e) => {
+                        setFamilyQuery(e.target.value);
+                        setFamilyPickerOpen(true);
+                      }}
+                      aria-label="Search and select a family"
+                      aria-expanded={familyPickerOpen}
+                    />
+                    {familyPickerOpen && familyQuery && (
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setFamilyQuery('')} aria-label="Clear family search">
+                        <X size={12} />
+                      </button>
+                    )}
+                  </label>
+                  {familyPickerOpen && (
+                    <div className="family-picker-options">
+                      <button
+                        type="button"
+                        className={selectedFamilyId === '__all__' ? 'active' : ''}
+                        onClick={() => {
+                          setSelectedFamilyId('__all__');
+                          setSelectedId('');
+                          setFamilyPickerOpen(false);
+                          setFamilyQuery('');
+                          setDetailsOpen(false);
+                          setMobileDetailsOpen(false);
+                          if (treeScroll.current) {
+                            treeScroll.current.scrollLeft = 0;
+                            treeScroll.current.scrollTop = 0;
+                          }
+                        }}
+                      >
+                        {families.length === 2 ? 'Both families' : 'All families'} · {people.length}
+                      </button>
+                      {families
+                        .filter((group) => group.name.toLowerCase().includes(familyQuery.toLowerCase()))
+                        .map((group) => (
+                          <button
+                            type="button"
+                            key={group.id}
+                            className={selectedFamilyId === group.id || (!selectedFamilyId && selectedFamily?.id === group.id) ? 'active' : ''}
+                            onClick={() => {
+                              setSelectedFamilyId(group.id);
+                              setSelectedId('');
+                              setFamilyPickerOpen(false);
+                              setFamilyQuery('');
+                              setDetailsOpen(false);
+                              setMobileDetailsOpen(false);
+                              if (treeScroll.current) {
+                                treeScroll.current.scrollLeft = 0;
+                                treeScroll.current.scrollTop = 0;
+                              }
+                            }}
+                          >
+                            {group.name} · {group.people.length}
+                          </button>
+                        ))}
+                      {!families.some((group) => group.name.toLowerCase().includes(familyQuery.toLowerCase())) && <span>No matching families</span>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className="side-caption">FAMILY MEMBERS</div>
+            <label className="sidebar-search">
+              <Search size={14} />
+              <input placeholder="Find a person" value={query} onChange={(e) => setQuery(e.target.value)} />
+              {query && (
+                <button onClick={() => setQuery('')}>
+                  <X size={12} />
+                </button>
+              )}
+            </label>
+            <div className="member-list" ref={memberList}>
+              {filtered.map((p) => (
+                <button
+                  key={p.id}
+                  className={`member-list-item ${selectedId === p.id || selectedNodeIds.includes(p.id) ? 'active' : ''}`}
+                  onClick={(e) => {
+                    e.currentTarget.focus();
+                    selectPerson(p.id);
+                    setDetailsOpen(true);
+                    if (window.innerWidth < 800) {
+                      setSidebarOpen(false);
+                      setMobileDetailsOpen(true);
+                    }
+                    focusPersonInTree(p.id);
+                  }}
+                >
+                  <PersonAvatar person={p} />
+                  <span>{fullName(p)}</span>
+                </button>
+              ))}
+              {!filtered.length && <div className="empty-list">No people yet</div>}
+            </div>
+            <div className="sidebar-bottom">
+              <div className="storage-status">
+                <span className={`status-light ${apiState}`} />
+                <span>{apiState === 'connected' ? 'Saved to MongoDB' : apiState === 'checking' ? 'Connecting…' : 'Saved in this browser'}</span>
+              </div>
+              <button className="theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
+                {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+                <span>Switch to {theme === 'light' ? 'dark' : 'light'} mode</span>
+              </button>
+            </div>
+          </aside>
+        </>
+      )}
+      <main className="simple-main">
+        <header className="simple-topbar">
+          <div className="topbar-left">
+            <button
+              className="plain-icon open-sidebar"
+              onClick={() => {
+                const next = !sidebarOpen;
+                setSidebarOpen(next);
+                if (next && window.innerWidth <= 1050) setMobileDetailsOpen(false);
+              }}
+              aria-label={sidebarOpen ? 'Hide family members' : 'Show family members'}
+              title={sidebarOpen ? 'Hide family members' : 'Show family members'}
+            >
+              {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+            </button>
+            <div className="top-info-wrap">
+              <button className="plain-icon top-info-button" aria-label="Family tree help">
+                <Info size={17} />
+              </button>
+              <div className="top-info-tooltip" role="tooltip">
+                Select a node to view details. Drag a selected node to move it, or drag empty canvas to pan. Use Ctrl + mouse wheel or trackpad pinch to zoom. Use Ctrl+A to select this family, then
+                Delete to remove the selection. Use the + on a node to add a family member.
+              </div>
+            </div>
+            <div className="topbar-title">
+              <span>FAMILY TREE</span>
+              <h1>{treeName}</h1>
+            </div>
+          </div>
+          <div className="topbar-actions">
+            <button className="top-theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label="Toggle color mode">
+              {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
+            </button>
+            <button
+              className="right-panel-toggle"
+              onClick={() => {
+                if (window.innerWidth <= 1050) {
+                  setSidebarOpen(false);
+                  setDetailsOpen(true);
+                  setMobileDetailsOpen(!mobileDetailsOpen);
+                } else setDetailsOpen(!detailsOpen);
+              }}
+              aria-label={(window.innerWidth <= 1050 ? mobileDetailsOpen : detailsOpen) ? 'Hide person details' : 'Show person details'}
+            >
+              {(window.innerWidth <= 1050 ? mobileDetailsOpen : detailsOpen) ? <PanelRightClose size={17} /> : <PanelRightOpen size={17} />}
+            </button>
+            <button className="add-person-button" onClick={() => openAddPersonForm()}>
+              <Plus size={16} />
+              <span>Add person</span>
+            </button>
+          </div>
+        </header>
+        <div className="tree-toolbar-simple">
+          <label className="link-style-toolbar-field">
+            <span>LINK STYLE</span>
+            <select className="link-style-select" value={linkStyle} onChange={(e) => setLinkStyle(e.target.value)}>
+              <option value="direct">Direct links</option>
+              <option value="classic">Classic branches</option>
+            </select>
+          </label>
+          <div className="tree-count">
+            <UsersRound size={15} />
+            <span>
+              {familyPeople.length} {familyPeople.length === 1 ? 'person' : 'people'}
+            </span>
+            <span className="toolbar-dot">·</span>
+            <span>{layout.generationCount} generations</span>
+          </div>
+          <div className="tree-toolbar-actions">
+            <button
+              className={`move-family-button ${moveFamily ? 'active' : ''}`}
+              onClick={() => {
+                moveFamilyRef.current = !moveFamilyRef.current;
+                setMoveFamily(moveFamilyRef.current);
+              }}
+              aria-pressed={moveFamily}
+              title={moveFamily ? 'Drag a selected node to move it and its descendants' : 'Enable descendant-branch movement'}
+            >
+              <Move size={14} />
+              <span>{moveFamily ? 'Move descendants: on' : 'Move descendants'}</span>
+            </button>
+            <button className="reset-layout-button" onClick={resetLayout} aria-label="Reset all people to automatic layout" title="Reset all people to automatic layout">
+              <RotateCcw size={14} />
+              <span>Reset layout</span>
+            </button>
+            <div className="zoom-tools">
+              <button onClick={() => zoomTo(Math.max(0.35, +(zoomValue.current - 0.1).toFixed(2)))} aria-label="Zoom out">
+                <ZoomOut size={16} />
+              </button>
+              <span>{Math.round(zoom * 100)}%</span>
+              <button onClick={() => zoomTo(Math.min(2, +(zoomValue.current + 0.1).toFixed(2)))} aria-label="Zoom in">
+                <ZoomIn size={16} />
+              </button>
+              <i />
+              <button onClick={() => zoomTo(1)} aria-label="Fit tree">
+                <Maximize2 size={15} />
+              </button>
+            </div>
+          </div>
+        </div>
+        <section className="simple-canvas">
+          <div className="canvas-help">
+            <span className="help-grab">↕</span> Tap or hover for 2 seconds to select; hold for details. On laptop, use the eye icon.{' '}
+            {moveFamily ? 'Drag a selected person to move them, their descendants, and their partners.' : 'Drag a selected node to move it; otherwise drag to pan.'}
+          </div>
+          <div
+            className="tree-scroll"
+            ref={treeScroll}
+            onPointerDown={startPan}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
+          >
+            <div className="tree-zoom-surface" style={{ width: layout.width * zoom, height: layout.height * zoom }}>
+              <div
+                className="tree-board"
+                style={{
+                  width: layout.width,
+                  height: layout.height,
+                  transform: `scale(${zoom})`,
+                  transformOrigin: 'top left',
+                }}
+              >
+                <svg className="connector-svg" width={layout.width} height={layout.height} aria-label="Family relationships">
+                  <defs>
+                    <marker id="family-link-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+                      <path d="M0 0 L8 4 L0 8 Z" fill="var(--line)" />
+                    </marker>
+                    <marker id="partner-link-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+                      <path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" />
+                    </marker>
+                  </defs>
+                  {linkStyle !== 'direct' && <FamilyBranchLinks branches={layout.familyBranches} people={familyPeople} />}
+                  {layout.edges
+                    .filter((edge) => linkStyle === 'direct' || edge.kind !== 'parent')
+                    .map((edge, i) => {
+                      const d =
+                        edge.path ||
+                        (linkStyle === 'classic' && (edge.kind === 'partner' || edge.kind === 'sibling')
+                          ? `M${edge.x1} ${edge.y1} L${edge.x2} ${edge.y2}`
+                          : `M${edge.x1} ${edge.y1} C${edge.c1x} ${edge.c1y} ${edge.c2x} ${edge.c2y} ${edge.x2} ${edge.y2}`);
+                      const from = byId(edge.fromId),
+                        to = byId(edge.toId);
+                      const relation = edge.kind === 'parent' ? relationshipLabel('Parent', from, to) : edge.kind === 'sibling' ? 'Sibling' : relationshipLabel('Partner', from, to) || 'Partner';
+                      const reverseRelation = edge.kind === 'parent' ? relationshipLabel('Child', to, from) : edge.kind === 'sibling' ? 'Sibling' : relationshipLabel('Partner', to, from) || 'Partner';
+                      const description = `${fullName(from)} · ${relation} · ${fullName(to)}`;
+                      const linkId = `${edge.kind}-${edge.fromId}-${edge.toId}`;
+                      const relationLabelPoint = linkLabelPoint(edge, 0.5);
+                      const storedPartnerRelation = edge.kind === 'partner' ? partnerRelationship(from, to?.id) || partnerRelationship(to, from?.id) : '';
+                      const genderedPartnerPair = (from?.gender === 'male' && to?.gender === 'female') || (from?.gender === 'female' && to?.gender === 'male');
+                      const usesDefaultPartnerRole = ['', 'Husband', 'Wife', 'Spouse'].includes(storedPartnerRelation);
+                      const visibleRelation =
+                        edge.kind === 'sibling'
+                          ? 'Sibling'
+                          : edge.kind === 'partner' && genderedPartnerPair && usesDefaultPartnerRole
+                            ? 'Husband · Wife'
+                            : storedPartnerRelation || `${relation} · ${reverseRelation}`;
+                      return (
+                        <g key={`${linkId}-${i}`}>
+                          <path
+                            className={`connector ${edge.kind}`}
+                            d={d}
+                            markerStart={`url(#${edge.kind === 'partner' ? 'partner-link-arrow' : 'family-link-arrow'})`}
+                            markerEnd={`url(#${edge.kind === 'partner' ? 'partner-link-arrow' : 'family-link-arrow'})`}
+                          />
+                          <text className="connector-relation" x={relationLabelPoint.x} y={relationLabelPoint.y} textAnchor="middle" dominantBaseline="central">
+                            <title>
+                              {fullName(from)} · {visibleRelation} · {fullName(to)}
+                            </title>
+                            {visibleRelation}
+                          </text>
+                        </g>
+                      );
+                    })}
+                </svg>
+                {familyPeople.map((person) => {
+                  const pos = layout.positions.get(person.id);
+                  const isDetailsVisible = detailsOpen && selectedId === person.id;
+                  return (
+                    <div
+                      key={person.id}
+                      data-person-id={person.id}
+                      className={`tree-person ${selectedId === person.id || selectedNodeIds.includes(person.id) ? 'selected' : ''}`}
+                      style={{ left: pos.x, top: pos.y }}
+                      onPointerDown={(e) => startDrag(e, person, pos)}
+                      onPointerEnter={(e) => beginNodeHover(person.id, e)}
+                      onPointerLeave={endNodeHover}
+                    >
+                      <button
+                        className="tree-person-card"
+                        aria-label={`Select ${fullName(person)}; press and hold to open details; drag selected node to move`}
+                        onContextMenu={(e) => e.preventDefault()}
+                        onClick={(e) => {
+                          if (e.detail === 0) openPersonDetails(person.id);
+                        }}
+                      >
+                        <PersonAvatar person={person} size="large" />
+                        <span className="tree-person-copy">
+                          <strong>{fullName(person)}</strong>
+                          <small>
+                            {year(person.birthDate)}
+                            {person.deathDate ? ` — ${year(person.deathDate)}` : ' —'}
+                          </small>
+                        </span>
+                        <span className="drag-grip">⠿</span>
+                      </button>
+                      <button
+                        className="tree-node-info"
+                        title={isDetailsVisible ? `Hide ${fullName(person)} details` : `View ${fullName(person)} details`}
+                        aria-label={isDetailsVisible ? `Hide ${fullName(person)} details` : `View ${fullName(person)} details`}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isDetailsVisible) {
+                            setDetailsOpen(false);
+                            setMobileDetailsOpen(false);
+                          } else openPersonDetails(person.id);
+                        }}
+                      >
+                        {isDetailsVisible ? <EyeOff size={13} /> : <Eye size={13} />}
+                      </button>
+                      <div className="tree-node-about-wrap">
+                        <button className="tree-node-about" aria-label={`Information about ${fullName(person)}`} onPointerDown={(e) => e.stopPropagation()}>
+                          <Info size={13} />
+                        </button>
+                        <div className="tree-node-about-tooltip" onPointerDown={(e) => e.stopPropagation()}>
+                          <strong>{fullName(person)}</strong>
+                          <span>Gender: {person.gender && person.gender !== 'unspecified' ? person.gender : 'Not specified'}</span>
+                          <span>Born: {person.birthDate ? year(person.birthDate) : 'Not added'}</span>
+                          {person.birthPlace && <span>Place: {person.birthPlace}</span>}
+                          {person.occupation && <span>Occupation: {person.occupation}</span>}
+                        </div>
+                      </div>
+                      <button
+                        className="tree-node-delete"
+                        title={`Delete ${fullName(person)}`}
+                        aria-label={`Delete ${fullName(person)}`}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedId(person.id);
+                          setSelectedNodeIds([]);
+                          setConfirmDelete(true);
+                        }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                      <button
+                        className="tree-node-add"
+                        title={`Add a family member related to ${fullName(person)}`}
+                        aria-label={`Add a family member related to ${fullName(person)}`}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAddMenuId(addMenuId === person.id ? '' : person.id);
+                        }}
+                      >
+                        <Plus size={15} />
+                      </button>
+                      {addMenuId === person.id && (
+                        <div className="node-add-menu" onPointerDown={(e) => e.stopPropagation()}>
+                          <button onClick={() => addRelatedPerson('parent', person)}>Add parent</button>
+                          <button onClick={() => addRelatedPerson('partner', person)}>Add partner</button>
+                          <button onClick={() => addRelatedPerson('child', person)}>Add child</button>
+                          <button onClick={() => addRelatedPerson('sibling', person)}>Add sibling</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {!familyPeople.length && (
+                  <div className="tree-empty">
+                    <div className="tree-empty-icon">
+                      <GitFork size={26} />
+                    </div>
+                    <h2>Start your family tree</h2>
+                    <p>Add a person, then link parents and partners to build the branches.</p>
+                    <button className="add-person-button" onClick={() => openAddPersonForm()}>
+                      <Plus size={16} />
+                      Add first person
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="canvas-zoom-controls">
+            <button onClick={() => zoomTo(Math.min(2, +(zoomValue.current + 0.1).toFixed(2)))} aria-label="Zoom in">
+              <Plus size={17} />
+            </button>
+            <button onClick={() => zoomTo(Math.max(0.35, +(zoomValue.current - 0.1).toFixed(2)))} aria-label="Zoom out">
+              <span>−</span>
+            </button>
+            <button onClick={() => zoomTo(1)} aria-label="Reset zoom">
+              <Maximize2 size={15} />
+            </button>
+          </div>
+        </section>
+      </main>
+      {mobileDetailsOpen && <button className="details-scrim" onClick={clearSelection} aria-label="Close person details and clear selection" />}
+      {detailsOpen && (
+        <aside className={`simple-details ${mobileDetailsOpen ? 'show-mobile' : ''} ${modal?.inline ? 'editing-person' : ''}`}>
+          <div
+            className="details-resize-handle"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize details panel"
+            aria-valuenow={detailsWidth}
+            tabIndex={0}
+            onKeyDown={handleDetailsResizeKey}
+            onPointerDown={beginDetailsResize}
+            onPointerMove={moveDetailsResize}
+            onPointerUp={endDetailsResize}
+            onPointerCancel={endDetailsResize}
+          />
+          {modal?.inline && (!modal.person || modal.person.id === selected?.id) ? (
+            <PersonModal
+              key={modal.person?.id || modal.kind || 'new'}
+              modal={modal}
+              people={people}
+              onClose={() => {
+                setModal(null);
+                if (!selected) {
+                  setDetailsOpen(false);
+                  setMobileDetailsOpen(false);
+                }
+              }}
+              onSave={saveMember}
+            />
+          ) : selected ? (
+            <>
+              <div className="details-heading">
+                <span>PERSON DETAILS</span>
+                <div>
+                  <button className="plain-icon mobile-details-close" onClick={() => setMobileDetailsOpen(false)} aria-label="Close details">
+                    <X size={17} />
+                  </button>
+                  <button className="plain-icon" onClick={() => setModal({ person: selected, inline: true })} aria-label="Edit person">
+                    <Pencil size={15} />
+                  </button>
+                </div>
+              </div>
+              <div className="selected-profile">
+                <PersonAvatar person={selected} size="profile" />
+                <h2>{fullName(selected)}</h2>
+                <span className="person-years">
+                  {year(selected.birthDate)}
+                  {selected.deathDate ? ` — ${year(selected.deathDate)}` : ' —'}
+                </span>
+              </div>
+              <div className="details-fields">
+                <div className="detail-field">
+                  <CalendarDays size={15} />
+                  <span>
+                    <small>Born</small>
+                    <strong>
+                      {selected.birthDate
+                        ? new Date(`${selected.birthDate}T00:00:00`).toLocaleDateString(undefined, {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric',
+                          })
+                        : 'Not added'}
+                    </strong>
+                  </span>
+                </div>
+                <div className="detail-field">
+                  <MapPin size={15} />
+                  <span>
+                    <small>Birthplace</small>
+                    <strong>{selected.birthPlace || 'Not added'}</strong>
+                  </span>
+                </div>
+                {selected.deathDate && (
+                  <div className="detail-field">
+                    <CalendarDays size={15} />
+                    <span>
+                      <small>Died</small>
+                      <strong>
+                        {new Date(`${selected.deathDate}T00:00:00`).toLocaleDateString(undefined, {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        })}
+                      </strong>
+                    </span>
+                  </div>
+                )}
+                {selected.occupation && (
+                  <div className="detail-field">
+                    <Heart size={15} />
+                    <span>
+                      <small>Occupation</small>
+                      <strong>{selected.occupation}</strong>
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="details-bio">
+                <label>ABOUT</label>
+                <p>{selected.bio || 'Add a short story or memory about this person.'}</p>
+              </div>
+              <div className="details-links">
+                <label>FAMILY LINKS</label>
+                {[
+                  ...(selected.parentIds || []).map((id) => ({ id, role: 'Parent' })),
+                  ...(selected.partnerIds || []).map((id) => ({
+                    id,
+                    role: 'Partner',
+                    label: partnerDisplayLabel(selected, byId(id)),
+                  })),
+                  ...people.filter((p) => (p.parentIds || []).includes(selected.id)).map((p) => ({ id: p.id, role: 'Child' })),
+                  ...people.filter((p) => p.id !== selected.id && (p.parentIds || []).some((parentId) => (selected.parentIds || []).includes(parentId))).map((p) => ({ id: p.id, role: 'Sibling' })),
+                ].map(
+                  (link, i) =>
+                    byId(link.id) && (
+                      <button key={`${link.role}-${link.id}-${i}`} onClick={() => openPersonDetails(link.id)}>
+                        <PersonAvatar person={byId(link.id)} />
+                        <span>
+                          <strong>{fullName(byId(link.id))}</strong>
+                          <small>{link.label || relationshipLabel(link.role, byId(link.id), selected)}</small>
+                        </span>
+                      </button>
+                    ),
+                )}
+                <button className="link-edit-button" onClick={() => setModal({ person: selected, inline: true })}>
+                  <Link2 size={14} /> Edit links
+                </button>
+                <button className="remove-person-button" onClick={() => setConfirmDelete(true)}>
+                  <Trash2 size={14} /> Remove person
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="details-empty">
+              <UsersRound size={23} />
+              <p>Select a person in the tree to see details.</p>
+            </div>
+          )}
+        </aside>
+      )}
+      {modal && !modal.inline && <PersonModal key={modal.person?.id || modal.kind || 'new'} modal={modal} people={people} onClose={() => setModal(null)} onSave={saveMember} />}
+      {confirmDelete && selected && (
+        <div className="simple-modal-backdrop">
+          <div className="delete-dialog">
+            <h2>{selectedNodeIds.length > 1 ? `Remove ${selectedNodeIds.length} selected people?` : `Remove ${fullName(selected)}?`}</h2>
+            <p>
+              {selectedNodeIds.length > 1
+                ? 'This will permanently remove the selected family members and their links.'
+                : deleteDescendants
+                  ? `This will also delete ${selectedDescendants.length} descendant${selectedDescendants.length === 1 ? '' : 's'} and their links.`
+                  : 'This also removes their links from the tree.'}
+            </p>
+            {selectedNodeIds.length <= 1 && (
+              <label className="delete-descendants-option">
+                <input type="checkbox" checked={deleteDescendants} onChange={(e) => setDeleteDescendants(e.target.checked)} />
+                <span>Also delete all descendants ({selectedDescendants.length})</span>
+              </label>
+            )}
+            <div>
+              <button onClick={() => setConfirmDelete(false)}>Cancel</button>
+              <button className="danger-action" onClick={removePerson}>
+                Remove {selectedNodeIds.length > 1 ? 'selected people' : 'person'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {toast && <div className="simple-toast">{toast}</div>}
+    </div>
+  );
 }
 
-const partnerRelationshipOptions=['Husband','Wife','Boyfriend','Girlfriend','Fiancé','Fiancée','Partner','Spouse','Former spouse','Former partner'];
-function defaultPartnerLabel(gender){return gender==='male'?'Husband':gender==='female'?'Wife':'Spouse'}
-function PersonLinkPicker({people,selectedIds,onChange,excludeId,placeholder,max=Infinity,relationships,onRelationshipsChange,defaultRelationship='Spouse'}){const [query,setQuery]=useState('');const selected=people.filter(person=>selectedIds.includes(person.id));const results=people.filter(person=>person.id!==excludeId&&!selectedIds.includes(person.id)&&fullName(person).toLowerCase().includes(query.trim().toLowerCase())).slice(0,6);const hasRelationships=Boolean(relationships&&onRelationshipsChange);function add(id){if(selectedIds.length>=max)return;onChange([...selectedIds,id]);if(hasRelationships)onRelationshipsChange([...relationships,{partnerId:id,label:defaultRelationship}]);setQuery('')}function remove(id){onChange(selectedIds.filter(selectedId=>selectedId!==id));if(hasRelationships)onRelationshipsChange(relationships.filter(link=>link.partnerId!==id))}function setLabel(id,label){onRelationshipsChange(relationships.map(link=>link.partnerId===id?{...link,label}:link))}return <div className="person-link-picker">{hasRelationships?<div className="partner-link-list">{selected.map(person=>{const relationship=relationships.find(link=>link.partnerId===person.id);const label=relationship?relationship.label:defaultRelationship;const isCustom=!partnerRelationshipOptions.includes(label);return <div className="partner-link-row" key={person.id}><strong>{fullName(person)}</strong><select aria-label={`Relationship with ${fullName(person)}`} value={isCustom?'Other':label} onChange={e=>setLabel(person.id,e.target.value==='Other'?(partnerRelationshipOptions.includes(label)?'':label):e.target.value)}>{partnerRelationshipOptions.map(option=><option key={option}>{option}</option>)}<option>Other</option></select>{(isCustom||label==='')&&<input className="custom-relationship-input" aria-label={`Custom relationship with ${fullName(person)}`} value={isCustom?label:''} onChange={e=>setLabel(person.id,e.target.value)} placeholder="Describe relationship"/>}<button type="button" className="remove-link-button" onClick={()=>remove(person.id)} aria-label={`Remove ${fullName(person)}`}><X size={13}/></button></div>})}</div>:<div className="link-chip-list">{selected.map(person=><button type="button" key={person.id} onClick={()=>remove(person.id)}>{fullName(person)} <X size={12}/></button>)}</div>}<label className="link-search"><Search size={13}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={placeholder}/></label>{query&&<div className="link-search-results">{results.map(person=><button type="button" key={person.id} onClick={()=>add(person.id)}>{fullName(person)}</button>)}{!results.length&&<span>No matching people</span>}</div>}</div>}
+const partnerRelationshipOptions = ['Husband', 'Wife', 'Boyfriend', 'Girlfriend', 'Fiancé', 'Fiancée', 'Partner', 'Spouse', 'Former spouse', 'Former partner'];
+function defaultPartnerLabel(gender) {
+  return gender === 'male' ? 'Husband' : gender === 'female' ? 'Wife' : 'Spouse';
+}
+function PersonLinkPicker({ people, selectedIds, onChange, excludeId, placeholder, max = Infinity, relationships, onRelationshipsChange, defaultRelationship = 'Spouse' }) {
+  const [query, setQuery] = useState('');
+  const selected = people.filter((person) => selectedIds.includes(person.id));
+  const results = people.filter((person) => person.id !== excludeId && !selectedIds.includes(person.id) && fullName(person).toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6);
+  const hasRelationships = Boolean(relationships && onRelationshipsChange);
+  function add(id) {
+    if (selectedIds.length >= max) return;
+    onChange([...selectedIds, id]);
+    if (hasRelationships) onRelationshipsChange([...relationships, { partnerId: id, label: defaultRelationship }]);
+    setQuery('');
+  }
+  function remove(id) {
+    onChange(selectedIds.filter((selectedId) => selectedId !== id));
+    if (hasRelationships) onRelationshipsChange(relationships.filter((link) => link.partnerId !== id));
+  }
+  function setLabel(id, label) {
+    onRelationshipsChange(relationships.map((link) => (link.partnerId === id ? { ...link, label } : link)));
+  }
+  return (
+    <div className="person-link-picker">
+      {hasRelationships ? (
+        <div className="partner-link-list">
+          {selected.map((person) => {
+            const relationship = relationships.find((link) => link.partnerId === person.id);
+            const label = relationship ? relationship.label : defaultRelationship;
+            const isCustom = !partnerRelationshipOptions.includes(label);
+            return (
+              <div className="partner-link-row" key={person.id}>
+                <strong>{fullName(person)}</strong>
+                <select
+                  aria-label={`Relationship with ${fullName(person)}`}
+                  value={isCustom ? 'Other' : label}
+                  onChange={(e) => setLabel(person.id, e.target.value === 'Other' ? (partnerRelationshipOptions.includes(label) ? '' : label) : e.target.value)}
+                >
+                  {partnerRelationshipOptions.map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                  <option>Other</option>
+                </select>
+                {(isCustom || label === '') && (
+                  <input
+                    className="custom-relationship-input"
+                    aria-label={`Custom relationship with ${fullName(person)}`}
+                    value={isCustom ? label : ''}
+                    onChange={(e) => setLabel(person.id, e.target.value)}
+                    placeholder="Describe relationship"
+                  />
+                )}
+                <button type="button" className="remove-link-button" onClick={() => remove(person.id)} aria-label={`Remove ${fullName(person)}`}>
+                  <X size={13} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="link-chip-list">
+          {selected.map((person) => (
+            <button type="button" key={person.id} onClick={() => remove(person.id)}>
+              {fullName(person)} <X size={12} />
+            </button>
+          ))}
+        </div>
+      )}
+      <label className="link-search">
+        <Search size={13} />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={placeholder} />
+      </label>
+      {query && (
+        <div className="link-search-results">
+          {results.map((person) => (
+            <button type="button" key={person.id} onClick={() => add(person.id)}>
+              {fullName(person)}
+            </button>
+          ))}
+          {!results.length && <span>No matching people</span>}
+        </div>
+      )}
+    </div>
+  );
+}
 
-function PersonModal({modal,people,onClose,onSave}){const p=modal.person;const [form,setForm]=useState({firstName:p?.firstName||'',lastName:p?.lastName||'',gender:p?.gender||'unspecified',birthDate:p?.birthDate?.slice(0,10)||'',deathDate:p?.deathDate?.slice(0,10)||'',birthPlace:p?.birthPlace||'',photoUrl:p?.photoUrl||'',occupation:p?.occupation||'',bio:p?.bio||'',notes:p?.notes||''});const initialParents=modal.kind==='child'?[modal.parent.id]:modal.kind==='sibling'?(modal.parent?.parentIds||[]):modal.kind==='parent'?[]:p?.parentIds||[];const [parentIds,setParents]=useState(initialParents);const initialPartners=modal.kind==='partner'?[modal.parent.id]:p?.partnerIds||[];const [partnerIds,setPartners]=useState(initialPartners);const [partnerRelationships,setPartnerRelationships]=useState(()=>initialPartners.map(id=>({partnerId:id,label:partnerRelationship(p,id)||defaultPartnerLabel(form.gender)})));const updatePartners=ids=>{setPartners(ids);setPartnerRelationships(previous=>ids.map(id=>previous.find(link=>link.partnerId===id)||{partnerId:id,label:defaultPartnerLabel(form.gender)}))};useEffect(()=>{setPartnerRelationships(previous=>previous.map(link=>['Husband','Wife','Spouse'].includes(link.label)?{...link,label:defaultPartnerLabel(form.gender)}:link))},[form.gender]);const change=(k,v)=>setForm(x=>({...x,[k]:v}));function submit(e){e.preventDefault();onSave({...form,parentIds,partnerIds,partnerRelationships})}
-  const title=p?'Edit person':modal.kind==='parent'?'Add a parent':modal.kind==='child'?'Add a child':modal.kind==='sibling'?'Add a sibling':modal.kind==='partner'?'Add a partner':'Add a person';const editor=<form className={modal.inline?"inline-person-editor":"simple-person-modal"} onSubmit={submit}><header><div><small>FAMILY MEMBER</small><h2>{title}</h2></div><button type="button" className="plain-icon" onClick={onClose}><X size={18}/></button></header><div className="person-form-body"><label className="photo-url"><Camera size={15}/><span>Photo URL</span><input value={form.photoUrl} onChange={e=>change('photoUrl',e.target.value)} placeholder="https://…"/></label><div className="simple-form-grid"><label>First name *<input required value={form.firstName} onChange={e=>change('firstName',e.target.value)} placeholder="First name"/></label><label>Last name<input value={form.lastName} onChange={e=>change('lastName',e.target.value)} placeholder="Last name"/></label><label>Gender<select value={form.gender} onChange={e=>change("gender",e.target.value)}><option value="unspecified">Not specified</option><option value="female">Female</option><option value="male">Male</option><option value="nonbinary">Nonbinary</option></select></label><label>Born<input type="date" value={form.birthDate} onChange={e=>change('birthDate',e.target.value)}/></label><label>Died<input type="date" value={form.deathDate} onChange={e=>change('deathDate',e.target.value)}/></label><label>Birthplace<input value={form.birthPlace} onChange={e=>change('birthPlace',e.target.value)} placeholder="City, country"/></label><label>Occupation<input value={form.occupation} onChange={e=>change('occupation',e.target.value)} placeholder="Occupation"/></label><label className="wide-form-field">About<textarea rows="3" value={form.bio} onChange={e=>change('bio',e.target.value)} placeholder="A little about this person"/></label><label className="wide-form-field">Family notes<textarea rows="2" value={form.notes} onChange={e=>change('notes',e.target.value)} placeholder="Notes for the family archive"/></label></div><div className="simple-link-field"><strong>Parents</strong><PersonLinkPicker people={people} selectedIds={parentIds} onChange={setParents} excludeId={p?.id||modal.parent?.id} placeholder="Search and link parents" max={2}/></div><div className="simple-link-field"><strong>Partner or spouse</strong><PersonLinkPicker people={people} selectedIds={partnerIds} onChange={updatePartners} excludeId={p?.id} placeholder="Search and link partner" relationships={partnerRelationships} onRelationshipsChange={setPartnerRelationships} defaultRelationship={defaultPartnerLabel(form.gender)}/></div></div><footer><button type="button" onClick={onClose}>Cancel</button><button type="submit" className="save-person-button">{p?'Save changes':'Add person'}</button></footer></form>;return modal.inline?editor:<div className="simple-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>{editor}</div>
+function PersonModal({ modal, people, onClose, onSave }) {
+  const p = modal.person;
+  const [form, setForm] = useState({
+    firstName: p?.firstName || '',
+    lastName: p?.lastName || '',
+    gender: p?.gender || 'unspecified',
+    birthDate: p?.birthDate?.slice(0, 10) || '',
+    deathDate: p?.deathDate?.slice(0, 10) || '',
+    birthPlace: p?.birthPlace || '',
+    photoUrl: p?.photoUrl || '',
+    occupation: p?.occupation || '',
+    bio: p?.bio || '',
+    notes: p?.notes || '',
+  });
+  const solePartnerIds = (modal.parent?.partnerIds || []).filter((id) => people.some((person) => person.id === id));
+  const initialParents =
+    modal.kind === 'child'
+      ? [modal.parent.id, ...(solePartnerIds.length === 1 ? solePartnerIds : [])]
+      : modal.kind === 'sibling'
+        ? modal.parent?.parentIds || []
+        : modal.kind === 'parent'
+          ? []
+          : p?.parentIds || [];
+  const [parentIds, setParents] = useState(initialParents);
+  const initialPartners = modal.kind === 'partner' ? [modal.parent.id] : p?.partnerIds || [];
+  const [partnerIds, setPartners] = useState(initialPartners);
+  const [partnerRelationships, setPartnerRelationships] = useState(() =>
+    initialPartners.map((id) => ({
+      partnerId: id,
+      label: partnerRelationship(p, id) || defaultPartnerLabel(form.gender),
+    })),
+  );
+  const updatePartners = (ids) => {
+    setPartners(ids);
+    setPartnerRelationships((previous) =>
+      ids.map(
+        (id) =>
+          previous.find((link) => link.partnerId === id) || {
+            partnerId: id,
+            label: defaultPartnerLabel(form.gender),
+          },
+      ),
+    );
+  };
+  useEffect(() => {
+    setPartnerRelationships((previous) => previous.map((link) => (['Husband', 'Wife', 'Spouse'].includes(link.label) ? { ...link, label: defaultPartnerLabel(form.gender) } : link)));
+  }, [form.gender]);
+  const change = (k, v) => setForm((x) => ({ ...x, [k]: v }));
+  function submit(e) {
+    e.preventDefault();
+    onSave({ ...form, parentIds, partnerIds, partnerRelationships });
+  }
+  const title = p
+    ? 'Edit person'
+    : modal.kind === 'parent'
+      ? 'Add a parent'
+      : modal.kind === 'child'
+        ? 'Add a child'
+        : modal.kind === 'sibling'
+          ? 'Add a sibling'
+          : modal.kind === 'partner'
+            ? 'Add a partner'
+            : 'Add a person';
+  const editor = (
+    <form className={modal.inline ? 'inline-person-editor' : 'simple-person-modal'} onSubmit={submit}>
+      <header>
+        <div>
+          <small>FAMILY MEMBER</small>
+          <h2>{title}</h2>
+        </div>
+        <button type="button" className="plain-icon" onClick={onClose}>
+          <X size={18} />
+        </button>
+      </header>
+      <div className="person-form-body">
+        <label className="photo-url">
+          <Camera size={15} />
+          <span>Photo URL</span>
+          <input value={form.photoUrl} onChange={(e) => change('photoUrl', e.target.value)} placeholder="https://…" />
+        </label>
+        <div className="simple-form-grid">
+          <label>
+            First name *
+            <input required value={form.firstName} onChange={(e) => change('firstName', e.target.value)} placeholder="First name" />
+          </label>
+          <label>
+            Last name
+            <input value={form.lastName} onChange={(e) => change('lastName', e.target.value)} placeholder="Last name" />
+          </label>
+          <label>
+            Gender
+            <select value={form.gender} onChange={(e) => change('gender', e.target.value)}>
+              <option value="unspecified">Not specified</option>
+              <option value="female">Female</option>
+              <option value="male">Male</option>
+              <option value="nonbinary">Nonbinary</option>
+            </select>
+          </label>
+          <label>
+            Born
+            <input type="date" value={form.birthDate} onChange={(e) => change('birthDate', e.target.value)} />
+          </label>
+          <label>
+            Died
+            <input type="date" value={form.deathDate} onChange={(e) => change('deathDate', e.target.value)} />
+          </label>
+          <label>
+            Birthplace
+            <input value={form.birthPlace} onChange={(e) => change('birthPlace', e.target.value)} placeholder="City, country" />
+          </label>
+          <label>
+            Occupation
+            <input value={form.occupation} onChange={(e) => change('occupation', e.target.value)} placeholder="Occupation" />
+          </label>
+          <label className="wide-form-field">
+            About
+            <textarea rows="3" value={form.bio} onChange={(e) => change('bio', e.target.value)} placeholder="A little about this person" />
+          </label>
+          <label className="wide-form-field">
+            Family notes
+            <textarea rows="2" value={form.notes} onChange={(e) => change('notes', e.target.value)} placeholder="Notes for the family archive" />
+          </label>
+        </div>
+        <div className="simple-link-field">
+          <strong>Parents</strong>
+          <PersonLinkPicker people={people} selectedIds={parentIds} onChange={setParents} excludeId={p?.id || modal.parent?.id} placeholder="Search and link parents" max={2} />
+        </div>
+        <div className="simple-link-field">
+          <strong>Partner or spouse</strong>
+          <PersonLinkPicker
+            people={people}
+            selectedIds={partnerIds}
+            onChange={updatePartners}
+            excludeId={p?.id}
+            placeholder="Search and link partner"
+            relationships={partnerRelationships}
+            onRelationshipsChange={setPartnerRelationships}
+            defaultRelationship={defaultPartnerLabel(form.gender)}
+          />
+        </div>
+      </div>
+      <footer>
+        <button type="button" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="submit" className="save-person-button">
+          {p ? 'Save changes' : 'Add person'}
+        </button>
+      </footer>
+    </form>
+  );
+  return modal.inline ? (
+    editor
+  ) : (
+    <div
+      className="simple-modal-backdrop"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      {editor}
+    </div>
+  );
 }

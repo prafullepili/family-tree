@@ -4,10 +4,10 @@ function connectRectangles(from, to) {
   let dx = toCenter.x - fromCenter.x;
   let dy = toCenter.y - fromCenter.y;
   if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) dy = 1;
-  const fromScaleX = (from.w / 2) / Math.max(Math.abs(dx), 0.001);
-  const fromScaleY = (from.h / 2) / Math.max(Math.abs(dy), 0.001);
-  const toScaleX = (to.w / 2) / Math.max(Math.abs(dx), 0.001);
-  const toScaleY = (to.h / 2) / Math.max(Math.abs(dy), 0.001);
+  const fromScaleX = from.w / 2 / Math.max(Math.abs(dx), 0.001);
+  const fromScaleY = from.h / 2 / Math.max(Math.abs(dy), 0.001);
+  const toScaleX = to.w / 2 / Math.max(Math.abs(dx), 0.001);
+  const toScaleY = to.h / 2 / Math.max(Math.abs(dy), 0.001);
   const fromHorizontal = fromScaleX < fromScaleY;
   const toHorizontal = toScaleX < toScaleY;
   const fromScale = Math.min(fromScaleX, fromScaleY);
@@ -16,8 +16,8 @@ function connectRectangles(from, to) {
   const y1 = fromCenter.y + dy * fromScale;
   const x2 = toCenter.x - dx * toScale;
   const y2 = toCenter.y - dy * toScale;
-  const fromSide = fromHorizontal ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'bottom' : 'top');
-  const toSide = toHorizontal ? (dx > 0 ? 'left' : 'right') : (dy > 0 ? 'top' : 'bottom');
+  const fromSide = fromHorizontal ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'bottom' : 'top';
+  const toSide = toHorizontal ? (dx > 0 ? 'left' : 'right') : dy > 0 ? 'top' : 'bottom';
   const normals = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] };
   const reach = Math.max(24, Math.min(100, Math.hypot(dx, dy) * 0.32));
   const [fromNX, fromNY] = normals[fromSide];
@@ -57,7 +57,7 @@ function connectParentChild(parent, child) {
 }
 
 export function layoutTree(people) {
-  const representative = new Map(people.map(person => [person.id, person.id]));
+  const representative = new Map(people.map((person) => [person.id, person.id]));
   function find(id) {
     const parent = representative.get(id);
     if (!parent || parent === id) return parent;
@@ -75,21 +75,23 @@ export function layoutTree(people) {
   // connected component puts every partner on one row and makes long links
   // run through unrelated cards. Build primary couple units from shared
   // children first, then pair remaining unclaimed partners where possible.
-  const personById = new Map(people.map(person => [person.id, person]));
+  const personById = new Map(people.map((person) => [person.id, person]));
   const personOrder = new Map(people.map((person, index) => [person.id, index]));
   const partnerPairs = new Map();
-  people.forEach(person => (person.partnerIds || []).forEach(partnerId => {
-    if (!personById.has(partnerId) || partnerId === person.id) return;
-    const ids = [person.id, partnerId].sort((a, b) => personOrder.get(a) - personOrder.get(b));
-    const key = ids.join(':');
-    if (!partnerPairs.has(key)) {
-      const left = personById.get(ids[0]);
-      const right = personById.get(ids[1]);
-      const leftChildren = new Set(people.filter(child => (child.parentIds || []).includes(left.id)).map(child => child.id));
-      const sharedChildren = people.filter(child => leftChildren.has(child.id) && (child.parentIds || []).includes(right.id)).length;
-      partnerPairs.set(key, { ids, sharedChildren });
-    }
-  }));
+  people.forEach((person) =>
+    (person.partnerIds || []).forEach((partnerId) => {
+      if (!personById.has(partnerId) || partnerId === person.id) return;
+      const ids = [person.id, partnerId].sort((a, b) => personOrder.get(a) - personOrder.get(b));
+      const key = ids.join(':');
+      if (!partnerPairs.has(key)) {
+        const left = personById.get(ids[0]);
+        const right = personById.get(ids[1]);
+        const leftChildren = new Set(people.filter((child) => (child.parentIds || []).includes(left.id)).map((child) => child.id));
+        const sharedChildren = people.filter((child) => leftChildren.has(child.id) && (child.parentIds || []).includes(right.id)).length;
+        partnerPairs.set(key, { ids, sharedChildren });
+      }
+    }),
+  );
   const claimedPartners = new Set();
   [...partnerPairs.values()]
     .sort((a, b) => b.sharedChildren - a.sharedChildren || personOrder.get(a.ids[0]) - personOrder.get(b.ids[0]) || personOrder.get(a.ids[1]) - personOrder.get(b.ids[1]))
@@ -102,28 +104,32 @@ export function layoutTree(people) {
 
   const components = new Map();
   const componentOf = new Map();
-  people.forEach(person => {
+  people.forEach((person) => {
     const id = find(person.id);
     if (!components.has(id)) components.set(id, { id, members: [] });
     components.get(id).members.push(person);
     componentOf.set(person.id, id);
   });
   const componentParents = new Map();
-  const componentPartners = new Map([...components.keys()].map(id => [id, new Set()]));
-  people.forEach(person => (person.partnerIds || []).forEach(partnerId => {
-    const from = componentOf.get(person.id);
-    const to = componentOf.get(partnerId);
-    if (from && to && from !== to) {
-      componentPartners.get(from).add(to);
-      componentPartners.get(to).add(from);
-    }
-  }));
-  components.forEach(component => {
+  const componentPartners = new Map([...components.keys()].map((id) => [id, new Set()]));
+  people.forEach((person) =>
+    (person.partnerIds || []).forEach((partnerId) => {
+      const from = componentOf.get(person.id);
+      const to = componentOf.get(partnerId);
+      if (from && to && from !== to) {
+        componentPartners.get(from).add(to);
+        componentPartners.get(to).add(from);
+      }
+    }),
+  );
+  components.forEach((component) => {
     const parents = new Set();
-    component.members.forEach(person => (person.parentIds || []).forEach(parentId => {
-      const parentComponent = componentOf.get(parentId);
-      if (parentComponent && parentComponent !== component.id) parents.add(parentComponent);
-    }));
+    component.members.forEach((person) =>
+      (person.parentIds || []).forEach((parentId) => {
+        const parentComponent = componentOf.get(parentId);
+        if (parentComponent && parentComponent !== component.id) parents.add(parentComponent);
+      }),
+    );
     componentParents.set(component.id, [...parents]);
   });
 
@@ -133,18 +139,18 @@ export function layoutTree(people) {
     if (path.has(id)) return 0;
     const nextPath = new Set(path).add(id);
     const parents = componentParents.get(id) || [];
-    const level = parents.length ? Math.max(...parents.map(parentId => getLevel(parentId, nextPath))) + 1 : 0;
+    const level = parents.length ? Math.max(...parents.map((parentId) => getLevel(parentId, nextPath))) + 1 : 0;
     levels.set(id, level);
     return level;
   }
-  components.forEach(component => getLevel(component.id));
+  components.forEach((component) => getLevel(component.id));
 
   // Partner groups without parent links (for example a second partner and
   // their spouse) belong beside the generation they connect to, not at the
   // top of the entire canvas. Keep their separate couple units, while giving
   // every unit in the connected partner network the deepest family level.
   const visitedPartnerComponents = new Set();
-  components.forEach(component => {
+  components.forEach((component) => {
     if (visitedPartnerComponents.has(component.id)) return;
     const network = [];
     const pending = [component.id];
@@ -155,15 +161,15 @@ export function layoutTree(people) {
       visitedPartnerComponents.add(id);
       network.push(id);
       networkLevel = Math.max(networkLevel, levels.get(id) || 0);
-      (componentPartners.get(id) || []).forEach(partnerId => {
+      (componentPartners.get(id) || []).forEach((partnerId) => {
         if (!visitedPartnerComponents.has(partnerId)) pending.push(partnerId);
       });
     }
-    network.forEach(id => levels.set(id, networkLevel));
+    network.forEach((id) => levels.set(id, networkLevel));
   });
 
   const rows = new Map();
-  components.forEach(component => {
+  components.forEach((component) => {
     const level = levels.get(component.id) || 0;
     rows.set(level, [...(rows.get(level) || []), component]);
   });
@@ -180,46 +186,46 @@ export function layoutTree(people) {
 
   for (let level = 0; level <= maxLevel; level++) {
     const groupsByParents = new Map();
-    (rows.get(level) || []).forEach(component => {
+    (rows.get(level) || []).forEach((component) => {
       const parents = componentParents.get(component.id) || [];
       const key = parents.length ? [...parents].sort().join('|') : `root:${component.id}`;
       if (!groupsByParents.has(key)) groupsByParents.set(key, { parents, components: [] });
       groupsByParents.get(key).components.push(component);
     });
 
-    const groups = [...groupsByParents.values()].map(group => {
-      const anchors = group.parents.map(parentId => canonical.get(parentId)?.center).filter(Number.isFinite);
-      if (!anchors.length) {
-        group.components.forEach(component => {
-          (componentPartners.get(component.id) || []).forEach(partnerId => {
-            const partnerAnchor = canonical.get(partnerId)?.center;
-            if (Number.isFinite(partnerAnchor)) anchors.push(partnerAnchor);
-            else (componentParents.get(partnerId) || []).forEach(parentId => {
-              const parentAnchor = canonical.get(parentId)?.center;
-              if (Number.isFinite(parentAnchor)) anchors.push(parentAnchor);
+    const groups = [...groupsByParents.values()]
+      .map((group) => {
+        const anchors = group.parents.map((parentId) => canonical.get(parentId)?.center).filter(Number.isFinite);
+        if (!anchors.length) {
+          group.components.forEach((component) => {
+            (componentPartners.get(component.id) || []).forEach((partnerId) => {
+              const partnerAnchor = canonical.get(partnerId)?.center;
+              if (Number.isFinite(partnerAnchor)) anchors.push(partnerAnchor);
+              else
+                (componentParents.get(partnerId) || []).forEach((parentId) => {
+                  const parentAnchor = canonical.get(parentId)?.center;
+                  if (Number.isFinite(parentAnchor)) anchors.push(parentAnchor);
+                });
             });
           });
-        });
-      }
-      const anchor = anchors.length ? anchors.reduce((sum, x) => sum + x, 0) / anchors.length : null;
-      const widths = group.components.map(component => component.members.length * nodeWidth + Math.max(0, component.members.length - 1) * partnerGap);
-      const width = widths.reduce((sum, value) => sum + value, 0) + Math.max(0, widths.length - 1) * siblingGap;
-      return { ...group, anchor, widths, width };
-    }).sort((a, b) => {
-      if (a.anchor === null && b.anchor !== null) return -1;
-      if (a.anchor !== null && b.anchor === null) return 1;
-      return (a.anchor ?? 0) - (b.anchor ?? 0);
-    });
+        }
+        const anchor = anchors.length ? anchors.reduce((sum, x) => sum + x, 0) / anchors.length : null;
+        const widths = group.components.map((component) => component.members.length * nodeWidth + Math.max(0, component.members.length - 1) * partnerGap);
+        const width = widths.reduce((sum, value) => sum + value, 0) + Math.max(0, widths.length - 1) * siblingGap;
+        return { ...group, anchor, widths, width };
+      })
+      .sort((a, b) => {
+        if (a.anchor === null && b.anchor !== null) return -1;
+        if (a.anchor !== null && b.anchor === null) return 1;
+        return (a.anchor ?? 0) - (b.anchor ?? 0);
+      });
 
     let cursor = 0;
     const placedGroups = [];
-    groups.forEach(group => {
+    groups.forEach((group) => {
       const desiredLeft = group.anchor === null ? cursor : group.anchor - group.width / 2;
       let left = desiredLeft;
-      const hasSpace = candidate => placedGroups.every(placed =>
-        candidate + group.width + familyGap <= placed.left ||
-        candidate >= placed.right + familyGap
-      );
+      const hasSpace = (candidate) => placedGroups.every((placed) => candidate + group.width + familyGap <= placed.left || candidate >= placed.right + familyGap);
       if (group.anchor === null) {
         while (!hasSpace(left)) left += group.width + familyGap;
       } else if (!hasSpace(left)) {
@@ -250,15 +256,14 @@ export function layoutTree(people) {
   }
 
   const positions = new Map();
-  people.forEach(person => {
+  people.forEach((person) => {
     const component = components.get(componentOf.get(person.id));
     const automatic = canonical.get(component.id);
     const memberIndex = component.members.indexOf(person);
     const level = levels.get(component.id) || 0;
     const automaticX = automatic.x + memberIndex * (nodeWidth + partnerGap);
     const hasNoParents = !(componentParents.get(component.id) || []).length;
-    const hasPartnerInFamily = [...(componentPartners.get(component.id) || [])]
-      .some(partnerId => (componentParents.get(partnerId) || []).length > 0);
+    const hasPartnerInFamily = [...(componentPartners.get(component.id) || [])].some((partnerId) => (componentParents.get(partnerId) || []).length > 0);
     const partnerBranchOffset = hasNoParents && hasPartnerInFamily ? -Math.round(generationGap * 0.65) : 0;
     const automaticY = level * generationGap + partnerBranchOffset;
     const rawX = Number.isFinite(person.treeX) ? person.treeX : automaticX;
@@ -266,11 +271,11 @@ export function layoutTree(people) {
     positions.set(person.id, { x: rawX, y: rawY, rawX, rawY, w: nodeWidth, h: nodeHeight, person });
   });
 
-  const minX = Math.min(0, ...[...positions.values()].map(position => position.rawX));
-  const minY = Math.min(0, ...[...positions.values()].map(position => position.rawY));
+  const minX = Math.min(0, ...[...positions.values()].map((position) => position.rawX));
+  const minY = Math.min(0, ...[...positions.values()].map((position) => position.rawY));
   const originX = 60 - minX;
   const originY = 56 - minY;
-  positions.forEach(position => {
+  positions.forEach((position) => {
     position.x = position.rawX + originX;
     position.y = position.rawY + originY;
   });
@@ -278,13 +283,13 @@ export function layoutTree(people) {
   const edges = [];
   const seenPartners = new Set();
   const partnerRouteLanes = new Map();
-  people.forEach(person => {
-    (person.parentIds || []).forEach(parentId => {
+  people.forEach((person) => {
+    (person.parentIds || []).forEach((parentId) => {
       const parent = positions.get(parentId);
       const child = positions.get(person.id);
       if (parent && child) edges.push({ kind: 'parent', fromId: parentId, toId: person.id, ...connectParentChild(parent, child) });
     });
-    (person.partnerIds || []).forEach(partnerId => {
+    (person.partnerIds || []).forEach((partnerId) => {
       const partner = positions.get(partnerId);
       const current = positions.get(person.id);
       const key = [partnerId, person.id].sort().join(':');
@@ -295,18 +300,19 @@ export function layoutTree(people) {
       const left = Math.min(from.x + from.w / 2, to.x + to.w / 2);
       const right = Math.max(from.x + from.w / 2, to.x + to.w / 2);
       const row = Math.round((from.y + to.y) / 2);
-      const blockers = [...positions.values()].some(position =>
-        position.person.id !== from.person.id &&
-        position.person.id !== to.person.id &&
-        Math.abs(position.y - from.y) < nodeHeight / 2 &&
-        position.x + position.w / 2 > left &&
-        position.x + position.w / 2 < right
+      const blockers = [...positions.values()].some(
+        (position) =>
+          position.person.id !== from.person.id &&
+          position.person.id !== to.person.id &&
+          Math.abs(position.y - from.y) < nodeHeight / 2 &&
+          position.x + position.w / 2 > left &&
+          position.x + position.w / 2 < right,
       );
       let connection = connectRectangles(from, to);
       if (blockers && Math.abs(from.y - to.y) < nodeHeight / 2) {
         const lanes = partnerRouteLanes.get(row) || [];
         const interval = [left, right];
-        let lane = lanes.findIndex(existing => existing.every(([start, end]) => right + 24 <= start || left >= end + 24));
+        let lane = lanes.findIndex((existing) => existing.every(([start, end]) => right + 24 <= start || left >= end + 24));
         if (lane < 0) lane = lanes.length;
         if (!lanes[lane]) lanes[lane] = [];
         lanes[lane].push(interval);
@@ -318,12 +324,17 @@ export function layoutTree(people) {
         const laneY = Math.min(y1, y2) - 26 - lane * 22;
         connection = {
           ...connection,
-          x1, y1, x2, y2,
-          c1x: x1, c1y: laneY,
-          c2x: x2, c2y: laneY,
+          x1,
+          y1,
+          x2,
+          y2,
+          c1x: x1,
+          c1y: laneY,
+          c2x: x2,
+          c2y: laneY,
           labelX: (x1 + x2) / 2,
           labelY: laneY - 8,
-          path: `M${x1} ${y1} C${x1} ${laneY} ${x2} ${laneY} ${x2} ${y2}`
+          path: `M${x1} ${y1} C${x1} ${laneY} ${x2} ${laneY} ${x2} ${y2}`,
         };
       }
       edges.push({ kind: 'partner', fromId: from === current ? person.id : partnerId, toId: from === current ? partnerId : person.id, ...connection });
@@ -331,13 +342,16 @@ export function layoutTree(people) {
   });
 
   const siblingGroups = new Map();
-  people.forEach(person => {
-    const parentKey = [...(person.parentIds || [])].filter(id => positions.has(id)).sort().join('|');
+  people.forEach((person) => {
+    const parentKey = [...(person.parentIds || [])]
+      .filter((id) => positions.has(id))
+      .sort()
+      .join('|');
     if (!parentKey) return;
     if (!siblingGroups.has(parentKey)) siblingGroups.set(parentKey, []);
     siblingGroups.get(parentKey).push(person);
   });
-  siblingGroups.forEach(siblings => {
+  siblingGroups.forEach((siblings) => {
     const ordered = siblings.sort((a, b) => positions.get(a.id).x - positions.get(b.id).x);
     for (let index = 0; index < ordered.length - 1; index++) {
       const left = positions.get(ordered[index].id);
@@ -347,39 +361,36 @@ export function layoutTree(people) {
   });
 
   const childrenByParents = new Map();
-  people.forEach(person => {
-    const parentIds = [...(person.parentIds || [])].filter(id => positions.has(id)).sort();
+  people.forEach((person) => {
+    const parentIds = [...(person.parentIds || [])].filter((id) => positions.has(id)).sort();
     if (!parentIds.length) return;
     const key = parentIds.join('|');
     if (!childrenByParents.has(key)) childrenByParents.set(key, { parentIds, children: [] });
     childrenByParents.get(key).children.push(person);
   });
   const familyBranches = [...childrenByParents.values()].map(({ parentIds, children }) => {
-    const parents = parentIds.map(id => positions.get(id));
-    const orderedChildren = children.map(person => positions.get(person.id)).sort((a, b) => a.x - b.x);
-    const partnerEdge = edges.find(edge => edge.kind === 'partner' && parentIds.includes(edge.fromId) && parentIds.includes(edge.toId));
-    const sourceX = partnerEdge
-      ? (partnerEdge.x1 + partnerEdge.x2) / 2
-      : parents.reduce((sum, parent) => sum + parent.x + parent.w / 2, 0) / parents.length;
-    const sourceY = partnerEdge
-      ? (partnerEdge.y1 + partnerEdge.y2) / 2
-      : parents.length > 1
-        ? parents.reduce((sum, parent) => sum + parent.y + parent.h / 2, 0) / parents.length
-        : parents[0].y + 76;
-    const childTop = Math.min(...orderedChildren.map(child => child.y));
+    const parents = parentIds.map((id) => positions.get(id));
+    const orderedChildren = children.map((person) => positions.get(person.id)).sort((a, b) => a.x - b.x);
+    const partnerEdge = edges.find((edge) => edge.kind === 'partner' && parentIds.includes(edge.fromId) && parentIds.includes(edge.toId));
+    const sourceX = partnerEdge ? (partnerEdge.x1 + partnerEdge.x2) / 2 : parents.reduce((sum, parent) => sum + parent.x + parent.w / 2, 0) / parents.length;
+    const sourceY = partnerEdge ? (partnerEdge.y1 + partnerEdge.y2) / 2 : parents.length > 1 ? parents.reduce((sum, parent) => sum + parent.y + parent.h / 2, 0) / parents.length : parents[0].y + 76;
+    const childTop = Math.min(...orderedChildren.map((child) => child.y));
     return {
       parentIds,
-      children: children.slice().sort((a, b) => positions.get(a.id).x - positions.get(b.id).x).map(person => person.id),
+      children: children
+        .slice()
+        .sort((a, b) => positions.get(a.id).x - positions.get(b.id).x)
+        .map((person) => person.id),
       sourceX,
       sourceY,
       // Keep the child bus comfortably clear of the partner connector and its label.
       branchY: Math.min(childTop - 24, sourceY + 60),
-      childXs: orderedChildren.map(child => child.x + child.w / 2),
-      childTops: orderedChildren.map(child => child.y)
+      childXs: orderedChildren.map((child) => child.x + child.w / 2),
+      childTops: orderedChildren.map((child) => child.y),
     };
   });
 
-  const width = Math.max(800, ...[...positions.values()].map(position => position.x + position.w + 60));
-  const height = Math.max(300, ...[...positions.values()].map(position => position.y + position.h + 100));
+  const width = Math.max(800, ...[...positions.values()].map((position) => position.x + position.w + 60));
+  const height = Math.max(300, ...[...positions.values()].map((position) => position.y + position.h + 100));
   return { positions, edges, familyBranches, width, height, originX, originY, generationCount: maxLevel + 1 };
 }

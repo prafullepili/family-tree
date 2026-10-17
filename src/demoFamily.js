@@ -1,40 +1,270 @@
 const baseDemoPeople = [
-  {id:'p1',firstName:'William',lastName:'Ashford',gender:'male',birthDate:'1928-06-14',deathDate:'2003-05-11',birthPlace:'Bath, England',photoUrl:'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&h=120&fit=crop&crop=faces',occupation:'Architect',bio:'A devoted father and grandfather who loved tending his garden in Somerset.',parentIds:[],partnerIds:['p2']},
-  {id:'p2',firstName:'Margaret',lastName:'Ashford',gender:'female',birthDate:'1931-02-08',deathDate:'2015-09-22',birthPlace:'Bristol, England',photoUrl:'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop&crop=faces',occupation:'Teacher',bio:'She kept the family together over Sunday lunches and long summer holidays.',parentIds:[],partnerIds:['p1']},
-  {id:'p3',firstName:'Thomas',lastName:'Ashford',gender:'male',birthDate:'1957-09-21',birthPlace:'Bath, England',photoUrl:'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=120&h=120&fit=crop&crop=faces',occupation:'Photographer',bio:'An amateur photographer who still tells stories about his parents’ old house.',parentIds:['p1','p2'],partnerIds:['p4']},
-  {id:'p4',firstName:'Eleanor',lastName:'Ashford',gender:'female',birthDate:'1960-04-03',birthPlace:'Oxford, England',photoUrl:'https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=120&h=120&fit=crop&crop=faces',occupation:'Writer',bio:'Eleanor loves collecting family recipes and documenting their origins.',parentIds:[],partnerIds:['p3']},
-  {id:'p5',firstName:'James',lastName:'Ashford',gender:'male',birthDate:'1986-11-12',birthPlace:'London, England',photoUrl:'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&h=120&fit=crop&crop=faces',occupation:'Product designer',bio:'The keeper of the Ashford family archive.',parentIds:['p3','p4'],partnerIds:['p6']},
-  {id:'p6',firstName:'Sophie',lastName:'Ashford',gender:'female',birthDate:'1988-08-05',birthPlace:'Cambridge, England',photoUrl:'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120&h=120&fit=crop&crop=faces',occupation:'Botanist',bio:'A botanist who shares James’s curiosity about the people who came before.',parentIds:[],partnerIds:['p5']},
-  {id:'p7',firstName:'Oliver',lastName:'Ashford',gender:'male',birthDate:'2016-05-17',birthPlace:'London, England',photoUrl:'https://images.unsplash.com/photo-1503919005314-30d93d07d823?w=120&h=120&fit=crop&crop=faces',bio:'Always ready for an adventure.',parentIds:['p5','p6'],partnerIds:[]},
-  {id:'p8',firstName:'Amelia',lastName:'Ashford',gender:'female',birthDate:'2019-10-02',birthPlace:'London, England',photoUrl:'https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=120&h=120&fit=crop&crop=faces',bio:'Has already started her own little collection of family treasures.',parentIds:['p5','p6'],partnerIds:[]}
-].map((p,i)=>({...p,color:['sage','rose','blue','peach','lavender','yellow','mint','pink'][i]}));
-const ancestryNames=['Arthur','Edith','Walter','Agnes','Harold','Mabel','Frederick','Clara','Albert','Evelyn','George','Florence','Edward','Alice','Henry','Beatrice','Thomas','Margaret','William','Eleanor','James','Rose','Charles','Mary','Joseph','Elsie','Samuel','Nora','Frank','Ada','Robert','Lily','Alfred','Ivy','Ernest','Violet','Leonard','Grace','Albertine','Cecil','Winifred','Edwin','Louisa','Percy','Hannah','Maurice','Esther','Bertie','Martha','Arthurine'];
-const lineageSpecs=[{key:'ashford-f',birthYear:1904},{key:'ashford-m',birthYear:1907}];
-export const addedPeople=[];
-lineageSpecs.forEach((line,index)=>{for(let generation=1;generation<=21;generation++){const id=`${line.key}-${generation}`;addedPeople.push({id,firstName:ancestryNames[(generation-1+index*21)%ancestryNames.length],lastName:'Ashford',gender:index===0?'male':'female',birthDate:`${line.birthYear-(generation-1)*23}-${String((generation*3)%12+1).padStart(2,'0')}-15`,birthPlace:['Bath, England','Bristol, England','Somerset, England','Yorkshire, England'][generation%4],photoUrl:'',occupation:generation%3===0?'Teacher':generation%3===1?'Farmer':'Craftsperson',bio:`A remembered member of the Ashford family, ${generation} generation${generation===1?'':'s'} before ${index===0?'William':'Margaret'}.`,parentIds:generation<21?[`${line.key}-${generation+1}`]:[],partnerIds:[],treeX:null,treeY:null,color:['sage','rose','blue','peach','lavender','yellow','mint','pink'][(generation+index)%8]})}});
-for(let i=0;i<8;i++){const line=lineageSpecs[i%2],generation=[4,7,10,13][Math.floor(i/2)],parentId=`${line.key}-${generation+1}`;addedPeople.push({id:`ashford-branch-${i+1}`,firstName:ancestryNames[42+i],lastName:'Ashford',gender:i%2?'female':'male',birthDate:`${line.birthYear-(generation-1)*23}-06-15`,birthPlace:['Bath, England','Bristol, England','Somerset, England','Yorkshire, England'][i%4],photoUrl:'',occupation:i%2?'Seamstress':'Carpenter',bio:'A branch of the Ashford family tree.',parentIds:[parentId],partnerIds:[],treeX:null,treeY:null,color:['sage','rose','blue','peach','lavender','yellow','mint','pink'][i]})}
-const epiliSpecs=[
-  ['epili-01','Suryanarayana','Epili','male',1888,[],['epili-02'],'Farmer','Srikakulam, Andhra Pradesh'],
-  ['epili-02','Subhadra','Epili','female',1892,[],['epili-01'],'Homemaker','Srikakulam, Andhra Pradesh'],
-  ['epili-03','Satyanarayana','Epili','male',1915,['epili-01','epili-02'],['epili-05'],'Teacher','Vizianagaram, Andhra Pradesh'],
-  ['epili-04','Parvathi','Epili','female',1919,['epili-01','epili-02'],['epili-06'],'Tailor','Srikakulam, Andhra Pradesh'],
-  ['epili-05','Lakshmi','Reddy','female',1918,[],['epili-03'],'Nurse','Visakhapatnam, Andhra Pradesh'],
-  ['epili-06','Krishna','Rao','male',1916,[],['epili-04'],'Railway clerk','Vizianagaram, Andhra Pradesh'],
-  ['epili-07','Vijay','Epili','male',1942,['epili-03','epili-05'],['epili-11'],'Engineer','Visakhapatnam, Andhra Pradesh'],
-  ['epili-08','Anasuya','Epili','female',1945,['epili-03','epili-05'],[],'Teacher','Visakhapatnam, Andhra Pradesh'],
-  ['epili-09','Ramakrishna','Epili','male',1944,['epili-04','epili-06'],['epili-12'],'Accountant','Hyderabad, Telangana'],
-  ['epili-10','Bharathi','Epili','female',1948,['epili-04','epili-06'],[],'Nurse','Vizianagaram, Andhra Pradesh'],
-  ['epili-11','Kavitha','Naidu','female',1946,[],['epili-07'],'Doctor','Rajahmundry, Andhra Pradesh'],
-  ['epili-12','Rajeswari','Devi','female',1947,[],['epili-09'],'Artist','Hyderabad, Telangana'],
-  ['epili-13','Aditya','Epili','male',1970,['epili-07','epili-11'],[],'Software developer','Hyderabad, Telangana'],
-  ['epili-14','Sravya','Epili','female',1973,['epili-07','epili-11'],[],'Architect','Visakhapatnam, Andhra Pradesh'],
-  ['epili-15','Varun','Epili','male',1976,['epili-07','epili-11'],[],'Photographer','Vijayawada, Andhra Pradesh'],
-  ['epili-16','Nikhil','Epili','male',1972,['epili-09','epili-12'],[],'Accountant','Hyderabad, Telangana'],
-  ['epili-17','Mounika','Epili','female',1975,['epili-09','epili-12'],[],'Designer','Hyderabad, Telangana'],
-  ['epili-18','Karthik','Epili','male',1978,['epili-09','epili-12'],[],'Civil engineer','Rajahmundry, Andhra Pradesh'],
-  ['epili-19','Rohit','Epili','male',1974,['epili-08'],[],'Teacher','Visakhapatnam, Andhra Pradesh'],
-  ['epili-20','Bhanu','Epili','female',1977,['epili-10'],[],'Researcher','Vizianagaram, Andhra Pradesh']
+  {
+    id: 'p1',
+    firstName: 'William',
+    lastName: 'Ashford',
+    gender: 'male',
+    birthDate: '1928-06-14',
+    deathDate: '2003-05-11',
+    birthPlace: 'Bath, England',
+    photoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&h=120&fit=crop&crop=faces',
+    occupation: 'Architect',
+    bio: 'A devoted father and grandfather who loved tending his garden in Somerset.',
+    parentIds: [],
+    partnerIds: ['p2'],
+  },
+  {
+    id: 'p2',
+    firstName: 'Margaret',
+    lastName: 'Ashford',
+    gender: 'female',
+    birthDate: '1931-02-08',
+    deathDate: '2015-09-22',
+    birthPlace: 'Bristol, England',
+    photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop&crop=faces',
+    occupation: 'Teacher',
+    bio: 'She kept the family together over Sunday lunches and long summer holidays.',
+    parentIds: [],
+    partnerIds: ['p1'],
+  },
+  {
+    id: 'p3',
+    firstName: 'Thomas',
+    lastName: 'Ashford',
+    gender: 'male',
+    birthDate: '1957-09-21',
+    birthPlace: 'Bath, England',
+    photoUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=120&h=120&fit=crop&crop=faces',
+    occupation: 'Photographer',
+    bio: 'An amateur photographer who still tells stories about his parents’ old house.',
+    parentIds: ['p1', 'p2'],
+    partnerIds: ['p4'],
+  },
+  {
+    id: 'p4',
+    firstName: 'Eleanor',
+    lastName: 'Ashford',
+    gender: 'female',
+    birthDate: '1960-04-03',
+    birthPlace: 'Oxford, England',
+    photoUrl: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=120&h=120&fit=crop&crop=faces',
+    occupation: 'Writer',
+    bio: 'Eleanor loves collecting family recipes and documenting their origins.',
+    parentIds: [],
+    partnerIds: ['p3'],
+  },
+  {
+    id: 'p5',
+    firstName: 'James',
+    lastName: 'Ashford',
+    gender: 'male',
+    birthDate: '1986-11-12',
+    birthPlace: 'London, England',
+    photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&h=120&fit=crop&crop=faces',
+    occupation: 'Product designer',
+    bio: 'The keeper of the Ashford family archive.',
+    parentIds: ['p3', 'p4'],
+    partnerIds: ['p6'],
+  },
+  {
+    id: 'p6',
+    firstName: 'Sophie',
+    lastName: 'Ashford',
+    gender: 'female',
+    birthDate: '1988-08-05',
+    birthPlace: 'Cambridge, England',
+    photoUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120&h=120&fit=crop&crop=faces',
+    occupation: 'Botanist',
+    bio: 'A botanist who shares James’s curiosity about the people who came before.',
+    parentIds: [],
+    partnerIds: ['p5'],
+  },
+  {
+    id: 'p7',
+    firstName: 'Oliver',
+    lastName: 'Ashford',
+    gender: 'male',
+    birthDate: '2016-05-17',
+    birthPlace: 'London, England',
+    photoUrl: 'https://images.unsplash.com/photo-1503919005314-30d93d07d823?w=120&h=120&fit=crop&crop=faces',
+    bio: 'Always ready for an adventure.',
+    parentIds: ['p5', 'p6'],
+    partnerIds: [],
+  },
+  {
+    id: 'p8',
+    firstName: 'Amelia',
+    lastName: 'Ashford',
+    gender: 'female',
+    birthDate: '2019-10-02',
+    birthPlace: 'London, England',
+    photoUrl: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=120&h=120&fit=crop&crop=faces',
+    bio: 'Has already started her own little collection of family treasures.',
+    parentIds: ['p5', 'p6'],
+    partnerIds: [],
+  },
+].map((p, i) => ({
+  ...p,
+  color: ['sage', 'rose', 'blue', 'peach', 'lavender', 'yellow', 'mint', 'pink'][i],
+}));
+const ancestryNames = [
+  'Arthur',
+  'Edith',
+  'Walter',
+  'Agnes',
+  'Harold',
+  'Mabel',
+  'Frederick',
+  'Clara',
+  'Albert',
+  'Evelyn',
+  'George',
+  'Florence',
+  'Edward',
+  'Alice',
+  'Henry',
+  'Beatrice',
+  'Thomas',
+  'Margaret',
+  'William',
+  'Eleanor',
+  'James',
+  'Rose',
+  'Charles',
+  'Mary',
+  'Joseph',
+  'Elsie',
+  'Samuel',
+  'Nora',
+  'Frank',
+  'Ada',
+  'Robert',
+  'Lily',
+  'Alfred',
+  'Ivy',
+  'Ernest',
+  'Violet',
+  'Leonard',
+  'Grace',
+  'Albertine',
+  'Cecil',
+  'Winifred',
+  'Edwin',
+  'Louisa',
+  'Percy',
+  'Hannah',
+  'Maurice',
+  'Esther',
+  'Bertie',
+  'Martha',
+  'Arthurine',
 ];
-epiliSpecs.forEach(([id,firstName,lastName,gender,birthYear,parentIds,partnerIds,occupation,birthPlace],i)=>addedPeople.push({id,firstName,lastName,gender,birthDate:`${birthYear}-${String((i*5)%12+1).padStart(2,'0')}-${String((i*7)%27+1).padStart(2,'0')}`,birthPlace,photoUrl:'',occupation,bio:'Fictional sample person in the Epili family branch.',parentIds,partnerIds,treeX:null,treeY:null,color:['sage','rose','blue','peach','lavender','yellow','mint','pink'][i%8]}));
-export const demoPeople=[...baseDemoPeople.map(p=>p.id==='p1'?{...p,parentIds:['ashford-f-1']}:p.id==='p2'?{...p,parentIds:['ashford-m-1']}:p),...addedPeople];
-export function initialPeople(){try{const saved=JSON.parse(localStorage.getItem('kinfolk-demo-people'));if(!Array.isArray(saved))return demoPeople;const clean=saved.filter(person=>!String(person.id).startsWith('stress-'));const ids=new Set(clean.map(person=>person.id));const base=[...clean,...demoPeople.filter(person=>!ids.has(person.id))].map(person=>person.id==='p1'?{...person,parentIds:[...new Set([...(person.parentIds||[]),'ashford-f-1'])]}:person.id==='p2'?{...person,parentIds:[...new Set([...(person.parentIds||[]),'ashford-m-1'])]}:person);localStorage.setItem('kinfolk-demo-ancestry-v1','1');localStorage.setItem('kinfolk-demo-epili-v1','1');if(clean.length!==saved.length||!localStorage.getItem('kinfolk-demo-people'))localStorage.setItem('kinfolk-demo-people',JSON.stringify(base));return base}catch{return demoPeople}}
+const lineageSpecs = [
+  { key: 'ashford-f', birthYear: 1904 },
+  { key: 'ashford-m', birthYear: 1907 },
+];
+export const addedPeople = [];
+lineageSpecs.forEach((line, index) => {
+  for (let generation = 1; generation <= 21; generation++) {
+    const id = `${line.key}-${generation}`;
+    addedPeople.push({
+      id,
+      firstName: ancestryNames[(generation - 1 + index * 21) % ancestryNames.length],
+      lastName: 'Ashford',
+      gender: index === 0 ? 'male' : 'female',
+      birthDate: `${line.birthYear - (generation - 1) * 23}-${String(((generation * 3) % 12) + 1).padStart(2, '0')}-15`,
+      birthPlace: ['Bath, England', 'Bristol, England', 'Somerset, England', 'Yorkshire, England'][generation % 4],
+      photoUrl: '',
+      occupation: generation % 3 === 0 ? 'Teacher' : generation % 3 === 1 ? 'Farmer' : 'Craftsperson',
+      bio: `A remembered member of the Ashford family, ${generation} generation${generation === 1 ? '' : 's'} before ${index === 0 ? 'William' : 'Margaret'}.`,
+      parentIds: generation < 21 ? [`${line.key}-${generation + 1}`] : [],
+      partnerIds: [],
+      treeX: null,
+      treeY: null,
+      color: ['sage', 'rose', 'blue', 'peach', 'lavender', 'yellow', 'mint', 'pink'][(generation + index) % 8],
+    });
+  }
+});
+for (let i = 0; i < 8; i++) {
+  const line = lineageSpecs[i % 2],
+    generation = [4, 7, 10, 13][Math.floor(i / 2)],
+    parentId = `${line.key}-${generation + 1}`;
+  addedPeople.push({
+    id: `ashford-branch-${i + 1}`,
+    firstName: ancestryNames[42 + i],
+    lastName: 'Ashford',
+    gender: i % 2 ? 'female' : 'male',
+    birthDate: `${line.birthYear - (generation - 1) * 23}-06-15`,
+    birthPlace: ['Bath, England', 'Bristol, England', 'Somerset, England', 'Yorkshire, England'][i % 4],
+    photoUrl: '',
+    occupation: i % 2 ? 'Seamstress' : 'Carpenter',
+    bio: 'A branch of the Ashford family tree.',
+    parentIds: [parentId],
+    partnerIds: [],
+    treeX: null,
+    treeY: null,
+    color: ['sage', 'rose', 'blue', 'peach', 'lavender', 'yellow', 'mint', 'pink'][i],
+  });
+}
+const epiliSpecs = [
+  ['epili-01', 'Suryanarayana', 'Epili', 'male', 1888, [], ['epili-02'], 'Farmer', 'Srikakulam, Andhra Pradesh'],
+  ['epili-02', 'Subhadra', 'Epili', 'female', 1892, [], ['epili-01'], 'Homemaker', 'Srikakulam, Andhra Pradesh'],
+  ['epili-03', 'Satyanarayana', 'Epili', 'male', 1915, ['epili-01', 'epili-02'], ['epili-05'], 'Teacher', 'Vizianagaram, Andhra Pradesh'],
+  ['epili-04', 'Parvathi', 'Epili', 'female', 1919, ['epili-01', 'epili-02'], ['epili-06'], 'Tailor', 'Srikakulam, Andhra Pradesh'],
+  ['epili-05', 'Lakshmi', 'Reddy', 'female', 1918, [], ['epili-03'], 'Nurse', 'Visakhapatnam, Andhra Pradesh'],
+  ['epili-06', 'Krishna', 'Rao', 'male', 1916, [], ['epili-04'], 'Railway clerk', 'Vizianagaram, Andhra Pradesh'],
+  ['epili-07', 'Vijay', 'Epili', 'male', 1942, ['epili-03', 'epili-05'], ['epili-11'], 'Engineer', 'Visakhapatnam, Andhra Pradesh'],
+  ['epili-08', 'Anasuya', 'Epili', 'female', 1945, ['epili-03', 'epili-05'], [], 'Teacher', 'Visakhapatnam, Andhra Pradesh'],
+  ['epili-09', 'Ramakrishna', 'Epili', 'male', 1944, ['epili-04', 'epili-06'], ['epili-12'], 'Accountant', 'Hyderabad, Telangana'],
+  ['epili-10', 'Bharathi', 'Epili', 'female', 1948, ['epili-04', 'epili-06'], [], 'Nurse', 'Vizianagaram, Andhra Pradesh'],
+  ['epili-11', 'Kavitha', 'Naidu', 'female', 1946, [], ['epili-07'], 'Doctor', 'Rajahmundry, Andhra Pradesh'],
+  ['epili-12', 'Rajeswari', 'Devi', 'female', 1947, [], ['epili-09'], 'Artist', 'Hyderabad, Telangana'],
+  ['epili-13', 'Aditya', 'Epili', 'male', 1970, ['epili-07', 'epili-11'], [], 'Software developer', 'Hyderabad, Telangana'],
+  ['epili-14', 'Sravya', 'Epili', 'female', 1973, ['epili-07', 'epili-11'], [], 'Architect', 'Visakhapatnam, Andhra Pradesh'],
+  ['epili-15', 'Varun', 'Epili', 'male', 1976, ['epili-07', 'epili-11'], [], 'Photographer', 'Vijayawada, Andhra Pradesh'],
+  ['epili-16', 'Nikhil', 'Epili', 'male', 1972, ['epili-09', 'epili-12'], [], 'Accountant', 'Hyderabad, Telangana'],
+  ['epili-17', 'Mounika', 'Epili', 'female', 1975, ['epili-09', 'epili-12'], [], 'Designer', 'Hyderabad, Telangana'],
+  ['epili-18', 'Karthik', 'Epili', 'male', 1978, ['epili-09', 'epili-12'], [], 'Civil engineer', 'Rajahmundry, Andhra Pradesh'],
+  ['epili-19', 'Rohit', 'Epili', 'male', 1974, ['epili-08'], [], 'Teacher', 'Visakhapatnam, Andhra Pradesh'],
+  ['epili-20', 'Bhanu', 'Epili', 'female', 1977, ['epili-10'], [], 'Researcher', 'Vizianagaram, Andhra Pradesh'],
+];
+epiliSpecs.forEach(([id, firstName, lastName, gender, birthYear, parentIds, partnerIds, occupation, birthPlace], i) =>
+  addedPeople.push({
+    id,
+    firstName,
+    lastName,
+    gender,
+    birthDate: `${birthYear}-${String(((i * 5) % 12) + 1).padStart(2, '0')}-${String(((i * 7) % 27) + 1).padStart(2, '0')}`,
+    birthPlace,
+    photoUrl: '',
+    occupation,
+    bio: 'Fictional sample person in the Epili family branch.',
+    parentIds,
+    partnerIds,
+    treeX: null,
+    treeY: null,
+    color: ['sage', 'rose', 'blue', 'peach', 'lavender', 'yellow', 'mint', 'pink'][i % 8],
+  }),
+);
+export const demoPeople = [...baseDemoPeople.map((p) => (p.id === 'p1' ? { ...p, parentIds: ['ashford-f-1'] } : p.id === 'p2' ? { ...p, parentIds: ['ashford-m-1'] } : p)), ...addedPeople];
+export function initialPeople() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('kinfolk-demo-people'));
+    if (!Array.isArray(saved)) return demoPeople;
+    const clean = saved.filter((person) => !String(person.id).startsWith('stress-'));
+    const ids = new Set(clean.map((person) => person.id));
+    const base = [...clean, ...demoPeople.filter((person) => !ids.has(person.id))].map((person) =>
+      person.id === 'p1'
+        ? { ...person, parentIds: [...new Set([...(person.parentIds || []), 'ashford-f-1'])] }
+        : person.id === 'p2'
+          ? { ...person, parentIds: [...new Set([...(person.parentIds || []), 'ashford-m-1'])] }
+          : person,
+    );
+    localStorage.setItem('kinfolk-demo-ancestry-v1', '1');
+    localStorage.setItem('kinfolk-demo-epili-v1', '1');
+    if (clean.length !== saved.length || !localStorage.getItem('kinfolk-demo-people')) localStorage.setItem('kinfolk-demo-people', JSON.stringify(base));
+    return base;
+  } catch {
+    return demoPeople;
+  }
+}
