@@ -53,10 +53,10 @@ export function layoutTree(people) {
 
   const nodeWidth = 196;
   const nodeHeight = 82;
-  const partnerGap = 26;
-  const siblingGap = 42;
-  const familyGap = 28;
-  const generationGap = 144;
+  const partnerGap = 36;
+  const siblingGap = 76;
+  const familyGap = 56;
+  const generationGap = 190;
   const canonical = new Map();
   const maxLevel = Math.max(0, ...levels.values());
 
