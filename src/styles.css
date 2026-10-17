@@ -77,3 +77,9 @@
 .tree-node-about-wrap{left:-7px;right:auto}.tree-node-about-tooltip{left:0;right:auto}
 
 .family-app{--line:#879589}.family-app.theme-dark{--line:#536257}.connector{stroke-width:1.2}.connector.partner{stroke:#6f8875;stroke-width:1.3}.family-app.theme-dark .connector.partner{stroke:#607365}.family-app #partner-link-arrow path{fill:#6f8875}.family-app.theme-dark #partner-link-arrow path{fill:#607365}
+
+.simple-sidebar,.member-list{scrollbar-width:thin;scrollbar-color:var(--muted) var(--surface-soft)}
+.simple-sidebar::-webkit-scrollbar,.member-list::-webkit-scrollbar{width:6px}
+.simple-sidebar::-webkit-scrollbar-track,.member-list::-webkit-scrollbar-track{background:var(--surface-soft);border-radius:6px}
+.simple-sidebar::-webkit-scrollbar-thumb,.member-list::-webkit-scrollbar-thumb{background:var(--muted);border:1px solid var(--surface);border-radius:6px}
+.simple-sidebar::-webkit-scrollbar-thumb:hover,.member-list::-webkit-scrollbar-thumb:hover{background:var(--text-soft)}
