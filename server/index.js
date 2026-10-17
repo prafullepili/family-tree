@@ -38,7 +38,7 @@ app.post('/api/people/seed-extended', async (_req, res, next) => { try {
       _id: ids.get(id),
       seedKey: `ashford-extended-v1:${id}`,
       parentIds: (person.parentIds || []).map(parentId => ids.get(parentId)).filter(Boolean),
-      partnerIds: []
+      partnerIds: (person.partnerIds || []).map(partnerId => ids.get(partnerId)).filter(Boolean)
     })));
     const william = await Person.findOne({ firstName: 'William', lastName: 'Ashford', birthDate: new Date('1928-06-14') });
     const margaret = await Person.findOne({ firstName: 'Margaret', lastName: 'Ashford', birthDate: new Date('1931-02-08') });
