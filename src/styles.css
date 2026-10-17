@@ -95,6 +95,11 @@
 .family-picker-options button{width:100%;padding:7px 8px;border:0;border-radius:5px;background:transparent;color:var(--text-soft);text-align:left;font-size:11px!important}
 .family-picker-options button:hover,.family-picker-options button.active{background:var(--accent-bg);color:var(--accent)}
 .family-picker-options>span{padding:7px 8px;color:var(--muted);font-size:11px}
+.link-style-toolbar-field{display:flex;align-items:center;gap:7px;margin-right:12px;color:var(--muted);font-size:9px;font-weight:700;letter-spacing:.8px;white-space:nowrap}
+.link-style-select{width:100%;height:34px;padding:0 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-size:11px!important;letter-spacing:0;outline:0}
+.link-style-select:focus{border-color:var(--accent)}
+.link-style-toolbar-field .link-style-select{width:150px;height:30px}
+@media(max-width:520px){.link-style-toolbar-field{gap:0;margin-right:6px}.link-style-toolbar-field>span{display:none}.link-style-toolbar-field .link-style-select{width:116px;height:29px;padding:0 5px;font-size:10px!important}}
 .person-form-body{scrollbar-width:thin;scrollbar-color:var(--muted) var(--surface-soft)}
 .person-form-body::-webkit-scrollbar{width:6px}
 .person-form-body::-webkit-scrollbar-track{background:var(--surface-soft);border-radius:6px}
