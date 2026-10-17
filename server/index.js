@@ -49,6 +49,14 @@ app.post('/api/people/seed-extended', async (_req, res, next) => { try {
 } catch (e) { next(e); } });
 app.get('/api/people/:id', async (req, res, next) => { try { const person = await Person.findById(req.params.id); if (!person) return res.status(404).json({ error: 'Person not found' }); res.json(person); } catch (e) { next(e); } });
 app.patch('/api/people/layout/reset', async (_req, res, next) => { try { const result = await Person.updateMany({}, { $set: { treeX: null, treeY: null } }); res.json({ modifiedCount: result.modifiedCount }); } catch (e) { next(e); } });
+app.patch('/api/people/layout/positions', async (req, res, next) => { try {
+  const positions = Array.isArray(req.body?.positions) ? req.body.positions : [];
+  const operations = positions.filter(position => position.id && Number.isFinite(position.treeX) && Number.isFinite(position.treeY)).map(position => ({
+    updateOne: { filter: { _id: position.id }, update: { $set: { treeX: position.treeX, treeY: position.treeY } } }
+  }));
+  if (operations.length) await Person.bulkWrite(operations);
+  res.json({ modifiedCount: operations.length });
+} catch (e) { next(e); } });
 async function syncPartners(person) {
   await Person.updateMany({ partnerIds: person._id }, { $pull: { partnerIds: person._id } });
   if (person.partnerIds.length) await Person.updateMany({ _id: { $in: person.partnerIds } }, { $addToSet: { partnerIds: person._id } });
