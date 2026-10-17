@@ -114,3 +114,6 @@
 .partner-link-row .custom-relationship-input{width:130px}
 .partner-link-row .remove-link-button{height:26px;width:25px;flex:none;display:grid;place-items:center;padding:0;border:0;border-radius:5px;background:transparent;color:var(--muted)}
 .partner-link-row .remove-link-button:hover{background:var(--accent-bg);color:var(--accent)}
+.tree-toolbar-simple{gap:12px}
+.tree-count{flex:none;white-space:nowrap}
+.tree-toolbar-actions{flex:none}

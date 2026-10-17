@@ -52,7 +52,7 @@ export function layoutTree(people) {
   });
 
   const nodeWidth = 196;
-  const nodeHeight = 82;
+  const nodeHeight = 76;
   // Leave room for the fixed relationship labels at both ends of partner links.
   const partnerGap = 184;
   const siblingGap = 120;
