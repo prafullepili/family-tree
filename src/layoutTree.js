@@ -55,7 +55,7 @@ export function layoutTree(people) {
   const nodeHeight = 82;
   // Leave room for the fixed relationship labels at both ends of partner links.
   const partnerGap = 184;
-  const siblingGap = 76;
+  const siblingGap = 120;
   const familyGap = 56;
   const generationGap = 190;
   const canonical = new Map();
@@ -136,6 +136,22 @@ export function layoutTree(people) {
       const right = partner.x < current.x ? current : partner;
       edges.push({ kind: 'partner', fromId: left === current ? person.id : partnerId, toId: left === current ? partnerId : person.id, x1: left.x + left.w, y1: left.y + left.h / 2, x2: right.x, y2: right.y + right.h / 2 });
     });
+  });
+
+  const siblingGroups = new Map();
+  people.forEach(person => {
+    const parentKey = [...(person.parentIds || [])].filter(id => positions.has(id)).sort().join('|');
+    if (!parentKey) return;
+    if (!siblingGroups.has(parentKey)) siblingGroups.set(parentKey, []);
+    siblingGroups.get(parentKey).push(person);
+  });
+  siblingGroups.forEach(siblings => {
+    const ordered = siblings.sort((a, b) => positions.get(a.id).x - positions.get(b.id).x);
+    for (let index = 0; index < ordered.length - 1; index++) {
+      const left = positions.get(ordered[index].id);
+      const right = positions.get(ordered[index + 1].id);
+      edges.push({ kind: 'sibling', fromId: ordered[index].id, toId: ordered[index + 1].id, x1: left.x + left.w, y1: left.y + left.h / 2, x2: right.x, y2: right.y + right.h / 2 });
+    }
   });
 
   const width = Math.max(800, ...[...positions.values()].map(position => position.x + position.w + 60));
