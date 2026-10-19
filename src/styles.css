@@ -4383,30 +4383,38 @@ button {
     width: min(430px, 94vw);
   }
   .mobile-box-select {
-    position: absolute;
-    right: 58px;
-    bottom: 16px;
-    z-index: 6;
-    display: inline-flex;
-    min-height: 38px;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 0 11px;
+    display: none;
+  }
+  .canvas-zoom-controls .mobile-box-select {
+    display: grid;
+    width: 30px;
+    min-height: 30px;
+    padding: 0;
     border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface);
+    border-radius: 5px;
+    background: transparent;
     color: var(--text);
-    box-shadow: 0 3px 12px #15201712;
-    font: inherit;
-    font-size: 11px;
-    font-weight: 600;
     cursor: pointer;
   }
-  .mobile-box-select.active {
+  .canvas-zoom-controls .mobile-box-select.active {
     border-color: var(--accent);
     background: var(--accent-bg);
     color: var(--accent);
+  }
+  .box-select-hint {
+    position: absolute;
+    right: 58px;
+    bottom: 79px;
+    z-index: 5;
+    padding: 6px 9px;
+    border: 1px solid var(--accent);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--accent);
+    box-shadow: 0 3px 12px #15201712;
+    font-size: 11px;
+    font-weight: 600;
+    pointer-events: none;
   }
 }
 .inline-person-editor {

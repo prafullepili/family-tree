@@ -270,7 +270,6 @@ export default function App() {
   const [familyPickerOpen, setFamilyPickerOpen] = useState(false);
   const [familyQuery, setFamilyQuery] = useState('');
   const [linkStyle, setLinkStyle] = useState(() => (['direct', 'classic'].includes(storageGet('kinfolk-link-style')) ? storageGet('kinfolk-link-style') : 'classic'));
-  const hoverSelectTimer = useRef(0);
   const [selectedId, setSelectedId] = useState(() => initialCache.people[0]?.id || '');
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [marqueeRect, setMarqueeRect] = useState(null);
@@ -450,12 +449,6 @@ export default function App() {
   useEffect(() => {
     setSelectedNodeIds([]);
   }, [selectedFamilyId]);
-  useEffect(
-    () => () => {
-      if (hoverSelectTimer.current) clearTimeout(hoverSelectTimer.current);
-    },
-    [],
-  );
   useEffect(() => {
     storageSet('kinfolk-delete-descendants', String(deleteDescendants));
   }, [deleteDescendants]);
@@ -976,19 +969,6 @@ export default function App() {
   function openLinkEditor() {
     if (selected) setModal({ person: selected, inline: true, focusLinks: true });
   }
-  function beginNodeHover(personId, event) {
-    if (event.pointerType !== 'mouse' || drag.current) return;
-    if (hoverSelectTimer.current) clearTimeout(hoverSelectTimer.current);
-    hoverSelectTimer.current = window.setTimeout(() => {
-      selectPerson(personId);
-      const card = [...(treeScroll.current?.querySelectorAll('.tree-person') || [])].find((node) => node.dataset.personId === personId)?.querySelector('.tree-person-card');
-      card?.focus({ preventScroll: true });
-    }, 1000);
-  }
-  function endNodeHover() {
-    if (hoverSelectTimer.current) clearTimeout(hoverSelectTimer.current);
-    hoverSelectTimer.current = 0;
-  }
   function clearSelection() {
     setSelectedId('');
     setSelectedNodeIds([]);
@@ -997,7 +977,6 @@ export default function App() {
   }
   function startDrag(e, p, pos) {
     if (e.button !== 0) return;
-    endNodeHover();
     e.preventDefault();
     e.stopPropagation();
     const isSelected = selectedId === p.id || selectedNodeIds.includes(p.id);
@@ -1541,15 +1520,6 @@ export default function App() {
                 : 'Tap to select a person, then drag to move them. Drag empty space to pan the view.'
               : 'Drag a selected person to move them. Drag empty canvas to select nodes. Space-drag or middle-drag to pan.'}
           </div>
-          <button
-            className={`mobile-box-select ${boxSelectMode ? 'active' : ''}`}
-            aria-pressed={boxSelectMode}
-            aria-label={boxSelectMode ? 'Turn off box selection' : 'Turn on box selection'}
-            title={boxSelectMode ? 'Turn off rectangle selection' : 'Select people with a rectangle'}
-            onClick={() => setBoxSelectMode((active) => !active)}
-          >
-            <Scan size={14} /> {boxSelectMode ? 'Box select on' : 'Box select'}
-          </button>
           {selectedNodeIds.length > 1 && (
             <div className="selection-toolbar" aria-live="polite">
               <span>{selectedNodeIds.length} selected</span>
@@ -1644,8 +1614,6 @@ export default function App() {
                       className={`tree-person ${selectedId === person.id || selectedNodeIds.includes(person.id) ? 'selected' : ''}`}
                       style={{ left: pos.x, top: pos.y }}
                       onPointerDown={(e) => startDrag(e, person, pos)}
-                      onPointerEnter={(e) => beginNodeHover(person.id, e)}
-                      onPointerLeave={endNodeHover}
                     >
                       <button
                         className="tree-person-card"
@@ -1766,6 +1734,15 @@ export default function App() {
             {marqueeRect && <div className="marquee-selection" style={{ left: marqueeRect.left, top: marqueeRect.top, width: marqueeRect.width, height: marqueeRect.height }} aria-hidden="true" />}
           </div>
           <div className="canvas-zoom-controls">
+            <button
+              className={`mobile-box-select ${boxSelectMode ? 'active' : ''}`}
+              aria-pressed={boxSelectMode}
+              aria-label={boxSelectMode ? 'Turn off box selection' : 'Turn on box selection'}
+              title={boxSelectMode ? 'Turn off rectangle selection' : 'Box select: draw a rectangle on empty space'}
+              onClick={() => setBoxSelectMode((active) => !active)}
+            >
+              <Scan size={16} />
+            </button>
             <button onClick={() => zoomTo(Math.min(2, +(zoomValue.current + 0.1).toFixed(2)))} aria-label="Zoom in">
               <Plus size={17} />
             </button>
@@ -1773,6 +1750,7 @@ export default function App() {
               <span>−</span>
             </button>
           </div>
+          {boxSelectMode && <span className="box-select-hint" aria-live="polite">Box select</span>}
         </section>
       </main>
       {mobileDetailsOpen && <button className="details-scrim" onClick={clearSelection} aria-label="Close person details and clear selection" />}
