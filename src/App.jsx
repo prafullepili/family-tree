@@ -584,11 +584,14 @@ export default function App() {
       const response = await fetch('/api/people', { cache: 'no-store' });
       if (!response.ok) throw Error();
       const rows = (await response.json()).map(fromApi);
+      storageRemove('kinfolk-demo-people');
+      storageSet(mongoPeopleCacheKey, JSON.stringify({ people: rows, updatedAt: Date.now() }));
       setPeople(rows);
       setHasMongoSnapshot(true);
       setSelectedId((selectedId) => (rows.some((person) => person.id === selectedId) ? selectedId : rows[0]?.id || ''));
       setApiState('connected');
       setRefreshFailed(false);
+      notify(`Synced ${rows.length} ${rows.length === 1 ? 'person' : 'people'} from MongoDB`);
     } catch {
       setRefreshFailed(true);
       if (!hasMongoSnapshot) setApiState('error');
