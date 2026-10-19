@@ -3333,66 +3333,6 @@ button {
   width: min(370px, 100%);
   padding: 22px;
 }
-.layout-reset-dialog {
-  width: min(440px, 100%);
-  padding: 24px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface);
-  color: var(--text);
-  text-align: center;
-  box-shadow: 0 20px 70px #12191445;
-}
-.layout-reset-icon {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  margin: 0 auto 12px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--surface-soft);
-  color: var(--accent);
-}
-.layout-reset-dialog h2 {
-  margin: 0 0 8px;
-  font-size: 17px;
-}
-.layout-reset-dialog p {
-  max-width: 350px;
-  margin: 0 auto 20px;
-  color: var(--text-soft);
-  font-size: 12px;
-  line-height: 1.55;
-}
-.layout-reset-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.layout-reset-actions button {
-  min-height: 38px;
-  padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-.layout-reset-actions button:hover {
-  background: var(--surface-soft);
-}
-.layout-reset-actions .layout-reset-primary {
-  grid-column: 1 / -1;
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #fff;
-  font-weight: 700;
-}
-.theme-dark .layout-reset-actions .layout-reset-primary {
-  color: #17251a;
-}
 .delete-dialog h2 {
   margin: 0 0 6px;
   font:
@@ -3666,23 +3606,6 @@ button {
   align-items: center;
   gap: 8px;
 }
-.reset-layout-button {
-  height: 29px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 9px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--text-soft);
-  font-size: 11px !important;
-}
-.reset-layout-button:hover {
-  border-color: var(--accent);
-  background: var(--accent-bg);
-  color: var(--accent);
-}
 @media (max-width: 1050px) {
   .family-app.sidebar-open.details-open,
   .family-app.sidebar-open.details-closed {
@@ -3696,14 +3619,6 @@ button {
 @media (max-width: 520px) {
   .tree-toolbar-actions {
     gap: 5px;
-  }
-  .reset-layout-button {
-    width: 30px;
-    justify-content: center;
-    padding: 0;
-  }
-  .reset-layout-button span {
-    display: none;
   }
 }
 .tree-node-delete {
@@ -4626,10 +4541,20 @@ button {
 }
 @media (min-width: 1051px) {
   .family-app.sidebar-open.details-open {
-    grid-template-columns: 238px minmax(0, 1fr) var(--details-width, 320px);
+    grid-template-columns: 238px minmax(0, 1fr);
   }
   .family-app.sidebar-closed.details-open {
-    grid-template-columns: minmax(0, 1fr) var(--details-width, 320px);
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .family-app > .simple-details:not(.show-mobile) {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(var(--details-width, 390px), calc(100vw - 238px));
+    height: 100dvh;
+    z-index: 18;
+    box-shadow: -12px 0 35px #111b1530;
   }
 }
 @media (max-width: 1050px) {

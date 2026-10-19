@@ -16,17 +16,15 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
+  Scan,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
   Heart,
   Camera,
-  RotateCcw,
   RefreshCw,
-  Move,
   Info,
-  Scan,
 } from 'lucide-react';
 import { initialPeople } from './demoFamily.js';
 import { layoutTree, resolveNodeOverlaps } from './layoutTree.js';
@@ -97,19 +95,49 @@ function descendantIds(people, personId) {
   }
   return [...found];
 }
-function getMoveBranch(people, personId) {
-  const ids = new Set([personId, ...descendantIds(people, personId)]);
-  const partnerIds = new Set();
-  people.forEach((person) => {
-    if (ids.has(person.id)) (person.partnerIds || []).forEach((id) => partnerIds.add(id));
-  });
-  partnerIds.forEach((id) => {
-    if (people.some((person) => person.id === id)) ids.add(id);
-  });
-  return people.filter((person) => ids.has(person.id));
-}
-function linkLabelPoint(edge) {
-  return { x: edge.labelX, y: edge.labelY };
+function linkLabelPoint(edge, label, positions, placedLabels, straight = false) {
+  const halfWidth = Math.max(22, label.length * 3.1);
+  const curveXs = [edge.x1, edge.x2, edge.c1x, edge.c2x].filter(Number.isFinite);
+  const curveYs = [edge.y1, edge.y2, edge.c1y, edge.c2y].filter(Number.isFinite);
+  const nearbyPositions = positions.filter(
+    (position) =>
+      position.x + position.w >= Math.min(...curveXs) - halfWidth - 6 &&
+      position.x <= Math.max(...curveXs) + halfWidth + 6 &&
+      position.y + position.h >= Math.min(...curveYs) - 100 &&
+      position.y <= Math.max(...curveYs) + 100,
+  );
+  const candidates = [];
+  for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8]) {
+    const u = 1 - t;
+    const x = straight
+      ? edge.x1 + (edge.x2 - edge.x1) * t
+      : u ** 3 * edge.x1 + 3 * u ** 2 * t * edge.c1x + 3 * u * t ** 2 * edge.c2x + t ** 3 * edge.x2;
+    const curveY = straight
+      ? edge.y1 + (edge.y2 - edge.y1) * t
+      : u ** 3 * edge.y1 + 3 * u ** 2 * t * edge.c1y + 3 * u * t ** 2 * edge.c2y + t ** 3 * edge.y2;
+    for (const offsetY of [0, -24, 24, -42, 42, -60, 60, -78, 78]) {
+      const point = { x, y: curveY - 9 + offsetY };
+      let collisions = 0;
+      nearbyPositions.forEach((position) => {
+        const nodeRight = position.x + position.w;
+        const nodeBottom = position.y + position.h;
+        if (
+          point.x + halfWidth > position.x - 6 &&
+          point.x - halfWidth < nodeRight + 6 &&
+          point.y + 8 > position.y - 6 &&
+          point.y - 8 < nodeBottom + 6
+        )
+          collisions += 1;
+      });
+      placedLabels.forEach((placed) => {
+        if (Math.abs(point.x - placed.x) < halfWidth + placed.halfWidth + 6 && Math.abs(point.y - placed.y) < 18) collisions += 1;
+      });
+      candidates.push({ ...point, halfWidth, score: collisions * 1000 + Math.abs(t - 0.5) * 10 + Math.abs(offsetY) * 0.1 });
+    }
+  }
+  const best = candidates.sort((a, b) => a.score - b.score)[0] || { x: edge.labelX, y: edge.labelY, halfWidth };
+  placedLabels.push({ x: best.x, y: best.y, halfWidth });
+  return { x: best.x, y: best.y };
 }
 function applyDragPositions(people, drag) {
   if (!drag.familyPositions) return people.map((person) => (person.id === drag.id ? { ...person, treeX: drag.lastX, treeY: drag.lastY } : person));
@@ -233,6 +261,7 @@ function FamilyBranchLinks({ branches, people }) {
 }
 
 export default function App() {
+  const [isCompactViewport, setIsCompactViewport] = useState(() => window.innerWidth <= 1050);
   const [initialCache] = useState(readMongoPeopleCache);
   const [people, setPeople] = useState(() => initialCache.people);
   const [hasMongoSnapshot, setHasMongoSnapshot] = useState(initialCache.hasSnapshot);
@@ -242,12 +271,19 @@ export default function App() {
   const [familyQuery, setFamilyQuery] = useState('');
   const [linkStyle, setLinkStyle] = useState(() => (['direct', 'classic'].includes(storageGet('kinfolk-link-style')) ? storageGet('kinfolk-link-style') : 'classic'));
   const hoverSelectTimer = useRef(0);
-  const [moveFamily, setMoveFamily] = useState(false);
-  const moveFamilyRef = useRef(false);
   const [selectedId, setSelectedId] = useState(() => initialCache.people[0]?.id || '');
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [marqueeRect, setMarqueeRect] = useState(null);
-  const [touchSelectionMode, setTouchSelectionMode] = useState(false);
+  const [boxSelectMode, setBoxSelectMode] = useState(() => storageGet('kinfolk-phone-box-select-v1') === 'true' || storageGet('kinfolk-phone-move-mode-v1') === 'true');
+  const [phoneLayout, setPhoneLayout] = useState(() => {
+    try {
+      const saved = JSON.parse(storageGet('kinfolk-phone-tree-layout-v1'));
+      return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+    } catch {
+      return {};
+    }
+  });
+  const [phoneLayoutPreview, setPhoneLayoutPreview] = useState({});
   const [theme, setTheme] = useState(() => storageGet('kinfolk-theme') || 'light');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -257,9 +293,15 @@ export default function App() {
     return Number.isFinite(saved) && saved >= 286 && saved <= 620 ? saved : 390;
   });
   const detailsResize = useRef(null);
-  const [zoom, setZoom] = useState(1);
-  const [fitAfterReset, setFitAfterReset] = useState(false);
-  const [resetChoiceOpen, setResetChoiceOpen] = useState(false);
+  const [zoom, setZoom] = useState(() => {
+    const saved = Number(storageGet(window.innerWidth <= 1050 ? 'kinfolk-phone-zoom-v1' : 'kinfolk-site-zoom-v1'));
+    return Number.isFinite(saved) && saved >= 0.1 && saved <= 2 ? saved : 1;
+  });
+  const [treeViewportWidth, setTreeViewportWidth] = useState(0);
+  const [treeViewportHeight, setTreeViewportHeight] = useState(0);
+  const initialAutoFitDone = useRef(false);
+  const manualZoomTouched = useRef(false);
+  const viewportMode = useRef(isCompactViewport);
   const [query, setQuery] = useState('');
   const [modal, setModal] = useState(null);
   const [addMenuId, setAddMenuId] = useState('');
@@ -283,31 +325,61 @@ export default function App() {
   const selectedFamily = selectedFamilyId === '__all__' ? null : families.find((group) => group.id === selectedFamilyId) || [...families].sort((a, b) => b.people.length - a.people.length)[0];
   const familyPeople = selectedFamilyId === '__all__' ? people : selectedFamily?.people || people;
   const selected = people.find((p) => p.id === selectedId) || null;
-  const isCompactViewport = window.innerWidth <= 1050;
   const byId = (id) => people.find((p) => p.id === id);
-  const layout = useMemo(() => layoutTree(familyPeople), [familyPeople]);
+  const layoutPeople = useMemo(() => {
+    if (!isCompactViewport) return familyPeople;
+    return familyPeople.map((person) => {
+      const savedPosition = phoneLayoutPreview[person.id] || phoneLayout[person.id];
+      return { ...person, treeX: savedPosition?.treeX ?? null, treeY: savedPosition?.treeY ?? null };
+    });
+  }, [familyPeople, isCompactViewport, phoneLayout, phoneLayoutPreview]);
+  const layout = useMemo(() => layoutTree(layoutPeople), [layoutPeople]);
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
-  // const treeViewportWidth = treeScroll.current?.clientWidth || 0;
-  // const treeSurfaceWidth = Math.max(layout.width * zoom, treeViewportWidth + Math.max(0, (layout.originX - 60) * zoom));
-  // const treeBoardLeft = treeSurfaceWidth >= treeViewportWidth ? Math.max(0, (treeViewportWidth - layout.width * zoom) / 2) : 0;
   const treeContentWidth = layout.width * zoom;
   const treeExtraWidth = Math.max(0, (layout.originX - 60) * zoom);
+  const treeBoardLeft = Math.max(0, (treeViewportWidth - treeContentWidth) / 2);
+  const treeBoardTop = Math.max(0, (treeViewportHeight - layout.height * zoom) / 2);
+  const connectorNodePositions = [...layout.positions.values()];
+  const connectorLabelPositions = [];
   const filtered = useMemo(() => {
     const matches = familyPeople.filter((p) => fullName(p).toLowerCase().includes(query.toLowerCase()));
     return matches;
   }, [query, familyPeople]);
   const selectedDescendants = selected ? descendantIds(people, selected.id) : [];
   const deleteShortcutState = useRef(null);
-  deleteShortcutState.current = { selectedId, selectedNodeIds, confirmDelete, modal, resetChoiceOpen, familyPeople };
+  deleteShortcutState.current = { selectedId, selectedNodeIds, confirmDelete, modal, familyPeople };
   useEffect(() => {
     document.getElementById('boot-screen')?.remove();
     document.documentElement.dataset.theme = theme;
     storageSet('kinfolk-theme', theme);
   }, [theme]);
   useEffect(() => {
+    const updateViewportMode = () => setIsCompactViewport(window.innerWidth <= 1050);
+    window.addEventListener('resize', updateViewportMode);
+    return () => window.removeEventListener('resize', updateViewportMode);
+  }, []);
+  useEffect(() => {
+    if (viewportMode.current === isCompactViewport) return;
+    viewportMode.current = isCompactViewport;
+    manualZoomTouched.current = false;
+    const saved = Number(storageGet(isCompactViewport ? 'kinfolk-phone-zoom-v1' : 'kinfolk-site-zoom-v1'));
+    const nextZoom = Number.isFinite(saved) && saved >= 0.1 && saved <= 2 ? saved : 1;
+    zoomValue.current = nextZoom;
+    setZoom(nextZoom);
+  }, [isCompactViewport]);
+  useEffect(() => {
     storageSet('kinfolk-details-width', String(detailsWidth));
   }, [detailsWidth]);
+  useEffect(() => {
+    storageSet('kinfolk-phone-tree-layout-v1', JSON.stringify(phoneLayout));
+  }, [phoneLayout]);
+  useEffect(() => {
+    storageSet('kinfolk-phone-box-select-v1', String(boxSelectMode));
+  }, [boxSelectMode]);
+  useEffect(() => {
+    storageSet(isCompactViewport ? 'kinfolk-phone-zoom-v1' : 'kinfolk-site-zoom-v1', String(zoom));
+  }, [isCompactViewport, zoom]);
   function beginDetailsResize(event) {
     if (window.innerWidth <= 1050) return;
     event.preventDefault();
@@ -341,11 +413,23 @@ export default function App() {
     const viewport = treeScroll.current;
     if (viewport) {
       const rect = viewport.getBoundingClientRect();
-      viewport.scrollLeft = Math.max(0, anchor.x * zoom - (anchor.clientX - rect.left));
-      viewport.scrollTop = Math.max(0, anchor.y * zoom - (anchor.clientY - rect.top));
+      viewport.scrollLeft = Math.max(0, anchor.x * zoom + treeBoardLeft - (anchor.clientX - rect.left));
+      viewport.scrollTop = Math.max(0, anchor.y * zoom + treeBoardTop - (anchor.clientY - rect.top));
     }
     pendingZoomAnchor.current = null;
-  }, [zoom]);
+  }, [zoom, treeBoardLeft, treeBoardTop]);
+  useLayoutEffect(() => {
+    const viewport = treeScroll.current;
+    if (!viewport) return;
+    const updateSize = () => {
+      setTreeViewportWidth(viewport.clientWidth);
+      setTreeViewportHeight(viewport.clientHeight);
+    };
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     const viewport = treeScroll.current;
     if (!viewport) return;
@@ -354,7 +438,7 @@ export default function App() {
       e.preventDefault();
       e.stopPropagation();
       const baseZoom = pendingZoom.current?.nextZoom ?? zoomValue.current;
-      zoomAround(e.clientX, e.clientY, Math.max(0.35, Math.min(2, baseZoom * Math.exp(-e.deltaY * 0.01))));
+      zoomAround(e.clientX, e.clientY, Math.max(0.1, Math.min(2, baseZoom * Math.exp(-e.deltaY * 0.01))));
     };
     viewport.addEventListener('wheel', onWheel, { passive: false });
     return () => viewport.removeEventListener('wheel', onWheel);
@@ -366,21 +450,6 @@ export default function App() {
   useEffect(() => {
     setSelectedNodeIds([]);
   }, [selectedFamilyId]);
-  useEffect(() => {
-    if (!fitAfterReset) return;
-    const viewport = treeScroll.current;
-    if (!viewport) return;
-    const availableWidth = Math.max(1, viewport.clientWidth - 48);
-    const availableHeight = Math.max(1, viewport.clientHeight - 48);
-    const fittedZoom = Math.max(0.35, Math.min(1, availableWidth / layout.width, availableHeight / layout.height));
-    zoomValue.current = fittedZoom;
-    setZoom(fittedZoom);
-    requestAnimationFrame(() => {
-      viewport.scrollLeft = 0;
-      viewport.scrollTop = 0;
-    });
-    setFitAfterReset(false);
-  }, [fitAfterReset, layout.width, layout.height]);
   useEffect(
     () => () => {
       if (hoverSelectTimer.current) clearTimeout(hoverSelectTimer.current);
@@ -406,16 +475,30 @@ export default function App() {
   useLayoutEffect(() => {
     const previous = previousOrigin.current;
     if (treeScroll.current) {
-      if (previous) {
+      if (previous?.hasPeople && familyPeople.length) {
         treeScroll.current.scrollLeft += (layout.originX - previous.x) * zoom;
         treeScroll.current.scrollTop += (layout.originY - previous.y) * zoom;
       } else {
-        treeScroll.current.scrollLeft = Math.max(treeScroll.current.scrollLeft, (layout.originX - 60) * zoom);
-        treeScroll.current.scrollTop = Math.max(treeScroll.current.scrollTop, (layout.originY - 56) * zoom);
+        treeScroll.current.scrollLeft = 0;
+        treeScroll.current.scrollTop = 0;
       }
     }
-    previousOrigin.current = { x: layout.originX, y: layout.originY };
-  }, [layout.originX, layout.originY, zoom]);
+    previousOrigin.current = { x: layout.originX, y: layout.originY, hasPeople: familyPeople.length > 0 };
+  }, [layout.originX, layout.originY, zoom, familyPeople.length]);
+  useLayoutEffect(() => {
+    if (initialAutoFitDone.current || !familyPeople.length || apiState === 'checking') return;
+    initialAutoFitDone.current = true;
+    const key = isCompactViewport ? 'kinfolk-phone-initial-fit-v1' : 'kinfolk-site-initial-fit-v1';
+    if (storageGet(key) === 'true' || manualZoomTouched.current) return;
+    const viewport = treeScroll.current;
+    if (!viewport) return;
+    const fittedZoom = Math.max(0.1, Math.min(1, (viewport.clientWidth - 48) / layout.width, (viewport.clientHeight - 48) / layout.height));
+    zoomValue.current = fittedZoom;
+    setZoom(fittedZoom);
+    viewport.scrollLeft = 0;
+    viewport.scrollTop = 0;
+    storageSet(key, 'true');
+  }, [apiState, familyPeople.length, isCompactViewport, layout.height, layout.width]);
   useEffect(() => {
     if (apiState !== 'demo') return;
     const timer = setTimeout(() => storageSet('kinfolk-demo-people', JSON.stringify(people)), 250);
@@ -681,18 +764,30 @@ export default function App() {
             parentIds: (person.parentIds || []).filter((id) => !removalIds.has(id)),
             partnerIds: (person.partnerIds || []).filter((id) => !removalIds.has(id)),
             partnerRelationships: (person.partnerRelationships || []).filter((link) => !removalIds.has(link.partnerId)),
-            treeX: position ? position.x - 60 : person.treeX,
-            treeY: position ? position.y - 56 : person.treeY,
+            treeX: isCompactViewport ? person.treeX : position ? position.x - 60 : person.treeX,
+            treeY: isCompactViewport ? person.treeY : position ? position.y - 56 : person.treeY,
           };
         });
+      if (isCompactViewport) {
+        setPhoneLayout(
+          Object.fromEntries(
+            rows.map((person) => {
+              const position = layout.positions.get(person.id);
+              return [person.id, { treeX: position?.rawX ?? null, treeY: position?.rawY ?? null }];
+            }),
+          ),
+        );
+      }
       if (apiState === 'connected') {
-        const positions = rows.filter((person) => person._id).map((person) => ({ id: person._id, treeX: person.treeX, treeY: person.treeY }));
-        const saved = await fetch('/api/people/layout/positions', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ positions }),
-        });
-        if (!saved.ok) throw Error('Could not preserve the current tree layout');
+        if (!isCompactViewport) {
+          const positions = rows.filter((person) => person._id).map((person) => ({ id: person._id, treeX: person.treeX, treeY: person.treeY }));
+          const saved = await fetch('/api/people/layout/positions', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ positions }),
+          });
+          if (!saved.ok) throw Error('Could not preserve the current tree layout');
+        }
         const ids = removedPeople.filter((person) => person._id).map((person) => person._id);
         if (ids.length) {
           const response = await fetch('/api/people/batch', {
@@ -732,7 +827,7 @@ export default function App() {
     const onKeyDown = (event) => {
       if (event.code === 'Space' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target?.tagName)) spacePan.current = true;
       const state = deleteShortcutState.current;
-      if (!state || state.confirmDelete || state.modal || state.resetChoiceOpen || event.repeat || event.altKey) return;
+      if (!state || state.confirmDelete || state.modal || event.repeat || event.altKey) return;
       const target = event.target;
       if (target?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName) || target?.closest?.('[contenteditable="true"]')) return;
       const key = String(event.key || '').toLowerCase();
@@ -769,51 +864,6 @@ export default function App() {
       window.removeEventListener('blur', onBlur);
     };
   }, []);
-  async function saveCurrentLayout() {
-    try {
-      const positions = [...layoutRef.current.positions.values()]
-        .filter((position) => position.person?._id || position.person?.id)
-        .map((position) => ({ id: position.person._id || position.person.id, treeX: position.rawX, treeY: position.rawY }));
-      if (apiState === 'connected' && positions.length) {
-        const response = await fetch('/api/people/layout/positions', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ positions }),
-        });
-        if (!response.ok) throw Error('Could not save the current positions');
-      }
-      const byId = new Map(positions.map((position) => [String(position.id), position]));
-      setPeople((previous) =>
-        previous.map((person) => {
-          const position = byId.get(String(person._id || person.id));
-          return position ? { ...person, treeX: position.treeX, treeY: position.treeY } : person;
-        }),
-      );
-      setResetChoiceOpen(false);
-      notify('Current positions saved');
-    } catch (error) {
-      notify(error.message || 'Could not save the current positions');
-    }
-  }
-  async function resetLayout() {
-    try {
-      if (apiState === 'connected') {
-        const r = await fetch('/api/people/layout/reset', { method: 'PATCH' });
-        if (!r.ok) throw Error('Could not reset the saved layout');
-      }
-      setPeople((prev) => prev.map((p) => ({ ...p, treeX: null, treeY: null })));
-      setSelectedNodeIds([]);
-      if (treeScroll.current) {
-        treeScroll.current.scrollLeft = 0;
-        treeScroll.current.scrollTop = 0;
-      }
-      setFitAfterReset(true);
-      setResetChoiceOpen(false);
-      notify('Family tree arranged and fitted to canvas');
-    } catch (e) {
-      notify(e.message);
-    }
-  }
   function focusPersonInTree(id) {
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
@@ -832,6 +882,7 @@ export default function App() {
     );
   }
   function zoomAround(clientX, clientY, nextZoom) {
+    manualZoomTouched.current = true;
     pendingZoom.current = { clientX, clientY, nextZoom };
     if (zoomFrame.current) return;
     zoomFrame.current = requestAnimationFrame(() => {
@@ -844,8 +895,8 @@ export default function App() {
       if (viewport && surface) {
         const surfaceRect = surface.getBoundingClientRect();
         pendingZoomAnchor.current = {
-          x: (request.clientX - surfaceRect.left) / zoomValue.current,
-          y: (request.clientY - surfaceRect.top) / zoomValue.current,
+          x: (request.clientX - surfaceRect.left - treeBoardLeft) / zoomValue.current,
+          y: (request.clientY - surfaceRect.top - treeBoardTop) / zoomValue.current,
           clientX: request.clientX,
           clientY: request.clientY,
         };
@@ -863,11 +914,12 @@ export default function App() {
     zoomAround(rect.left + rect.width / 2, rect.top + rect.height / 2, nextZoom);
   }
   function fitTreeToView() {
+    manualZoomTouched.current = true;
     const viewport = treeScroll.current;
     if (!viewport) return;
     const availableWidth = Math.max(1, viewport.clientWidth - 48);
     const availableHeight = Math.max(1, viewport.clientHeight - 48);
-    const fittedZoom = Math.max(0.35, Math.min(1, availableWidth / layout.width, availableHeight / layout.height));
+    const fittedZoom = Math.max(0.1, Math.min(1, availableWidth / layout.width, availableHeight / layout.height));
     zoomValue.current = fittedZoom;
     setZoom(fittedZoom);
     requestAnimationFrame(() => {
@@ -892,7 +944,7 @@ export default function App() {
     const centerX = (a.clientX + b.clientX) / 2;
     const centerY = (a.clientY + b.clientY) / 2;
     const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-    zoomAround(centerX, centerY, Math.max(0.35, Math.min(2, (pinch.current.zoom * distance) / pinch.current.distance)));
+    zoomAround(centerX, centerY, Math.max(0.1, Math.min(2, (pinch.current.zoom * distance) / pinch.current.distance)));
   }
   function handleTouchEnd(e) {
     if (e.touches.length < 2) pinch.current = null;
@@ -948,6 +1000,15 @@ export default function App() {
     endNodeHover();
     e.preventDefault();
     e.stopPropagation();
+    const isSelected = selectedId === p.id || selectedNodeIds.includes(p.id);
+    if (!isSelected) {
+      const gesture = { mode: 'select-only', id: p.id, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, moved: false, held: false };
+      drag.current = gesture;
+      gesture.holdTimer = window.setTimeout(() => {
+        if (drag.current === gesture && !gesture.moved) gesture.held = true;
+      }, 520);
+      return;
+    }
     const movingGroup = selectedNodeIds.length > 1 && selectedNodeIds.includes(p.id);
     const viewport = treeScroll.current;
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -976,21 +1037,7 @@ export default function App() {
               return position ? { id: person.id, personId: person._id, x: position.rawX, y: position.rawY } : null;
             })
             .filter(Boolean)
-        : moveFamilyRef.current
-          ? getMoveBranch(familyPeople, p.id)
-              .map((person) => {
-                const position = layout.positions.get(person.id);
-                return position ? { id: person.id, personId: person._id, x: position.rawX, y: position.rawY } : null;
-              })
-              .filter(Boolean)
-          : moveFamilyRef.current
-            ? getMoveBranch(familyPeople, p.id)
-              .map((person) => {
-                const position = layout.positions.get(person.id);
-                return position ? { id: person.id, personId: person._id, x: position.rawX, y: position.rawY } : null;
-              })
-              .filter(Boolean)
-            : null,
+        : null,
     };
     drag.current = gesture;
     gesture.holdTimer = window.setTimeout(() => {
@@ -1003,7 +1050,7 @@ export default function App() {
     if (!viewport) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
-    const shouldPan = e.button === 1 || spacePan.current || (e.pointerType === 'touch' && !touchSelectionMode);
+    const shouldPan = e.button === 1 || spacePan.current || (e.pointerType === 'touch' && !boxSelectMode);
     const bounds = viewport.getBoundingClientRect();
     drag.current = {
       mode: shouldPan ? 'pan' : 'marquee',
@@ -1034,6 +1081,7 @@ export default function App() {
         d.holdTimer = 0;
       }
       e.preventDefault();
+      if (d.mode === 'select-only') return;
       if (d.mode === 'select') d.mode = 'pan';
       if (d.mode === 'marquee') {
         const viewport = treeScroll.current;
@@ -1064,7 +1112,14 @@ export default function App() {
       if (!d.frame)
         d.frame = requestAnimationFrame(() => {
           d.frame = 0;
-          setPeople((prev) => applyDragPositions(prev, d));
+          if (isCompactViewport) {
+            const deltaX = d.lastX - d.x;
+            const deltaY = d.lastY - d.y;
+            const nextPositions = d.familyPositions
+              ? Object.fromEntries(d.familyPositions.map((position) => [position.id, { treeX: position.x + deltaX, treeY: position.y + deltaY }]))
+              : { [d.id]: { treeX: d.lastX, treeY: d.lastY } };
+            setPhoneLayoutPreview((previous) => ({ ...previous, ...nextPositions }));
+          } else setPeople((prev) => applyDragPositions(prev, d));
         });
     }
     async function onUp(e) {
@@ -1073,8 +1128,22 @@ export default function App() {
       drag.current = null;
       if (d.holdTimer) clearTimeout(d.holdTimer);
       if (d.frame) cancelAnimationFrame(d.frame);
+      if (d.mode === 'select-only') {
+        if (d.held && !d.moved) {
+          openPersonDetails(d.id);
+          return;
+        }
+        setSelectedId(d.id);
+        setSelectedNodeIds([]);
+        return;
+      }
       if (d.mode === 'pan') {
-        if (!d.moved) clearSelection();
+        if (d.held && !d.moved && d.id) {
+          openPersonDetails(d.id);
+        } else if (!d.moved && d.id) {
+          setSelectedId(d.id);
+          setSelectedNodeIds([]);
+        } else if (!d.moved) clearSelection();
         return;
       }
       if (d.mode === 'marquee') {
@@ -1122,15 +1191,30 @@ export default function App() {
         .map((position) => ({ id: position.person.id, x: position.rawX, y: position.rawY, w: position.w, h: position.h }));
       const resolved = resolveNodeOverlaps(moving, stationary);
       const resolvedById = new Map(resolved.map((position) => [position.id, position]));
-      setPeople((previous) =>
-        previous.map((person) => {
-          const position = resolvedById.get(person.id);
-          return position ? { ...person, treeX: position.x, treeY: position.y } : person;
-        }),
-      );
+      if (!isCompactViewport)
+        setPeople((previous) =>
+          previous.map((person) => {
+            const position = resolvedById.get(person.id);
+            return position ? { ...person, treeX: position.x, treeY: position.y } : person;
+          }),
+        );
       setSelectedId(d.id);
       if (!d.groupSelection) setSelectedNodeIds([]);
-      if (d.familyPositions) {
+      if (isCompactViewport) {
+        setPhoneLayout((previous) => {
+          const next = { ...previous };
+          resolvedById.forEach((position, id) => {
+            next[id] = { treeX: position.x, treeY: position.y };
+          });
+          return next;
+        });
+        setPhoneLayoutPreview((previous) => {
+          const next = { ...previous };
+          movingIds.forEach((id) => delete next[id]);
+          return next;
+        });
+        notify(d.familyPositions ? 'Phone positions saved on this device' : 'Phone position saved on this device');
+      } else if (d.familyPositions) {
         const positions = d.familyPositions
           .filter((position) => position.personId)
           .map((position) => {
@@ -1364,7 +1448,7 @@ export default function App() {
                 <Info size={17} />
               </button>
               <div className="top-info-tooltip" role="tooltip">
-                Drag an empty area to box-select nodes. Drag any node to move it; selected nodes move together. On touch screens, turn on Box select to draw a selection. Hold Space or use middle-drag
+                Select a person before dragging to move them. Drag an empty area to box-select nodes. On phones, use Box select for rectangle selection; otherwise drag empty space to move the view. Hold Space or use middle-drag
                 to pan. Use Ctrl + mouse wheel or trackpad pinch to zoom. Use Ctrl+A to select this family, then Delete to remove the selection. Use the + on a node to add a family member.
               </div>
             </div>
@@ -1377,7 +1461,13 @@ export default function App() {
             <button className="top-theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label="Toggle color mode">
               {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
             </button>
-            <button className={`top-theme-toggle data-refresh-toggle ${isRefreshing ? 'is-refreshing' : ''}`} onClick={refreshFromDatabase} disabled={isRefreshing} aria-label={isRefreshing ? 'Refreshing family data' : 'Refresh family data'} title={isRefreshing ? 'Refreshing family data…' : 'Refresh family data'}>
+            <button
+              className={`top-theme-toggle data-refresh-toggle ${isRefreshing ? 'is-refreshing' : ''}`}
+              onClick={refreshFromDatabase}
+              disabled={isRefreshing}
+              aria-label={isRefreshing ? 'Refreshing family data' : 'Refresh family data'}
+              title={isRefreshing ? 'Refreshing family data…' : 'Refresh family data'}
+            >
               <RefreshCw size={16} />
             </button>
             <button
@@ -1427,24 +1517,8 @@ export default function App() {
             )}
           </div>
           <div className="tree-toolbar-actions">
-            <button
-              className={`move-family-button ${moveFamily ? 'active' : ''}`}
-              onClick={() => {
-                moveFamilyRef.current = !moveFamilyRef.current;
-                setMoveFamily(moveFamilyRef.current);
-              }}
-              aria-pressed={moveFamily}
-              title={moveFamily ? 'Drag a selected node to move it and its descendants' : 'Enable descendant-branch movement'}
-            >
-              <Move size={14} />
-              <span>{moveFamily ? 'Move descendants: on' : 'Move descendants'}</span>
-            </button>
-            <button className="reset-layout-button" onClick={() => setResetChoiceOpen(true)} aria-label="Reset layout options" title="Choose how to reset the layout">
-              <RotateCcw size={14} />
-              <span>Reset layout</span>
-            </button>
             <div className="zoom-tools">
-              <button onClick={() => zoomTo(Math.max(0.35, +(zoomValue.current - 0.1).toFixed(2)))} aria-label="Zoom out">
+              <button onClick={() => zoomTo(Math.max(0.1, +(zoomValue.current - 0.1).toFixed(2)))} aria-label="Zoom out">
                 <ZoomOut size={16} />
               </button>
               <span>{Math.round(zoom * 100)}%</span>
@@ -1460,17 +1534,21 @@ export default function App() {
         </div>
         <section className="simple-canvas">
           <div className="canvas-help">
-            <span className="help-grab">↕</span> Tap or hover for 2 seconds to select; hold for details. On laptop, use the eye icon.{' '}
+            <span className="help-grab">↕</span> Select a person before dragging to move them. Hold for details. On laptop, use the eye icon.{' '}
             {isCompactViewport
-              ? touchSelectionMode
-                ? 'Tap a node to select it. Drag a node to move it. Drag the canvas to select; turn Box select off to pan.'
-                : 'Tap a node to select it. Drag a node to move it. Drag the canvas to pan; turn on Box select to select multiple nodes.'
-              : moveFamily
-                ? 'Drag a person node to move them, their descendants, and their partners. Drag empty canvas to select nodes. Space-drag to pan.'
-                : 'Drag a person node to move it. Drag empty canvas to select nodes. Space-drag or middle-drag to pan.'}
+              ? boxSelectMode
+                ? 'Drag empty space to select people in a rectangle. Drag a selected person to move them. Turn Box select off to pan the view.'
+                : 'Tap to select a person, then drag to move them. Drag empty space to pan the view.'
+              : 'Drag a selected person to move them. Drag empty canvas to select nodes. Space-drag or middle-drag to pan.'}
           </div>
-          <button className={`mobile-box-select ${touchSelectionMode ? 'active' : ''}`} aria-pressed={touchSelectionMode} onClick={() => setTouchSelectionMode((active) => !active)}>
-            <Scan size={14} /> {touchSelectionMode ? 'Box select on' : 'Box select'}
+          <button
+            className={`mobile-box-select ${boxSelectMode ? 'active' : ''}`}
+            aria-pressed={boxSelectMode}
+            aria-label={boxSelectMode ? 'Turn off box selection' : 'Turn on box selection'}
+            title={boxSelectMode ? 'Turn off rectangle selection' : 'Select people with a rectangle'}
+            onClick={() => setBoxSelectMode((active) => !active)}
+          >
+            <Scan size={14} /> {boxSelectMode ? 'Box select on' : 'Box select'}
           </button>
           {selectedNodeIds.length > 1 && (
             <div className="selection-toolbar" aria-live="polite">
@@ -1499,6 +1577,7 @@ export default function App() {
                   width: layout.width,
                   height: layout.height,
                   left: treeBoardLeft,
+                  top: treeBoardTop,
                   transform: `scale(${zoom})`,
                   transformOrigin: 'top left',
                 }}
@@ -1527,7 +1606,6 @@ export default function App() {
                       const reverseRelation = edge.kind === 'parent' ? relationshipLabel('Child', to, from) : edge.kind === 'sibling' ? 'Sibling' : relationshipLabel('Partner', to, from) || 'Partner';
                       const description = `${fullName(from)} · ${relation} · ${fullName(to)}`;
                       const linkId = `${edge.kind}-${edge.fromId}-${edge.toId}`;
-                      const relationLabelPoint = linkLabelPoint(edge, 0.5);
                       const storedPartnerRelation = edge.kind === 'partner' ? partnerRelationship(from, to?.id) || partnerRelationship(to, from?.id) : '';
                       const genderedPartnerPair = (from?.gender === 'male' && to?.gender === 'female') || (from?.gender === 'female' && to?.gender === 'male');
                       const usesDefaultPartnerRole = ['', 'Husband', 'Wife', 'Spouse'].includes(storedPartnerRelation);
@@ -1537,6 +1615,7 @@ export default function App() {
                           : edge.kind === 'partner' && genderedPartnerPair && usesDefaultPartnerRole
                             ? 'Husband · Wife'
                             : storedPartnerRelation || `${relation} · ${reverseRelation}`;
+                      const relationLabelPoint = linkLabelPoint(edge, visibleRelation, connectorNodePositions, connectorLabelPositions, linkStyle === 'classic' && (edge.kind === 'partner' || edge.kind === 'sibling'));
                       return (
                         <g key={`${linkId}-${i}`}>
                           <path
@@ -1570,7 +1649,7 @@ export default function App() {
                     >
                       <button
                         className="tree-person-card"
-                        aria-label={`Select ${fullName(person)}; drag to move; press and hold to open details`}
+                      aria-label={`Select ${fullName(person)}; select first, then drag to move; press and hold to open details`}
                         onContextMenu={(e) => e.preventDefault()}
                         onClick={(e) => {
                           if (e.detail === 0) openPersonDetails(person.id);
@@ -1690,11 +1769,8 @@ export default function App() {
             <button onClick={() => zoomTo(Math.min(2, +(zoomValue.current + 0.1).toFixed(2)))} aria-label="Zoom in">
               <Plus size={17} />
             </button>
-            <button onClick={() => zoomTo(Math.max(0.35, +(zoomValue.current - 0.1).toFixed(2)))} aria-label="Zoom out">
+            <button onClick={() => zoomTo(Math.max(0.1, +(zoomValue.current - 0.1).toFixed(2)))} aria-label="Zoom out">
               <span>−</span>
-            </button>
-            <button onClick={() => zoomTo(1)} aria-label="Reset zoom">
-              <Maximize2 size={15} />
             </button>
           </div>
         </section>
@@ -1836,24 +1912,6 @@ export default function App() {
         </aside>
       )}
       {modal && !modal.inline && <PersonModal key={modal.person?.id || modal.kind || 'new'} modal={modal} people={people} onClose={() => setModal(null)} onSave={saveMember} />}
-      {resetChoiceOpen && (
-        <div className="simple-modal-backdrop">
-          <section className="layout-reset-dialog" role="dialog" aria-modal="true" aria-labelledby="layout-reset-title">
-            <span className="layout-reset-icon">
-              <RotateCcw size={18} />
-            </span>
-            <h2 id="layout-reset-title">Reset family layout?</h2>
-            <p>Choose whether to arrange everyone in a clean default view or keep the positions you have saved.</p>
-            <div className="layout-reset-actions">
-              <button onClick={() => setResetChoiceOpen(false)}>Cancel</button>
-              <button onClick={saveCurrentLayout}>Save current positions</button>
-              <button className="layout-reset-primary" onClick={resetLayout}>
-                Use best default view
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
       {confirmDelete && selected && (
         <div className="simple-modal-backdrop">
           <div className="delete-dialog">
