@@ -2723,9 +2723,6 @@ button {
   background: var(--surface-soft);
   color: var(--text);
 }
-.mobile-box-select {
-  display: none;
-}
 .tree-board {
   position: relative;
   flex: none;
@@ -4381,40 +4378,6 @@ button {
 @media (max-width: 1050px) {
   .simple-details.show-mobile.editing-person {
     width: min(430px, 94vw);
-  }
-  .mobile-box-select {
-    display: none;
-  }
-  .canvas-zoom-controls .mobile-box-select {
-    display: grid;
-    width: 30px;
-    min-height: 30px;
-    padding: 0;
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    background: transparent;
-    color: var(--text);
-    cursor: pointer;
-  }
-  .canvas-zoom-controls .mobile-box-select.active {
-    border-color: var(--accent);
-    background: var(--accent-bg);
-    color: var(--accent);
-  }
-  .box-select-hint {
-    position: absolute;
-    right: 58px;
-    bottom: 79px;
-    z-index: 5;
-    padding: 6px 9px;
-    border: 1px solid var(--accent);
-    border-radius: 7px;
-    background: var(--surface);
-    color: var(--accent);
-    box-shadow: 0 3px 12px #15201712;
-    font-size: 11px;
-    font-weight: 600;
-    pointer-events: none;
   }
 }
 .inline-person-editor {

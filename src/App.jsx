@@ -16,7 +16,6 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
-  Scan,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -273,7 +272,6 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(() => initialCache.people[0]?.id || '');
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [marqueeRect, setMarqueeRect] = useState(null);
-  const [boxSelectMode, setBoxSelectMode] = useState(() => storageGet('kinfolk-phone-box-select-v1') === 'true' || storageGet('kinfolk-phone-move-mode-v1') === 'true');
   const [phoneLayout, setPhoneLayout] = useState(() => {
     try {
       const saved = JSON.parse(storageGet('kinfolk-phone-tree-layout-v1'));
@@ -373,9 +371,6 @@ export default function App() {
   useEffect(() => {
     storageSet('kinfolk-phone-tree-layout-v1', JSON.stringify(phoneLayout));
   }, [phoneLayout]);
-  useEffect(() => {
-    storageSet('kinfolk-phone-box-select-v1', String(boxSelectMode));
-  }, [boxSelectMode]);
   useEffect(() => {
     storageSet(isCompactViewport ? 'kinfolk-phone-zoom-v1' : 'kinfolk-site-zoom-v1', String(zoom));
   }, [isCompactViewport, zoom]);
@@ -1029,10 +1024,11 @@ export default function App() {
     if (!viewport) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
-    const shouldPan = e.button === 1 || spacePan.current || (e.pointerType === 'touch' && !boxSelectMode);
+    const touchGesture = e.pointerType === 'touch';
+    const shouldPan = e.button === 1 || spacePan.current;
     const bounds = viewport.getBoundingClientRect();
     drag.current = {
-      mode: shouldPan ? 'pan' : 'marquee',
+      mode: touchGesture ? 'touch-pending' : shouldPan ? 'pan' : 'marquee',
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
@@ -1044,6 +1040,12 @@ export default function App() {
       startLocalX: e.clientX - bounds.left + viewport.scrollLeft,
       startLocalY: e.clientY - bounds.top + viewport.scrollTop,
     };
+    if (touchGesture) {
+      const gesture = drag.current;
+      gesture.holdTimer = window.setTimeout(() => {
+        if (drag.current === gesture && !gesture.moved) gesture.readyForMarquee = true;
+      }, 450);
+    }
     setMarqueeRect(null);
   }
   useEffect(() => {
@@ -1061,6 +1063,7 @@ export default function App() {
       }
       e.preventDefault();
       if (d.mode === 'select-only') return;
+      if (d.mode === 'touch-pending') d.mode = d.readyForMarquee ? 'marquee' : 'pan';
       if (d.mode === 'select') d.mode = 'pan';
       if (d.mode === 'marquee') {
         const viewport = treeScroll.current;
@@ -1114,6 +1117,10 @@ export default function App() {
         }
         setSelectedId(d.id);
         setSelectedNodeIds([]);
+        return;
+      }
+      if (d.mode === 'touch-pending') {
+        if (!d.moved) clearSelection();
         return;
       }
       if (d.mode === 'pan') {
@@ -1427,7 +1434,7 @@ export default function App() {
                 <Info size={17} />
               </button>
               <div className="top-info-tooltip" role="tooltip">
-                Select a person before dragging to move them. Drag an empty area to box-select nodes. On phones, use Box select for rectangle selection; otherwise drag empty space to move the view. Hold Space or use middle-drag
+                Select a person before dragging to move them. Drag an empty area to box-select nodes. On phones, drag empty space to move the view; hold briefly, then drag to select with a rectangle. Hold Space or use middle-drag
                 to pan. Use Ctrl + mouse wheel or trackpad pinch to zoom. Use Ctrl+A to select this family, then Delete to remove the selection. Use the + on a node to add a family member.
               </div>
             </div>
@@ -1439,15 +1446,6 @@ export default function App() {
           <div className="topbar-actions">
             <button className="top-theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label="Toggle color mode">
               {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
-            </button>
-            <button
-              className={`top-theme-toggle data-refresh-toggle ${isRefreshing ? 'is-refreshing' : ''}`}
-              onClick={refreshFromDatabase}
-              disabled={isRefreshing}
-              aria-label={isRefreshing ? 'Refreshing family data' : 'Refresh family data'}
-              title={isRefreshing ? 'Refreshing family data…' : 'Refresh family data'}
-            >
-              <RefreshCw size={16} />
             </button>
             <button
               className={`top-theme-toggle data-refresh-toggle ${isRefreshing ? 'is-refreshing' : ''}`}
@@ -1515,9 +1513,7 @@ export default function App() {
           <div className="canvas-help">
             <span className="help-grab">↕</span> Select a person before dragging to move them. Hold for details. On laptop, use the eye icon.{' '}
             {isCompactViewport
-              ? boxSelectMode
-                ? 'Drag empty space to select people in a rectangle. Drag a selected person to move them. Turn Box select off to pan the view.'
-                : 'Tap to select a person, then drag to move them. Drag empty space to pan the view.'
+              ? 'Tap a person to select, then drag to move them. Drag empty space to pan; hold briefly, then drag to select with a rectangle.'
               : 'Drag a selected person to move them. Drag empty canvas to select nodes. Space-drag or middle-drag to pan.'}
           </div>
           {selectedNodeIds.length > 1 && (
@@ -1734,15 +1730,6 @@ export default function App() {
             {marqueeRect && <div className="marquee-selection" style={{ left: marqueeRect.left, top: marqueeRect.top, width: marqueeRect.width, height: marqueeRect.height }} aria-hidden="true" />}
           </div>
           <div className="canvas-zoom-controls">
-            <button
-              className={`mobile-box-select ${boxSelectMode ? 'active' : ''}`}
-              aria-pressed={boxSelectMode}
-              aria-label={boxSelectMode ? 'Turn off box selection' : 'Turn on box selection'}
-              title={boxSelectMode ? 'Turn off rectangle selection' : 'Box select: draw a rectangle on empty space'}
-              onClick={() => setBoxSelectMode((active) => !active)}
-            >
-              <Scan size={16} />
-            </button>
             <button onClick={() => zoomTo(Math.min(2, +(zoomValue.current + 0.1).toFixed(2)))} aria-label="Zoom in">
               <Plus size={17} />
             </button>
@@ -1750,7 +1737,6 @@ export default function App() {
               <span>−</span>
             </button>
           </div>
-          {boxSelectMode && <span className="box-select-hint" aria-live="polite">Box select</span>}
         </section>
       </main>
       {mobileDetailsOpen && <button className="details-scrim" onClick={clearSelection} aria-label="Close person details and clear selection" />}
