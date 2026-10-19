@@ -2649,20 +2649,66 @@ button {
   top: 13px;
   left: 15px;
   z-index: 4;
-  display: flex;
-  align-items: center;
-  gap: 7px;
+  width: 34px;
+  height: 34px;
+}
+.canvas-help-button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 9px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 2px 9px #15201720;
+  cursor: pointer;
+  transition: background 0.16s, box-shadow 0.16s, transform 0.16s;
+}
+.canvas-help-button:hover,
+.canvas-help-button:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  box-shadow: 0 3px 13px color-mix(in srgb, var(--accent) 24%, transparent);
+  transform: translateY(-1px);
+}
+.canvas-help-tooltip {
+  position: absolute;
+  top: 42px;
+  left: 0;
+  z-index: 30;
+  width: min(340px, calc(100vw - 32px));
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
   background: var(--surface);
   color: var(--text-soft);
-  font-size: 10px;
-  box-shadow: 0 2px 8px #15201708;
+  box-shadow: 0 9px 28px #101a1430;
+  font-size: 11px;
+  line-height: 1.55;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-5px) scale(0.98);
+  transform-origin: top left;
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s;
+  pointer-events: none;
 }
-.help-grab {
-  font-size: 14px;
-  color: var(--accent);
+.canvas-help-tooltip p {
+  margin: 0;
+}
+.canvas-help-tooltip p + p {
+  margin-top: 7px;
+}
+.canvas-help-tooltip strong {
+  color: var(--text);
+}
+.canvas-help:hover .canvas-help-tooltip,
+.canvas-help:focus-within .canvas-help-tooltip,
+.canvas-help.open .canvas-help-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
 }
 .tree-scroll {
   position: absolute;
@@ -3970,45 +4016,6 @@ button {
 }
 .connector-hit:focus {
   outline: none;
-}
-
-.top-info-wrap {
-  position: relative;
-  display: grid;
-  place-items: center;
-}
-.top-info-button {
-  flex: none;
-}
-.top-info-tooltip {
-  position: absolute;
-  top: calc(100% + 9px);
-  left: 0;
-  z-index: 30;
-  width: min(290px, calc(100vw - 32px));
-  padding: 11px 13px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text-soft);
-  box-shadow: 0 8px 24px #101a1426;
-  font-size: 11px;
-  line-height: 1.55;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-3px);
-  transition:
-    opacity 0.14s,
-    transform 0.14s,
-    visibility 0.14s;
-  pointer-events: none;
-}
-.top-info-wrap:hover .top-info-tooltip,
-.top-info-wrap:focus-within .top-info-tooltip,
-.top-info-wrap.open .top-info-tooltip {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
 }
 
 .tree-node-about-wrap {

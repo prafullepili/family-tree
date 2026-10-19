@@ -287,7 +287,7 @@ export default function App() {
   const [theme, setTheme] = useState(() => storageGet('kinfolk-theme') || 'light');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const topInfoRef = useRef(null);
+  const canvasHelpRef = useRef(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [detailsWidth, setDetailsWidth] = useState(() => {
@@ -893,7 +893,7 @@ export default function App() {
   }, [confirmDelete, detailsOpen, helpOpen, modal, mobileDetailsOpen, selected, sidebarOpen]);
   useEffect(() => {
     const closeHelpOutside = (event) => {
-      if (!topInfoRef.current?.contains(event.target)) setHelpOpen(false);
+      if (!canvasHelpRef.current?.contains(event.target)) setHelpOpen(false);
     };
     document.addEventListener('pointerdown', closeHelpOutside);
     return () => document.removeEventListener('pointerdown', closeHelpOutside);
@@ -1475,22 +1475,6 @@ export default function App() {
             >
               {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
             </button>
-            <div className={`top-info-wrap ${helpOpen ? 'open' : ''}`} ref={topInfoRef}>
-              <button
-                className="plain-icon top-info-button"
-                aria-label="Family tree help"
-                aria-expanded={helpOpen}
-                aria-controls="family-tree-help"
-                title="Family tree help"
-                onClick={() => setHelpOpen((open) => !open)}
-              >
-                <Info size={17} />
-              </button>
-              <div id="family-tree-help" className="top-info-tooltip" role="tooltip">
-                Select a person before dragging to move them. Drag an empty area to box-select nodes. On phones, drag empty space to move the view; hold briefly, then drag to select with a rectangle. Hold Space or use middle-drag
-                to pan. Use Ctrl + mouse wheel or trackpad pinch to zoom. Use Ctrl+A to select this family, then Delete to remove the selection. Use the + on a node to add a family member.
-              </div>
-            </div>
             <div className="topbar-title">
               <span>FAMILY TREE</span>
               <h1>{treeName}</h1>
@@ -1573,11 +1557,23 @@ export default function App() {
           </div>
         </div>
         <section className="simple-canvas">
-          <div className="canvas-help">
-            <span className="help-grab">↕</span> Select a person before dragging to move them. Hold for details. On laptop, use the eye icon.{' '}
-            {isCompactViewport
-              ? 'Tap a person to select, then drag to move them. Drag empty space to pan; hold briefly, then drag to select with a rectangle.'
-              : 'Drag a selected person to move them. Drag empty canvas to select nodes. Space-drag or middle-drag to pan.'}
+          <div className={`canvas-help ${helpOpen ? 'open' : ''}`} ref={canvasHelpRef}>
+            <button
+              className="canvas-help-button"
+              aria-label="Canvas help"
+              aria-expanded={helpOpen}
+              aria-controls="canvas-help-tooltip"
+              title="Canvas help"
+              onClick={() => setHelpOpen((open) => !open)}
+            >
+              <Info size={17} />
+            </button>
+            <div id="canvas-help-tooltip" className="canvas-help-tooltip" role="tooltip">
+              <p><strong>Select and move:</strong> Select a person first, unlock node movement with the lock button, then drag. Lock movement to prevent accidental moves. Selected people move together.</p>
+              <p><strong>Select a group:</strong> On laptop, drag empty canvas. On phone, hold empty canvas briefly, then drag to draw a rectangle.</p>
+              <p><strong>Move the canvas:</strong> On phone, drag empty space. On laptop, hold Space while dragging or use the middle mouse button.</p>
+              <p><strong>More:</strong> Hold a person for details. Use the eye icon to show details on laptop. Ctrl + mouse wheel or trackpad pinch zooms. Ctrl+A selects this family; Delete removes the selection. Use the + on a node to add a family member.</p>
+            </div>
           </div>
           {selectedNodeIds.length > 1 && (
             <div className="selection-toolbar" aria-live="polite">
