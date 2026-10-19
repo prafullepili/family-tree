@@ -983,7 +983,14 @@ export default function App() {
                 return position ? { id: person.id, personId: person._id, x: position.rawX, y: position.rawY } : null;
               })
               .filter(Boolean)
-          : null,
+          : moveFamilyRef.current
+            ? getMoveBranch(familyPeople, p.id)
+              .map((person) => {
+                const position = layout.positions.get(person.id);
+                return position ? { id: person.id, personId: person._id, x: position.rawX, y: position.rawY } : null;
+              })
+              .filter(Boolean)
+            : null,
     };
     drag.current = gesture;
     gesture.holdTimer = window.setTimeout(() => {
@@ -1370,6 +1377,9 @@ export default function App() {
             <button className="top-theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label="Toggle color mode">
               {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
             </button>
+            <button className={`top-theme-toggle data-refresh-toggle ${isRefreshing ? 'is-refreshing' : ''}`} onClick={refreshFromDatabase} disabled={isRefreshing} aria-label={isRefreshing ? 'Refreshing family data' : 'Refresh family data'} title={isRefreshing ? 'Refreshing family data…' : 'Refresh family data'}>
+              <RefreshCw size={16} />
+            </button>
             <button
               className={`top-theme-toggle data-refresh-toggle ${isRefreshing ? 'is-refreshing' : ''}`}
               onClick={refreshFromDatabase}
@@ -1488,6 +1498,7 @@ export default function App() {
                 style={{
                   width: layout.width,
                   height: layout.height,
+                  left: treeBoardLeft,
                   transform: `scale(${zoom})`,
                   transformOrigin: 'top left',
                 }}
