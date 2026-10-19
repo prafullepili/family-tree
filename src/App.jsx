@@ -22,17 +22,44 @@ import {
   PanelRightOpen,
   Heart,
   Camera,
-  Link2,
   RotateCcw,
+  RefreshCw,
   Move,
   Info,
+  Scan,
 } from 'lucide-react';
 import { initialPeople } from './demoFamily.js';
-import { layoutTree } from './layoutTree.js';
+import { layoutTree, resolveNodeOverlaps } from './layoutTree.js';
 
 const fullName = (p) => [p?.firstName, p?.lastName].filter(Boolean).join(' ') || 'Unnamed person';
+function storageGet(key) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function storageSet(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    /* Storage can be unavailable or full. */
+  }
+}
+function storageRemove(key) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    /* Storage can be unavailable. */
+  }
+}
 const initials = (p) => `${p?.firstName?.[0] || ''}${p?.lastName?.[0] || ''}`.toUpperCase() || '?';
 const year = (date) => (date ? new Date(date).getUTCFullYear() : '—');
+function formatLongDate(value) {
+  if (!value) return 'Not added';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Not added' : date.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+}
 function relationshipLabel(role, relative, person) {
   if (role === 'Parent') return relative?.gender === 'male' ? 'Father' : relative?.gender === 'female' ? 'Mother' : 'Parent';
   if (role === 'Child') return relative?.gender === 'male' ? 'Son' : relative?.gender === 'female' ? 'Daughter' : 'Child';
@@ -148,6 +175,19 @@ function fromApi(p) {
     color: ['sage', 'rose', 'blue', 'peach', 'lavender', 'yellow', 'mint', 'pink'][(p.firstName?.charCodeAt(0) || 0) % 8],
   };
 }
+const mongoPeopleCacheKey = 'kinfolk-mongo-people-v1';
+function readMongoPeopleCache() {
+  try {
+    const cached = JSON.parse(storageGet(mongoPeopleCacheKey));
+    if (!Array.isArray(cached?.people)) return { people: [], hasSnapshot: false };
+    return {
+      people: cached.people.map((person) => fromApi({ ...person, _id: person._id || person.id })),
+      hasSnapshot: true,
+    };
+  } catch {
+    return { people: [], hasSnapshot: false };
+  }
+}
 function PersonAvatar({ person, size = 'small' }) {
   return <div className={`person-avatar ${size} ${person?.color || 'sage'}`}>{person?.photoUrl ? <img src={person.photoUrl} alt="" /> : <span>{initials(person)}</span>}</div>;
 }
@@ -193,36 +233,44 @@ function FamilyBranchLinks({ branches, people }) {
 }
 
 export default function App() {
-  const [people, setPeople] = useState([]);
+  const [initialCache] = useState(readMongoPeopleCache);
+  const [people, setPeople] = useState(() => initialCache.people);
+  const [hasMongoSnapshot, setHasMongoSnapshot] = useState(initialCache.hasSnapshot);
   const memberList = useRef(null);
   const [selectedFamilyId, setSelectedFamilyId] = useState('');
   const [familyPickerOpen, setFamilyPickerOpen] = useState(false);
   const [familyQuery, setFamilyQuery] = useState('');
-  const [linkStyle, setLinkStyle] = useState(() => (['direct', 'classic'].includes(localStorage.getItem('kinfolk-link-style')) ? localStorage.getItem('kinfolk-link-style') : 'classic'));
+  const [linkStyle, setLinkStyle] = useState(() => (['direct', 'classic'].includes(storageGet('kinfolk-link-style')) ? storageGet('kinfolk-link-style') : 'classic'));
   const hoverSelectTimer = useRef(0);
   const [moveFamily, setMoveFamily] = useState(false);
   const moveFamilyRef = useRef(false);
-  const [selectedId, setSelectedId] = useState('p5');
+  const [selectedId, setSelectedId] = useState(() => initialCache.people[0]?.id || '');
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
-  const [theme, setTheme] = useState(() => localStorage.getItem('kinfolk-theme') || 'light');
-  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 800);
+  const [marqueeRect, setMarqueeRect] = useState(null);
+  const [touchSelectionMode, setTouchSelectionMode] = useState(false);
+  const [theme, setTheme] = useState(() => storageGet('kinfolk-theme') || 'light');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [detailsWidth, setDetailsWidth] = useState(() => {
-    const saved = Number(localStorage.getItem('kinfolk-details-width'));
+    const saved = Number(storageGet('kinfolk-details-width'));
     return Number.isFinite(saved) && saved >= 286 && saved <= 620 ? saved : 390;
   });
   const detailsResize = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [fitAfterReset, setFitAfterReset] = useState(false);
+  const [resetChoiceOpen, setResetChoiceOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [modal, setModal] = useState(null);
   const [addMenuId, setAddMenuId] = useState('');
   const [toast, setToast] = useState('');
   const [apiState, setApiState] = useState('checking');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleteDescendants, setDeleteDescendants] = useState(() => localStorage.getItem('kinfolk-delete-descendants') === 'true');
+  const [deleteDescendants, setDeleteDescendants] = useState(() => storageGet('kinfolk-delete-descendants') === 'true');
   const drag = useRef(null);
+  const spacePan = useRef(false);
   const pinch = useRef(null);
   const zoomFrame = useRef(0);
   const pendingZoom = useRef(null);
@@ -230,25 +278,35 @@ export default function App() {
   const pendingZoomAnchor = useRef(null);
   const treeScroll = useRef(null);
   const previousOrigin = useRef(null);
+  const refreshDataRef = useRef(null);
   const families = useMemo(() => getFamilyGroups(people), [people]);
   const selectedFamily = selectedFamilyId === '__all__' ? null : families.find((group) => group.id === selectedFamilyId) || [...families].sort((a, b) => b.people.length - a.people.length)[0];
   const familyPeople = selectedFamilyId === '__all__' ? people : selectedFamily?.people || people;
   const selected = people.find((p) => p.id === selectedId) || null;
+  const isCompactViewport = window.innerWidth <= 1050;
   const byId = (id) => people.find((p) => p.id === id);
   const layout = useMemo(() => layoutTree(familyPeople), [familyPeople]);
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  // const treeViewportWidth = treeScroll.current?.clientWidth || 0;
+  // const treeSurfaceWidth = Math.max(layout.width * zoom, treeViewportWidth + Math.max(0, (layout.originX - 60) * zoom));
+  // const treeBoardLeft = treeSurfaceWidth >= treeViewportWidth ? Math.max(0, (treeViewportWidth - layout.width * zoom) / 2) : 0;
+  const treeContentWidth = layout.width * zoom;
+  const treeExtraWidth = Math.max(0, (layout.originX - 60) * zoom);
   const filtered = useMemo(() => {
     const matches = familyPeople.filter((p) => fullName(p).toLowerCase().includes(query.toLowerCase()));
     return matches;
   }, [query, familyPeople]);
   const selectedDescendants = selected ? descendantIds(people, selected.id) : [];
   const deleteShortcutState = useRef(null);
-  deleteShortcutState.current = { selectedId, selectedNodeIds, confirmDelete, modal, familyPeople };
+  deleteShortcutState.current = { selectedId, selectedNodeIds, confirmDelete, modal, resetChoiceOpen, familyPeople };
   useEffect(() => {
+    document.getElementById('boot-screen')?.remove();
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem('kinfolk-theme', theme);
+    storageSet('kinfolk-theme', theme);
   }, [theme]);
   useEffect(() => {
-    localStorage.setItem('kinfolk-details-width', String(detailsWidth));
+    storageSet('kinfolk-details-width', String(detailsWidth));
   }, [detailsWidth]);
   function beginDetailsResize(event) {
     if (window.innerWidth <= 1050) return;
@@ -274,7 +332,7 @@ export default function App() {
     }
   }
   useEffect(() => {
-    localStorage.setItem('kinfolk-link-style', linkStyle);
+    storageSet('kinfolk-link-style', linkStyle);
   }, [linkStyle]);
   useLayoutEffect(() => {
     zoomValue.current = zoom;
@@ -330,7 +388,7 @@ export default function App() {
     [],
   );
   useEffect(() => {
-    localStorage.setItem('kinfolk-delete-descendants', String(deleteDescendants));
+    storageSet('kinfolk-delete-descendants', String(deleteDescendants));
   }, [deleteDescendants]);
   useEffect(() => {
     setPeople((previous) => {
@@ -345,22 +403,36 @@ export default function App() {
         }));
     });
   }, []);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const previous = previousOrigin.current;
-    if (previous && drag.current?.moved && treeScroll.current) {
-      treeScroll.current.scrollLeft += (layout.originX - previous.x) * zoom;
-      treeScroll.current.scrollTop += (layout.originY - previous.y) * zoom;
+    if (treeScroll.current) {
+      if (previous) {
+        treeScroll.current.scrollLeft += (layout.originX - previous.x) * zoom;
+        treeScroll.current.scrollTop += (layout.originY - previous.y) * zoom;
+      } else {
+        treeScroll.current.scrollLeft = Math.max(treeScroll.current.scrollLeft, (layout.originX - 60) * zoom);
+        treeScroll.current.scrollTop = Math.max(treeScroll.current.scrollTop, (layout.originY - 56) * zoom);
+      }
     }
     previousOrigin.current = { x: layout.originX, y: layout.originY };
   }, [layout.originX, layout.originY, zoom]);
   useEffect(() => {
     if (apiState !== 'demo') return;
-    const timer = setTimeout(() => localStorage.setItem('kinfolk-demo-people', JSON.stringify(people)), 250);
+    const timer = setTimeout(() => storageSet('kinfolk-demo-people', JSON.stringify(people)), 250);
     return () => clearTimeout(timer);
   }, [people, apiState]);
   useEffect(() => {
+    if (apiState !== 'connected' || !hasMongoSnapshot) return;
+    try {
+      storageSet(mongoPeopleCacheKey, JSON.stringify({ people, updatedAt: Date.now() }));
+    } catch {
+      // The live MongoDB data remains available even if browser storage is full or disabled.
+    }
+  }, [people, apiState, hasMongoSnapshot]);
+  useEffect(() => {
     let active = true;
     (async () => {
+      setIsRefreshing(true);
       try {
         let ready = false;
         for (let i = 0; i < 8; i++) {
@@ -370,6 +442,7 @@ export default function App() {
           if (!state.configured) {
             if (active) {
               setPeople(initialPeople());
+              setHasMongoSnapshot(false);
               setApiState('demo');
             }
             return;
@@ -383,20 +456,78 @@ export default function App() {
         if (!ready) throw Error();
         const response = await fetch('/api/people');
         if (!response.ok) throw Error();
-        const rows = (await response.json()).map(fromApi);
+        const savedRows = await response.json();
+        const rows = savedRows.map(fromApi);
         if (active) {
-          localStorage.removeItem('kinfolk-demo-people');
+          storageRemove('kinfolk-demo-people');
+          setHasMongoSnapshot(true);
           setPeople(rows);
-          setSelectedId(rows[0]?.id || '');
+          setSelectedId((selectedId) => (rows.some((person) => person.id === selectedId) ? selectedId : rows[0]?.id || ''));
           setApiState('connected');
+          setRefreshFailed(false);
         }
       } catch {
-        if (active) setApiState('error');
+        if (active) {
+          setRefreshFailed(true);
+          setApiState(initialCache.hasSnapshot ? 'connected' : 'error');
+        }
+      } finally {
+        if (active) setIsRefreshing(false);
       }
     })();
     return () => {
       active = false;
     };
+  }, []);
+  async function refreshFromDatabase() {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    setRefreshFailed(false);
+    try {
+      let ready = false;
+      for (let i = 0; i < 8; i++) {
+        const healthResponse = await fetch('/api/health', { cache: 'no-store' });
+        if (!healthResponse.ok) throw Error();
+        const health = await healthResponse.json();
+        if (!health.configured) {
+          setRefreshFailed(hasMongoSnapshot);
+          if (!hasMongoSnapshot) setApiState('error');
+          notify('MongoDB is not configured for this app');
+          return;
+        }
+        if (health.database === 'connected') {
+          ready = true;
+          break;
+        }
+        if (i < 7) await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      if (!ready) throw Error();
+      const response = await fetch('/api/people', { cache: 'no-store' });
+      if (!response.ok) throw Error();
+      const rows = (await response.json()).map(fromApi);
+      setPeople(rows);
+      setHasMongoSnapshot(true);
+      setSelectedId((selectedId) => (rows.some((person) => person.id === selectedId) ? selectedId : rows[0]?.id || ''));
+      setApiState('connected');
+      setRefreshFailed(false);
+    } catch {
+      setRefreshFailed(true);
+      if (!hasMongoSnapshot) setApiState('error');
+      notify(hasMongoSnapshot ? 'Could not refresh from MongoDB. Showing the last saved data.' : 'Could not load family data from MongoDB.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+  refreshDataRef.current = refreshFromDatabase;
+  useEffect(() => {
+    const handleRefreshShortcut = (event) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'r') return;
+      event.preventDefault();
+      event.stopPropagation();
+      refreshDataRef.current?.();
+    };
+    window.addEventListener('keydown', handleRefreshShortcut, true);
+    return () => window.removeEventListener('keydown', handleRefreshShortcut, true);
   }, []);
   function notify(text) {
     setToast(text);
@@ -434,9 +565,10 @@ export default function App() {
   }
   async function saveMember(values) {
     const prior = modal.person;
+    const { childIds = [], ...memberValues } = values;
     const placement = !prior && modal.parent && ['parent', 'partner', 'child', 'sibling'].includes(modal.kind) ? findOpenTreePosition(modal.kind, modal.parent) : {};
     const payload = {
-      ...values,
+      ...memberValues,
       ...placement,
       parentIds: (values.parentIds || []).filter((id) => people.some((p) => p.id === id && p._id)),
       partnerIds: (values.partnerIds || []).filter((id) => people.some((p) => p.id === id && p._id)),
@@ -452,6 +584,22 @@ export default function App() {
         const data = await r.json();
         if (!r.ok) throw Error(data.error || 'Could not save this person');
         const saved = fromApi(data);
+        if (prior) {
+          const nextChildIds = new Set(childIds.filter((id) => people.some((person) => person.id === id && person._id)));
+          const currentChildren = people.filter((person) => (person.parentIds || []).includes(prior.id));
+          const childUpdates = [...new Map([...currentChildren, ...people.filter((person) => nextChildIds.has(person.id))].map((person) => [person.id, person])).values()]
+            .filter((child) => child._id && currentChildren.some((person) => person.id === child.id) !== nextChildIds.has(child.id))
+            .map(async (child) => {
+              const parentIds = nextChildIds.has(child.id) ? [...new Set([...(child.parentIds || []), saved.id])] : (child.parentIds || []).filter((id) => id !== saved.id);
+              const response = await fetch(`/api/people/${child._id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ parentIds }),
+              });
+              if (!response.ok) throw Error('Person saved, but a child link could not be updated');
+            });
+          await Promise.all(childUpdates);
+        }
         if (!prior && modal.kind === 'parent' && modal.parent?._id) {
           const link = await fetch(`/api/people/${modal.parent._id}`, {
             method: 'PATCH',
@@ -464,6 +612,8 @@ export default function App() {
         setPeople(rows);
         setSelectedId(saved.id);
         setModal(null);
+        setDetailsOpen(false);
+        setMobileDetailsOpen(false);
         notify(prior ? 'Person updated' : 'Person added to the tree');
       } catch (e) {
         notify(e.message);
@@ -480,29 +630,40 @@ export default function App() {
       color: prior?.color || ['sage', 'rose', 'blue', 'peach', 'lavender', 'yellow', 'mint', 'pink'][people.length % 8],
     };
     let rows = prior ? people.map((p) => (p.id === id ? newPerson : p)) : [...people, newPerson];
+    const currentChildren = new Set(prior ? people.filter((person) => (person.parentIds || []).includes(prior.id)).map((person) => person.id) : []);
+    const nextChildren = new Set(childIds);
     rows = rows.map((p) => {
       if (p.id === id) return p;
+      let updated = p;
+      if (prior && (currentChildren.has(p.id) || nextChildren.has(p.id))) {
+        updated = {
+          ...updated,
+          parentIds: nextChildren.has(p.id) ? [...new Set([...(updated.parentIds || []), id])] : (updated.parentIds || []).filter((parentId) => parentId !== id),
+        };
+      }
       const next = (values.partnerIds || []).includes(p.id);
       const relationship = (values.partnerRelationships || []).find((link) => link.partnerId === p.id)?.label;
-      const partnerRelationships = (p.partnerRelationships || []).filter((link) => link.partnerId !== id);
+      const partnerRelationships = (updated.partnerRelationships || []).filter((link) => link.partnerId !== id);
       if (next)
         return {
-          ...p,
-          partnerIds: [...new Set([...(p.partnerIds || []), id])],
+          ...updated,
+          partnerIds: [...new Set([...(updated.partnerIds || []), id])],
           partnerRelationships: relationship ? [...partnerRelationships, { partnerId: id, label: relationship }] : partnerRelationships,
         };
       if ((prior?.partnerIds || []).includes(p.id))
         return {
-          ...p,
-          partnerIds: (p.partnerIds || []).filter((x) => x !== id),
+          ...updated,
+          partnerIds: (updated.partnerIds || []).filter((x) => x !== id),
           partnerRelationships,
         };
-      return p;
+      return updated;
     });
     if (!prior && modal.kind === 'parent' && modal.parent) rows = rows.map((p) => (p.id === modal.parent.id ? { ...p, parentIds: [...new Set([...(p.parentIds || []), id])] } : p));
     setPeople(rows);
     setSelectedId(id);
     setModal(null);
+    setDetailsOpen(false);
+    setMobileDetailsOpen(false);
     notify(prior ? 'Person updated for this browser' : 'Person added for this browser');
   }
   async function removePerson() {
@@ -569,8 +730,9 @@ export default function App() {
   }, [confirmDelete, selectedId, selectedNodeIds, deleteDescendants, people, apiState, layout]);
   useEffect(() => {
     const onKeyDown = (event) => {
+      if (event.code === 'Space' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target?.tagName)) spacePan.current = true;
       const state = deleteShortcutState.current;
-      if (!state || state.confirmDelete || state.modal || event.repeat || event.altKey) return;
+      if (!state || state.confirmDelete || state.modal || state.resetChoiceOpen || event.repeat || event.altKey) return;
       const target = event.target;
       if (target?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName) || target?.closest?.('[contenteditable="true"]')) return;
       const key = String(event.key || '').toLowerCase();
@@ -592,9 +754,47 @@ export default function App() {
       event.stopImmediatePropagation();
       setConfirmDelete(true);
     };
+    const onKeyUp = (event) => {
+      if (event.code === 'Space') spacePan.current = false;
+    };
+    const onBlur = () => {
+      spacePan.current = false;
+    };
     window.addEventListener('keydown', onKeyDown, true);
-    return () => window.removeEventListener('keydown', onKeyDown, true);
+    window.addEventListener('keyup', onKeyUp, true);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+      window.removeEventListener('blur', onBlur);
+    };
   }, []);
+  async function saveCurrentLayout() {
+    try {
+      const positions = [...layoutRef.current.positions.values()]
+        .filter((position) => position.person?._id || position.person?.id)
+        .map((position) => ({ id: position.person._id || position.person.id, treeX: position.rawX, treeY: position.rawY }));
+      if (apiState === 'connected' && positions.length) {
+        const response = await fetch('/api/people/layout/positions', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ positions }),
+        });
+        if (!response.ok) throw Error('Could not save the current positions');
+      }
+      const byId = new Map(positions.map((position) => [String(position.id), position]));
+      setPeople((previous) =>
+        previous.map((person) => {
+          const position = byId.get(String(person._id || person.id));
+          return position ? { ...person, treeX: position.treeX, treeY: position.treeY } : person;
+        }),
+      );
+      setResetChoiceOpen(false);
+      notify('Current positions saved');
+    } catch (error) {
+      notify(error.message || 'Could not save the current positions');
+    }
+  }
   async function resetLayout() {
     try {
       if (apiState === 'connected') {
@@ -602,11 +802,13 @@ export default function App() {
         if (!r.ok) throw Error('Could not reset the saved layout');
       }
       setPeople((prev) => prev.map((p) => ({ ...p, treeX: null, treeY: null })));
+      setSelectedNodeIds([]);
       if (treeScroll.current) {
         treeScroll.current.scrollLeft = 0;
         treeScroll.current.scrollTop = 0;
       }
       setFitAfterReset(true);
+      setResetChoiceOpen(false);
       notify('Family tree arranged and fitted to canvas');
     } catch (e) {
       notify(e.message);
@@ -660,6 +862,19 @@ export default function App() {
     const rect = viewport.getBoundingClientRect();
     zoomAround(rect.left + rect.width / 2, rect.top + rect.height / 2, nextZoom);
   }
+  function fitTreeToView() {
+    const viewport = treeScroll.current;
+    if (!viewport) return;
+    const availableWidth = Math.max(1, viewport.clientWidth - 48);
+    const availableHeight = Math.max(1, viewport.clientHeight - 48);
+    const fittedZoom = Math.max(0.35, Math.min(1, availableWidth / layout.width, availableHeight / layout.height));
+    zoomValue.current = fittedZoom;
+    setZoom(fittedZoom);
+    requestAnimationFrame(() => {
+      viewport.scrollLeft = 0;
+      viewport.scrollTop = 0;
+    });
+  }
   function handleTouchStart(e) {
     if (e.touches.length !== 2) return;
     e.preventDefault();
@@ -706,8 +921,11 @@ export default function App() {
       setMobileDetailsOpen(true);
     }
   }
+  function openLinkEditor() {
+    if (selected) setModal({ person: selected, inline: true, focusLinks: true });
+  }
   function beginNodeHover(personId, event) {
-    if (event.pointerType !== 'mouse') return;
+    if (event.pointerType !== 'mouse' || drag.current) return;
     if (hoverSelectTimer.current) clearTimeout(hoverSelectTimer.current);
     hoverSelectTimer.current = window.setTimeout(() => {
       selectPerson(personId);
@@ -727,13 +945,14 @@ export default function App() {
   }
   function startDrag(e, p, pos) {
     if (e.button !== 0) return;
+    endNodeHover();
     e.preventDefault();
     e.stopPropagation();
-    const wasSelected = selectedId === p.id;
+    const movingGroup = selectedNodeIds.length > 1 && selectedNodeIds.includes(p.id);
     const viewport = treeScroll.current;
     e.currentTarget.setPointerCapture(e.pointerId);
     const gesture = {
-      mode: wasSelected ? 'person' : 'select',
+      mode: 'person',
       id: p.id,
       personId: p._id,
       pointerId: e.pointerId,
@@ -748,8 +967,16 @@ export default function App() {
       held: false,
       frame: 0,
       holdTimer: 0,
-      familyPositions:
-        wasSelected && moveFamilyRef.current
+      groupSelection: movingGroup,
+      familyPositions: movingGroup
+        ? familyPeople
+            .filter((person) => selectedNodeIds.includes(person.id))
+            .map((person) => {
+              const position = layout.positions.get(person.id);
+              return position ? { id: person.id, personId: person._id, x: position.rawX, y: position.rawY } : null;
+            })
+            .filter(Boolean)
+        : moveFamilyRef.current
           ? getMoveBranch(familyPeople, p.id)
               .map((person) => {
                 const position = layout.positions.get(person.id);
@@ -764,20 +991,27 @@ export default function App() {
     }, 520);
   }
   function startPan(e) {
-    if (e.button !== 0 || e.target.closest('.tree-person,.connector-hit,button,input,textarea,select,[role="button"]')) return;
+    if ((e.button !== 0 && e.button !== 1) || e.target.closest('.tree-person,.connector-hit,button,input,textarea,select,[role="button"]')) return;
     const viewport = treeScroll.current;
     if (!viewport) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
+    const shouldPan = e.button === 1 || spacePan.current || (e.pointerType === 'touch' && !touchSelectionMode);
+    const bounds = viewport.getBoundingClientRect();
     drag.current = {
-      mode: 'pan',
+      mode: shouldPan ? 'pan' : 'marquee',
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
       scrollLeft: viewport.scrollLeft,
       scrollTop: viewport.scrollTop,
       moved: false,
+      additive: e.shiftKey,
+      additiveIds: e.shiftKey ? [...new Set([...selectedNodeIds, ...(selectedId ? [selectedId] : [])])] : [],
+      startLocalX: e.clientX - bounds.left + viewport.scrollLeft,
+      startLocalY: e.clientY - bounds.top + viewport.scrollTop,
     };
+    setMarqueeRect(null);
   }
   useEffect(() => {
     function onMove(e) {
@@ -794,6 +1028,20 @@ export default function App() {
       }
       e.preventDefault();
       if (d.mode === 'select') d.mode = 'pan';
+      if (d.mode === 'marquee') {
+        const viewport = treeScroll.current;
+        if (!viewport) return;
+        const bounds = viewport.getBoundingClientRect();
+        const currentX = e.clientX - bounds.left + viewport.scrollLeft;
+        const currentY = e.clientY - bounds.top + viewport.scrollTop;
+        setMarqueeRect({
+          left: Math.min(d.startLocalX, currentX),
+          top: Math.min(d.startLocalY, currentY),
+          width: Math.abs(currentX - d.startLocalX),
+          height: Math.abs(currentY - d.startLocalY),
+        });
+        return;
+      }
       if (d.mode === 'pan') {
         const viewport = treeScroll.current;
         if (viewport) {
@@ -822,6 +1070,31 @@ export default function App() {
         if (!d.moved) clearSelection();
         return;
       }
+      if (d.mode === 'marquee') {
+        setMarqueeRect(null);
+        if (!d.moved) {
+          if (!d.additive) clearSelection();
+          return;
+        }
+        const box = {
+          left: Math.min(d.startX, e.clientX),
+          right: Math.max(d.startX, e.clientX),
+          top: Math.min(d.startY, e.clientY),
+          bottom: Math.max(d.startY, e.clientY),
+        };
+        const hitIds = [...(treeScroll.current?.querySelectorAll('.tree-person') || [])]
+          .filter((node) => {
+            const bounds = node.getBoundingClientRect();
+            return bounds.right >= box.left && bounds.left <= box.right && bounds.bottom >= box.top && bounds.top <= box.bottom;
+          })
+          .map((node) => node.dataset.personId);
+        const ids = [...new Set([...(d.additiveIds || []), ...hitIds])];
+        setSelectedId(ids[0] || '');
+        setSelectedNodeIds(ids.length > 1 ? ids : []);
+        setDetailsOpen(false);
+        setMobileDetailsOpen(false);
+        return;
+      }
       if (d.held && !d.moved) {
         openPersonDetails(d.id);
         return;
@@ -833,17 +1106,31 @@ export default function App() {
         setSelectedNodeIds([]);
         return;
       }
-      setPeople((prev) => applyDragPositions(prev, d));
+      const moving = d.familyPositions
+        ? d.familyPositions.map((position) => ({ id: position.id, x: position.x + (d.lastX - d.x), y: position.y + (d.lastY - d.y), w: 196, h: 82 }))
+        : [{ id: d.id, x: d.lastX, y: d.lastY, w: 196, h: 82 }];
+      const movingIds = new Set(moving.map((position) => position.id));
+      const stationary = [...layoutRef.current.positions.values()]
+        .filter((position) => !movingIds.has(position.person.id))
+        .map((position) => ({ id: position.person.id, x: position.rawX, y: position.rawY, w: position.w, h: position.h }));
+      const resolved = resolveNodeOverlaps(moving, stationary);
+      const resolvedById = new Map(resolved.map((position) => [position.id, position]));
+      setPeople((previous) =>
+        previous.map((person) => {
+          const position = resolvedById.get(person.id);
+          return position ? { ...person, treeX: position.x, treeY: position.y } : person;
+        }),
+      );
+      setSelectedId(d.id);
+      if (!d.groupSelection) setSelectedNodeIds([]);
       if (d.familyPositions) {
-        const dx = d.lastX - d.x,
-          dy = d.lastY - d.y;
         const positions = d.familyPositions
           .filter((position) => position.personId)
-          .map((position) => ({
-            id: position.personId,
-            treeX: position.x + dx,
-            treeY: position.y + dy,
-          }));
+          .map((position) => {
+            const resolvedPosition = resolvedById.get(position.id);
+            return resolvedPosition ? { id: position.personId, treeX: resolvedPosition.x, treeY: resolvedPosition.y } : null;
+          })
+          .filter(Boolean);
         if (positions.length) {
           try {
             const response = await fetch('/api/people/layout/positions', {
@@ -852,17 +1139,18 @@ export default function App() {
               body: JSON.stringify({ positions }),
             });
             if (!response.ok) throw Error();
-            notify('Family positions saved');
+            notify(d.groupSelection ? 'Selected positions saved' : 'Family positions saved');
           } catch {
             notify('Family moved for this session; positions could not be saved');
           }
         } else notify('Family moved');
       } else if (d.personId) {
+        const position = resolvedById.get(d.id);
         try {
           const r = await fetch(`/api/people/${d.personId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ treeX: d.lastX, treeY: d.lastY }),
+            body: JSON.stringify({ treeX: position?.x ?? d.lastX, treeY: position?.y ?? d.lastY }),
           });
           if (!r.ok) throw Error();
           notify('Position saved');
@@ -905,9 +1193,7 @@ export default function App() {
               <span className="sidebar-family-mark">{treeName[0] || 'F'}</span>
               <div>
                 <strong>{treeName}</strong>
-                <small>
-                  {apiState === 'checking' ? 'Loading…' : `${familyPeople.length} ${familyPeople.length === 1 ? 'person' : 'people'}`}
-                </small>
+                <small>{apiState === 'checking' && (!hasMongoSnapshot || !people.length) ? 'Loading…' : `${familyPeople.length} ${familyPeople.length === 1 ? 'person' : 'people'}`}</small>
               </div>
             </div>
             {families.length > 1 && (
@@ -1020,12 +1306,28 @@ export default function App() {
                   <span>{fullName(p)}</span>
                 </button>
               ))}
-              {!filtered.length && <div className="empty-list">{apiState === 'checking' ? 'Loading family members…' : apiState === 'error' ? 'Could not load family members' : 'No people yet'}</div>}
+              {!filtered.length && (
+                <div className="empty-list">
+                  {apiState === 'checking' && (!hasMongoSnapshot || !people.length) ? 'Loading family members…' : apiState === 'error' ? 'Could not load family members' : 'No people yet'}
+                </div>
+              )}
             </div>
             <div className="sidebar-bottom">
               <div className="storage-status">
-                <span className={`status-light ${apiState}`} />
-                <span>{apiState === 'connected' ? 'Saved to MongoDB' : apiState === 'checking' ? 'Connecting…' : apiState === 'demo' ? 'Saved in this browser' : 'Database unavailable'}</span>
+                <span className={`status-light ${refreshFailed ? 'error' : apiState}`} />
+                <span>
+                  {refreshFailed && hasMongoSnapshot
+                    ? 'Offline · showing saved data'
+                    : isRefreshing && hasMongoSnapshot
+                      ? 'Refreshing data…'
+                      : apiState === 'connected'
+                        ? 'Saved to MongoDB'
+                        : apiState === 'checking'
+                          ? 'Connecting…'
+                          : apiState === 'demo'
+                            ? 'Saved in this browser'
+                            : 'Database unavailable'}
+                </span>
               </div>
               <button className="theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
                 {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
@@ -1055,8 +1357,8 @@ export default function App() {
                 <Info size={17} />
               </button>
               <div className="top-info-tooltip" role="tooltip">
-                Select a node to view details. Drag a selected node to move it, or drag empty canvas to pan. Use Ctrl + mouse wheel or trackpad pinch to zoom. Use Ctrl+A to select this family, then
-                Delete to remove the selection. Use the + on a node to add a family member.
+                Drag an empty area to box-select nodes. Drag any node to move it; selected nodes move together. On touch screens, turn on Box select to draw a selection. Hold Space or use middle-drag
+                to pan. Use Ctrl + mouse wheel or trackpad pinch to zoom. Use Ctrl+A to select this family, then Delete to remove the selection. Use the + on a node to add a family member.
               </div>
             </div>
             <div className="topbar-title">
@@ -1067,6 +1369,15 @@ export default function App() {
           <div className="topbar-actions">
             <button className="top-theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label="Toggle color mode">
               {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
+            </button>
+            <button
+              className={`top-theme-toggle data-refresh-toggle ${isRefreshing ? 'is-refreshing' : ''}`}
+              onClick={refreshFromDatabase}
+              disabled={isRefreshing}
+              aria-label={isRefreshing ? 'Refreshing family data' : 'Refresh family data'}
+              title={isRefreshing ? 'Refreshing family data…' : 'Refresh family data'}
+            >
+              <RefreshCw size={16} />
             </button>
             <button
               className="right-panel-toggle"
@@ -1097,10 +1408,8 @@ export default function App() {
           </label>
           <div className="tree-count">
             <UsersRound size={15} />
-            <span>
-              {apiState === 'checking' ? 'Loading family…' : `${familyPeople.length} ${familyPeople.length === 1 ? 'person' : 'people'}`}
-            </span>
-            {apiState !== 'checking' && (
+            <span>{apiState === 'checking' && (!hasMongoSnapshot || !people.length) ? 'Loading family…' : `${familyPeople.length} ${familyPeople.length === 1 ? 'person' : 'people'}`}</span>
+            {(apiState !== 'checking' || (hasMongoSnapshot && people.length > 0)) && (
               <>
                 <span className="toolbar-dot">·</span>
                 <span>{layout.generationCount} generations</span>
@@ -1120,7 +1429,7 @@ export default function App() {
               <Move size={14} />
               <span>{moveFamily ? 'Move descendants: on' : 'Move descendants'}</span>
             </button>
-            <button className="reset-layout-button" onClick={resetLayout} aria-label="Reset all people to automatic layout" title="Reset all people to automatic layout">
+            <button className="reset-layout-button" onClick={() => setResetChoiceOpen(true)} aria-label="Reset layout options" title="Choose how to reset the layout">
               <RotateCcw size={14} />
               <span>Reset layout</span>
             </button>
@@ -1133,7 +1442,7 @@ export default function App() {
                 <ZoomIn size={16} />
               </button>
               <i />
-              <button onClick={() => zoomTo(1)} aria-label="Fit tree">
+              <button onClick={fitTreeToView} aria-label="Fit tree to view">
                 <Maximize2 size={15} />
               </button>
             </div>
@@ -1142,8 +1451,28 @@ export default function App() {
         <section className="simple-canvas">
           <div className="canvas-help">
             <span className="help-grab">↕</span> Tap or hover for 2 seconds to select; hold for details. On laptop, use the eye icon.{' '}
-            {moveFamily ? 'Drag a selected person to move them, their descendants, and their partners.' : 'Drag a selected node to move it; otherwise drag to pan.'}
+            {isCompactViewport
+              ? touchSelectionMode
+                ? 'Tap a node to select it. Drag a node to move it. Drag the canvas to select; turn Box select off to pan.'
+                : 'Tap a node to select it. Drag a node to move it. Drag the canvas to pan; turn on Box select to select multiple nodes.'
+              : moveFamily
+                ? 'Drag a person node to move them, their descendants, and their partners. Drag empty canvas to select nodes. Space-drag to pan.'
+                : 'Drag a person node to move it. Drag empty canvas to select nodes. Space-drag or middle-drag to pan.'}
           </div>
+          <button className={`mobile-box-select ${touchSelectionMode ? 'active' : ''}`} aria-pressed={touchSelectionMode} onClick={() => setTouchSelectionMode((active) => !active)}>
+            <Scan size={14} /> {touchSelectionMode ? 'Box select on' : 'Box select'}
+          </button>
+          {selectedNodeIds.length > 1 && (
+            <div className="selection-toolbar" aria-live="polite">
+              <span>{selectedNodeIds.length} selected</span>
+              <button onClick={() => setConfirmDelete(true)}>
+                <Trash2 size={14} /> Remove selected
+              </button>
+              <button className="selection-clear-button" aria-label="Clear selection" title="Clear selection" onClick={clearSelection}>
+                <X size={14} />
+              </button>
+            </div>
+          )}
           <div
             className="tree-scroll"
             ref={treeScroll}
@@ -1153,7 +1482,7 @@ export default function App() {
             onTouchEnd={handleTouchEnd}
             onTouchCancel={handleTouchEnd}
           >
-            <div className="tree-zoom-surface" style={{ width: layout.width * zoom, height: layout.height * zoom }}>
+            <div className="tree-zoom-surface" style={{ width: `calc(100% + ${treeExtraWidth}px)`, minWidth: treeContentWidth, height: layout.height * zoom }}>
               <div
                 className="tree-board"
                 style={{
@@ -1230,7 +1559,7 @@ export default function App() {
                     >
                       <button
                         className="tree-person-card"
-                        aria-label={`Select ${fullName(person)}; press and hold to open details; drag selected node to move`}
+                        aria-label={`Select ${fullName(person)}; drag to move; press and hold to open details`}
                         onContextMenu={(e) => e.preventDefault()}
                         onClick={(e) => {
                           if (e.detail === 0) openPersonDetails(person.id);
@@ -1310,36 +1639,41 @@ export default function App() {
                     </div>
                   );
                 })}
-                {apiState === 'checking' ? (
+                {apiState === 'checking' && (!hasMongoSnapshot || !people.length) ? (
                   <div className="tree-loading" role="status" aria-live="polite">
                     <span className="loading-spinner" />
                     <span>Loading your family tree…</span>
                   </div>
-                ) : !familyPeople.length && (
-                  <div className="tree-empty">
-                    <div className="tree-empty-icon">
-                      <GitFork size={26} />
+                ) : (
+                  !familyPeople.length && (
+                    <div className="tree-empty">
+                      <div className="tree-empty-icon">
+                        <GitFork size={26} />
+                      </div>
+                      {apiState === 'error' ? (
+                        <>
+                          <h2>Couldn’t load your family tree</h2>
+                          <p>Check that the API and MongoDB are running, then try again.</p>
+                          <button className="add-person-button" onClick={refreshFromDatabase} disabled={isRefreshing}>
+                            {isRefreshing ? 'Refreshing…' : 'Try again'}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <h2>Start your family tree</h2>
+                          <p>Add a person, then link parents and partners to build the branches.</p>
+                          <button className="add-person-button" onClick={() => openAddPersonForm()}>
+                            <Plus size={16} />
+                            Add first person
+                          </button>
+                        </>
+                      )}
                     </div>
-                    {apiState === 'error' ? (
-                      <>
-                        <h2>Couldn’t load your family tree</h2>
-                        <p>Check that the API and MongoDB are running, then try again.</p>
-                        <button className="add-person-button" onClick={() => window.location.reload()}>Try again</button>
-                      </>
-                    ) : (
-                      <>
-                        <h2>Start your family tree</h2>
-                        <p>Add a person, then link parents and partners to build the branches.</p>
-                        <button className="add-person-button" onClick={() => openAddPersonForm()}>
-                          <Plus size={16} />
-                          Add first person
-                        </button>
-                      </>
-                    )}
-                  </div>
+                  )
                 )}
               </div>
             </div>
+            {marqueeRect && <div className="marquee-selection" style={{ left: marqueeRect.left, top: marqueeRect.top, width: marqueeRect.width, height: marqueeRect.height }} aria-hidden="true" />}
           </div>
           <div className="canvas-zoom-controls">
             <button onClick={() => zoomTo(Math.min(2, +(zoomValue.current + 0.1).toFixed(2)))} aria-label="Zoom in">
@@ -1392,8 +1726,8 @@ export default function App() {
                   <button className="plain-icon mobile-details-close" onClick={() => setMobileDetailsOpen(false)} aria-label="Close details">
                     <X size={17} />
                   </button>
-                  <button className="plain-icon" onClick={() => setModal({ person: selected, inline: true })} aria-label="Edit person">
-                    <Pencil size={15} />
+                  <button className="family-links-edit-button" onClick={() => setModal({ person: selected, inline: true })} aria-label="Edit person" title="Edit person">
+                    <Pencil size={14} />
                   </button>
                 </div>
               </div>
@@ -1410,15 +1744,7 @@ export default function App() {
                   <CalendarDays size={15} />
                   <span>
                     <small>Born</small>
-                    <strong>
-                      {selected.birthDate
-                        ? new Date(`${selected.birthDate}T00:00:00`).toLocaleDateString(undefined, {
-                            day: 'numeric',
-                            month: 'long',
-                            year: 'numeric',
-                          })
-                        : 'Not added'}
-                    </strong>
+                    <strong>{formatLongDate(selected.birthDate)}</strong>
                   </span>
                 </div>
                 <div className="detail-field">
@@ -1458,7 +1784,12 @@ export default function App() {
                 <p>{selected.bio || 'Add a short story or memory about this person.'}</p>
               </div>
               <div className="details-links">
-                <label>FAMILY LINKS</label>
+                <div className="details-links-heading">
+                  <label>FAMILY LINKS</label>
+                  <button className="family-links-edit-button" onClick={openLinkEditor} aria-label="Edit family links" title="Edit family links">
+                    <Pencil size={13} />
+                  </button>
+                </div>
                 {[
                   ...(selected.parentIds || []).map((id) => ({ id, role: 'Parent' })),
                   ...(selected.partnerIds || []).map((id) => ({
@@ -1471,18 +1802,15 @@ export default function App() {
                 ].map(
                   (link, i) =>
                     byId(link.id) && (
-                      <button key={`${link.role}-${link.id}-${i}`} onClick={() => openPersonDetails(link.id)}>
+                      <button className="details-link-row" key={`${link.role}-${link.id}-${i}`} onClick={() => openPersonDetails(link.id)}>
                         <PersonAvatar person={byId(link.id)} />
-                        <span>
+                        <span className="details-link-person">
                           <strong>{fullName(byId(link.id))}</strong>
-                          <small>{link.label || relationshipLabel(link.role, byId(link.id), selected)}</small>
                         </span>
+                        <small className="details-link-role">{link.label || relationshipLabel(link.role, byId(link.id), selected)}</small>
                       </button>
                     ),
                 )}
-                <button className="link-edit-button" onClick={() => setModal({ person: selected, inline: true })}>
-                  <Link2 size={14} /> Edit links
-                </button>
                 <button className="remove-person-button" onClick={() => setConfirmDelete(true)}>
                   <Trash2 size={14} /> Remove person
                 </button>
@@ -1497,6 +1825,24 @@ export default function App() {
         </aside>
       )}
       {modal && !modal.inline && <PersonModal key={modal.person?.id || modal.kind || 'new'} modal={modal} people={people} onClose={() => setModal(null)} onSave={saveMember} />}
+      {resetChoiceOpen && (
+        <div className="simple-modal-backdrop">
+          <section className="layout-reset-dialog" role="dialog" aria-modal="true" aria-labelledby="layout-reset-title">
+            <span className="layout-reset-icon">
+              <RotateCcw size={18} />
+            </span>
+            <h2 id="layout-reset-title">Reset family layout?</h2>
+            <p>Choose whether to arrange everyone in a clean default view or keep the positions you have saved.</p>
+            <div className="layout-reset-actions">
+              <button onClick={() => setResetChoiceOpen(false)}>Cancel</button>
+              <button onClick={saveCurrentLayout}>Save current positions</button>
+              <button className="layout-reset-primary" onClick={resetLayout}>
+                Use best default view
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       {confirmDelete && selected && (
         <div className="simple-modal-backdrop">
           <div className="delete-dialog">
@@ -1532,15 +1878,20 @@ const partnerRelationshipOptions = ['Husband', 'Wife', 'Boyfriend', 'Girlfriend'
 function defaultPartnerLabel(gender) {
   return gender === 'male' ? 'Husband' : gender === 'female' ? 'Wife' : 'Spouse';
 }
-function PersonLinkPicker({ people, selectedIds, onChange, excludeId, placeholder, max = Infinity, relationships, onRelationshipsChange, defaultRelationship = 'Spouse' }) {
+function PersonLinkPicker({ people, selectedIds, onChange, excludeId, placeholder, max = Infinity, relationships, onRelationshipsChange, defaultRelationship = 'Spouse', canSelect, className = '' }) {
   const [query, setQuery] = useState('');
   const selected = people.filter((person) => selectedIds.includes(person.id));
-  const results = people.filter((person) => person.id !== excludeId && !selectedIds.includes(person.id) && fullName(person).toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6);
+  const results = people
+    .filter((person) => person.id !== excludeId && !selectedIds.includes(person.id) && (!canSelect || canSelect(person)) && fullName(person).toLowerCase().includes(query.trim().toLowerCase()))
+    .slice(0, 6);
   const hasRelationships = Boolean(relationships && onRelationshipsChange);
   function add(id) {
     if (selectedIds.length >= max) return;
     onChange([...selectedIds, id]);
-    if (hasRelationships) onRelationshipsChange([...relationships, { partnerId: id, label: defaultRelationship }]);
+    if (hasRelationships) {
+      const linkedPerson = people.find((person) => person.id === id);
+      onRelationshipsChange([...relationships, { partnerId: id, label: defaultPartnerLabel(linkedPerson?.gender) || defaultRelationship }]);
+    }
     setQuery('');
   }
   function remove(id) {
@@ -1551,7 +1902,7 @@ function PersonLinkPicker({ people, selectedIds, onChange, excludeId, placeholde
     onRelationshipsChange(relationships.map((link) => (link.partnerId === id ? { ...link, label } : link)));
   }
   return (
-    <div className="person-link-picker">
+    <div className={`person-link-picker ${className}`.trim()}>
       {hasRelationships ? (
         <div className="partner-link-list">
           {selected.map((person) => {
@@ -1590,9 +1941,12 @@ function PersonLinkPicker({ people, selectedIds, onChange, excludeId, placeholde
       ) : (
         <div className="link-chip-list">
           {selected.map((person) => (
-            <button type="button" key={person.id} onClick={() => remove(person.id)}>
-              {fullName(person)} <X size={12} />
-            </button>
+            <span className="link-chip" key={person.id}>
+              <span>{fullName(person)}</span>
+              <button type="button" className="link-chip-remove" aria-label={`Remove ${fullName(person)}`} onClick={() => remove(person.id)}>
+                <X size={12} />
+              </button>
+            </span>
           ))}
         </div>
       )}
@@ -1616,6 +1970,7 @@ function PersonLinkPicker({ people, selectedIds, onChange, excludeId, placeholde
 
 function PersonModal({ modal, people, onClose, onSave }) {
   const p = modal.person;
+  const familyLinksRef = useRef(null);
   const [form, setForm] = useState({
     firstName: p?.firstName || '',
     lastName: p?.lastName || '',
@@ -1640,10 +1995,14 @@ function PersonModal({ modal, people, onClose, onSave }) {
   const [parentIds, setParents] = useState(initialParents);
   const initialPartners = modal.kind === 'partner' ? [modal.parent.id] : p?.partnerIds || [];
   const [partnerIds, setPartners] = useState(initialPartners);
+  const [childIds, setChildren] = useState(() => (p ? people.filter((person) => (person.parentIds || []).includes(p.id)).map((person) => person.id) : []));
   const [partnerRelationships, setPartnerRelationships] = useState(() =>
     initialPartners.map((id) => ({
       partnerId: id,
-      label: partnerRelationship(p, id) || defaultPartnerLabel(form.gender),
+      label: (() => {
+        const stored = partnerRelationship(p, id);
+        return ['', 'Husband', 'Wife', 'Spouse'].includes(stored) ? defaultPartnerLabel(people.find((person) => person.id === id)?.gender) : stored;
+      })(),
     })),
   );
   const updatePartners = (ids) => {
@@ -1653,18 +2012,20 @@ function PersonModal({ modal, people, onClose, onSave }) {
         (id) =>
           previous.find((link) => link.partnerId === id) || {
             partnerId: id,
-            label: defaultPartnerLabel(form.gender),
+            label: defaultPartnerLabel(people.find((person) => person.id === id)?.gender),
           },
       ),
     );
   };
   useEffect(() => {
-    setPartnerRelationships((previous) => previous.map((link) => (['Husband', 'Wife', 'Spouse'].includes(link.label) ? { ...link, label: defaultPartnerLabel(form.gender) } : link)));
-  }, [form.gender]);
+    if (!modal.focusLinks) return;
+    const frame = requestAnimationFrame(() => familyLinksRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+    return () => cancelAnimationFrame(frame);
+  }, [modal.focusLinks]);
   const change = (k, v) => setForm((x) => ({ ...x, [k]: v }));
   function submit(e) {
     e.preventDefault();
-    onSave({ ...form, parentIds, partnerIds, partnerRelationships });
+    onSave({ ...form, parentIds, partnerIds, partnerRelationships, childIds });
   }
   const title = p
     ? 'Edit person'
@@ -1737,22 +2098,39 @@ function PersonModal({ modal, people, onClose, onSave }) {
             <textarea rows="2" value={form.notes} onChange={(e) => change('notes', e.target.value)} placeholder="Notes for the family archive" />
           </label>
         </div>
-        <div className="simple-link-field">
-          <strong>Parents</strong>
-          <PersonLinkPicker people={people} selectedIds={parentIds} onChange={setParents} excludeId={p?.id || modal.parent?.id} placeholder="Search and link parents" max={2} />
-        </div>
-        <div className="simple-link-field">
-          <strong>Partner or spouse</strong>
-          <PersonLinkPicker
-            people={people}
-            selectedIds={partnerIds}
-            onChange={updatePartners}
-            excludeId={p?.id}
-            placeholder="Search and link partner"
-            relationships={partnerRelationships}
-            onRelationshipsChange={setPartnerRelationships}
-            defaultRelationship={defaultPartnerLabel(form.gender)}
-          />
+        <div className="simple-link-fields" ref={familyLinksRef}>
+          <div className="simple-link-field">
+            <strong>Parents</strong>
+            <PersonLinkPicker people={people} selectedIds={parentIds} onChange={setParents} excludeId={p?.id || modal.parent?.id} placeholder="Search and link parents" max={2} />
+          </div>
+          <div className="simple-link-field">
+            <strong>Partner or spouse</strong>
+            <PersonLinkPicker
+              people={people}
+              selectedIds={partnerIds}
+              onChange={updatePartners}
+              excludeId={p?.id}
+              placeholder="Search and link partner"
+              relationships={partnerRelationships}
+              onRelationshipsChange={setPartnerRelationships}
+              defaultRelationship={defaultPartnerLabel(form.gender)}
+            />
+          </div>
+          <div className="simple-link-field">
+            <strong className="children-link-heading">
+              <span>Children</span>
+              <span className="children-link-count">{childIds.length} linked</span>
+            </strong>
+            <PersonLinkPicker
+              people={people}
+              selectedIds={childIds}
+              onChange={setChildren}
+              excludeId={p?.id}
+              placeholder="Search and link children"
+              canSelect={(person) => (person.parentIds || []).includes(p?.id) || ((person.parentIds || []).length < 2 && !(p?.parentIds || []).includes(person.id))}
+              className="children-link-picker"
+            />
+          </div>
         </div>
       </div>
       <footer>

@@ -56,6 +56,54 @@ function connectParentChild(parent, child) {
   return { x1, y1, x2, y2, c1x, c1y, c2x, c2y, fromSide: childBelow ? 'bottom' : 'top', toSide: childBelow ? 'top' : 'bottom', labelX, labelY };
 }
 
+const NODE_COLLISION_GAP = 18;
+
+function hasNodeCollision(candidate, placed) {
+  return placed.some((other) =>
+    candidate.x < other.x + other.w + NODE_COLLISION_GAP &&
+    candidate.x + candidate.w + NODE_COLLISION_GAP > other.x &&
+    candidate.y < other.y + other.h + NODE_COLLISION_GAP &&
+    candidate.y + candidate.h + NODE_COLLISION_GAP > other.y,
+  );
+}
+
+export function resolveNodeOverlaps(movingPositions, stationaryPositions) {
+  const placed = stationaryPositions.map((position) => ({ ...position }));
+  return movingPositions.map((position) => {
+    const candidate = { ...position };
+    if (!hasNodeCollision(candidate, placed)) {
+      placed.push(candidate);
+      return candidate;
+    }
+
+    const step = NODE_COLLISION_GAP;
+    let resolved = null;
+    for (let radius = 1; radius <= 160 && !resolved; radius += 1) {
+      const offsets = [];
+      for (let x = -radius; x <= radius; x += 1) {
+        for (let y = -radius; y <= radius; y += 1) {
+          if (Math.max(Math.abs(x), Math.abs(y)) === radius) offsets.push({ x, y });
+        }
+      }
+      offsets.sort((a, b) => Math.abs(a.y) - Math.abs(b.y) || Math.abs(a.x) - Math.abs(b.x) || b.x - a.x || b.y - a.y);
+      for (const offset of offsets) {
+        const spot = { ...candidate, x: candidate.x + offset.x * step, y: candidate.y + offset.y * step };
+        if (!hasNodeCollision(spot, placed)) {
+          resolved = spot;
+          break;
+        }
+      }
+    }
+
+    if (!resolved) {
+      resolved = { ...candidate, y: candidate.y + (candidate.h + NODE_COLLISION_GAP) * placed.length };
+      while (hasNodeCollision(resolved, placed)) resolved.y += resolved.h + NODE_COLLISION_GAP;
+    }
+    placed.push(resolved);
+    return resolved;
+  });
+}
+
 export function layoutTree(people) {
   const representative = new Map(people.map((person) => [person.id, person.id]));
   function find(id) {
@@ -269,6 +317,16 @@ export function layoutTree(people) {
     const rawX = Number.isFinite(person.treeX) ? person.treeX : automaticX;
     const rawY = Number.isFinite(person.treeY) ? person.treeY : automaticY;
     positions.set(person.id, { x: rawX, y: rawY, rawX, rawY, w: nodeWidth, h: nodeHeight, person });
+  });
+
+  const collisionSafe = resolveNodeOverlaps(
+    [...positions.values()].sort((a, b) => a.rawY - b.rawY || a.rawX - b.rawX || a.person.id.localeCompare(b.person.id)).map((position) => ({ ...position, x: position.rawX, y: position.rawY })),
+    [],
+  );
+  collisionSafe.forEach((position) => {
+    const original = positions.get(position.person.id);
+    original.rawX = position.x;
+    original.rawY = position.y;
   });
 
   const minX = Math.min(0, ...[...positions.values()].map((position) => position.rawX));
