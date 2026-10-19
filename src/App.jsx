@@ -286,6 +286,8 @@ export default function App() {
   const [phoneLayoutPreview, setPhoneLayoutPreview] = useState({});
   const [theme, setTheme] = useState(() => storageGet('kinfolk-theme') || 'light');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const topInfoRef = useRef(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [detailsWidth, setDetailsWidth] = useState(() => {
@@ -870,6 +872,11 @@ export default function App() {
         }
         return;
       }
+      if (helpOpen) {
+        event.preventDefault();
+        setHelpOpen(false);
+        return;
+      }
       if (sidebarOpen) {
         event.preventDefault();
         setSidebarOpen(false);
@@ -883,7 +890,14 @@ export default function App() {
     };
     window.addEventListener('keydown', onEscape);
     return () => window.removeEventListener('keydown', onEscape);
-  }, [confirmDelete, detailsOpen, modal, mobileDetailsOpen, selected, sidebarOpen]);
+  }, [confirmDelete, detailsOpen, helpOpen, modal, mobileDetailsOpen, selected, sidebarOpen]);
+  useEffect(() => {
+    const closeHelpOutside = (event) => {
+      if (!topInfoRef.current?.contains(event.target)) setHelpOpen(false);
+    };
+    document.addEventListener('pointerdown', closeHelpOutside);
+    return () => document.removeEventListener('pointerdown', closeHelpOutside);
+  }, []);
   function focusPersonInTree(id) {
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
@@ -1461,11 +1475,18 @@ export default function App() {
             >
               {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
             </button>
-            <div className="top-info-wrap">
-              <button className="plain-icon top-info-button" aria-label="Family tree help">
+            <div className={`top-info-wrap ${helpOpen ? 'open' : ''}`} ref={topInfoRef}>
+              <button
+                className="plain-icon top-info-button"
+                aria-label="Family tree help"
+                aria-expanded={helpOpen}
+                aria-controls="family-tree-help"
+                title="Family tree help"
+                onClick={() => setHelpOpen((open) => !open)}
+              >
                 <Info size={17} />
               </button>
-              <div className="top-info-tooltip" role="tooltip">
+              <div id="family-tree-help" className="top-info-tooltip" role="tooltip">
                 Select a person before dragging to move them. Drag an empty area to box-select nodes. On phones, drag empty space to move the view; hold briefly, then drag to select with a rectangle. Hold Space or use middle-drag
                 to pan. Use Ctrl + mouse wheel or trackpad pinch to zoom. Use Ctrl+A to select this family, then Delete to remove the selection. Use the + on a node to add a family member.
               </div>

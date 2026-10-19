@@ -4004,7 +4004,8 @@ button {
   pointer-events: none;
 }
 .top-info-wrap:hover .top-info-tooltip,
-.top-info-wrap:focus-within .top-info-tooltip {
+.top-info-wrap:focus-within .top-info-tooltip,
+.top-info-wrap.open .top-info-tooltip {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
