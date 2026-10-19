@@ -10,7 +10,14 @@ import Person from './models/Person.js';
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', configured: Boolean(process.env.MONGODB_URI), database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' }));
+app.get('/api/health', (_req, res) =>
+  res.json({
+    status: 'ok',
+    configured: Boolean(process.env.MONGODB_URI),
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    databaseName: mongoose.connection.readyState === 1 ? mongoose.connection.name : null,
+  }),
+);
 app.use('/api/people', (req, res, next) => {
   if (mongoose.connection.readyState !== 1) return res.status(503).json({ error: 'MongoDB is not connected. Set MONGODB_URI and restart the API.' });
   next();
