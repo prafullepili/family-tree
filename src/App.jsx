@@ -20,6 +20,8 @@ import {
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
+  Lock,
+  Unlock,
   Heart,
   Camera,
   RefreshCw,
@@ -271,6 +273,7 @@ export default function App() {
   const [linkStyle, setLinkStyle] = useState(() => (['direct', 'classic'].includes(storageGet('kinfolk-link-style')) ? storageGet('kinfolk-link-style') : 'classic'));
   const [selectedId, setSelectedId] = useState(() => initialCache.people[0]?.id || '');
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
+  const [movementLocked, setMovementLocked] = useState(() => storageGet('kinfolk-canvas-movement-locked-v1') !== 'false');
   const [marqueeRect, setMarqueeRect] = useState(null);
   const [phoneLayout, setPhoneLayout] = useState(() => {
     try {
@@ -351,6 +354,9 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     storageSet('kinfolk-theme', theme);
   }, [theme]);
+  useEffect(() => {
+    storageSet('kinfolk-canvas-movement-locked-v1', String(movementLocked));
+  }, [movementLocked]);
   useEffect(() => {
     const updateViewportMode = () => setIsCompactViewport(window.innerWidth <= 1050);
     window.addEventListener('resize', updateViewportMode);
@@ -852,6 +858,32 @@ export default function App() {
       window.removeEventListener('blur', onBlur);
     };
   }, []);
+  useEffect(() => {
+    const onEscape = (event) => {
+      if (event.key !== 'Escape' || confirmDelete) return;
+      if (modal) {
+        event.preventDefault();
+        setModal(null);
+        if (!selected) {
+          setDetailsOpen(false);
+          setMobileDetailsOpen(false);
+        }
+        return;
+      }
+      if (sidebarOpen) {
+        event.preventDefault();
+        setSidebarOpen(false);
+        return;
+      }
+      if (mobileDetailsOpen || detailsOpen) {
+        event.preventDefault();
+        setMobileDetailsOpen(false);
+        setDetailsOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onEscape);
+    return () => window.removeEventListener('keydown', onEscape);
+  }, [confirmDelete, detailsOpen, modal, mobileDetailsOpen, selected, sidebarOpen]);
   function focusPersonInTree(id) {
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
@@ -975,7 +1007,7 @@ export default function App() {
     e.preventDefault();
     e.stopPropagation();
     const isSelected = selectedId === p.id || selectedNodeIds.includes(p.id);
-    if (!isSelected) {
+    if (!isSelected || movementLocked) {
       const gesture = { mode: 'select-only', id: p.id, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, moved: false, held: false };
       drag.current = gesture;
       gesture.holdTimer = window.setTimeout(() => {
@@ -1494,6 +1526,16 @@ export default function App() {
             )}
           </div>
           <div className="tree-toolbar-actions">
+            <button
+              className={`canvas-lock-button ${movementLocked ? 'locked' : 'unlocked'}`}
+              onClick={() => setMovementLocked((locked) => !locked)}
+              aria-pressed={movementLocked}
+              aria-label={movementLocked ? 'Unlock node movement' : 'Lock node movement'}
+              title={movementLocked ? 'Node movement is locked. Unlock to move selected nodes.' : 'Node movement is unlocked. Lock to prevent moving nodes.'}
+            >
+              {movementLocked ? <Lock size={14} /> : <Unlock size={14} />}
+              <span>{movementLocked ? 'Locked' : 'Unlocked'}</span>
+            </button>
             <div className="zoom-tools">
               <button onClick={() => zoomTo(Math.max(0.1, +(zoomValue.current - 0.1).toFixed(2)))} aria-label="Zoom out">
                 <ZoomOut size={16} />
@@ -1755,6 +1797,19 @@ export default function App() {
             onPointerUp={endDetailsResize}
             onPointerCancel={endDetailsResize}
           />
+          <button
+            className="details-panel-close"
+            onClick={() => {
+              setModal(null);
+              setDetailsOpen(false);
+              setMobileDetailsOpen(false);
+            }}
+            aria-label="Cancel and hide details"
+            title="Cancel and hide details"
+          >
+            <X size={16} />
+            <span>Cancel</span>
+          </button>
           {modal?.inline && (!modal.person || modal.person.id === selected?.id) ? (
             <PersonModal
               key={modal.person?.id || modal.kind || 'new'}
@@ -1774,9 +1829,6 @@ export default function App() {
               <div className="details-heading">
                 <span>PERSON DETAILS</span>
                 <div>
-                  <button className="plain-icon mobile-details-close" onClick={() => setMobileDetailsOpen(false)} aria-label="Close details">
-                    <X size={17} />
-                  </button>
                   <button className="family-links-edit-button" onClick={() => setModal({ person: selected, inline: true })} aria-label="Edit person" title="Edit person">
                     <Pencil size={14} />
                   </button>

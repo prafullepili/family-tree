@@ -4375,6 +4375,72 @@ button {
 .tree-toolbar-actions {
   flex: none;
 }
+.canvas-lock-button {
+  min-height: 29px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.canvas-lock-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.canvas-lock-button.locked {
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+  background: var(--accent-bg);
+  color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent), 0 0 13px color-mix(in srgb, var(--accent) 30%, transparent);
+  animation: lockGlow 2.2s ease-in-out infinite;
+}
+@keyframes lockGlow {
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+}
+.details-panel-close {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  z-index: 2;
+  min-width: 29px;
+  height: 29px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+.details-panel-close:hover {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+@media (max-width: 520px) {
+  .canvas-lock-button {
+    width: 30px;
+    padding: 0;
+  }
+  .canvas-lock-button span {
+    display: none;
+  }
+}
 @media (max-width: 1050px) {
   .simple-details.show-mobile.editing-person {
     width: min(430px, 94vw);
