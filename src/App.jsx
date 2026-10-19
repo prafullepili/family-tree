@@ -1817,19 +1817,6 @@ export default function App() {
             onPointerUp={endDetailsResize}
             onPointerCancel={endDetailsResize}
           />
-          <button
-            className="details-panel-close"
-            onClick={() => {
-              setModal(null);
-              setDetailsOpen(false);
-              setMobileDetailsOpen(false);
-            }}
-            aria-label="Cancel and hide details"
-            title="Cancel and hide details"
-          >
-            <X size={16} />
-            <span>Cancel</span>
-          </button>
           {modal?.inline && (!modal.person || modal.person.id === selected?.id) ? (
             <PersonModal
               key={modal.person?.id || modal.kind || 'new'}
@@ -1936,6 +1923,16 @@ export default function App() {
                 )}
                 <button className="remove-person-button" onClick={() => setConfirmDelete(true)}>
                   <Trash2 size={14} /> Remove person
+                </button>
+                <button
+                  className="details-cancel-button"
+                  onClick={() => {
+                    setModal(null);
+                    setDetailsOpen(false);
+                    setMobileDetailsOpen(false);
+                  }}
+                >
+                  Cancel
                 </button>
               </div>
             </>
