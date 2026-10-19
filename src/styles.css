@@ -2786,6 +2786,31 @@ button {
   justify-content: center;
   text-align: center;
 }
+.tree-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  color: var(--text-soft);
+  font-size: 13px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+}
+.loading-spinner {
+  width: 19px;
+  height: 19px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: familyTreeSpin 0.75s linear infinite;
+}
+@keyframes familyTreeSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .tree-empty-icon {
   height: 54px;
   width: 54px;

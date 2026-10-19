@@ -6,7 +6,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import Person from './models/Person.js';
-import { demoPeople, addedPeople } from '../src/demoFamily.js';
 
 const app = express();
 app.use(cors());
@@ -19,48 +18,6 @@ app.use('/api/people', (req, res, next) => {
 app.get('/api/people', async (_req, res, next) => {
   try {
     res.json(await Person.find().sort({ birthDate: 1 }));
-  } catch (e) {
-    next(e);
-  }
-});
-app.post('/api/people/seed-extended', async (_req, res, next) => {
-  try {
-    const total = await Person.countDocuments();
-    if (total === 0) {
-      const ids = new Map(demoPeople.map((person) => [person.id, new mongoose.Types.ObjectId()]));
-      const extendedIds = new Set(addedPeople.map((person) => person.id));
-      const docs = demoPeople.map(({ id, ...person }) => ({
-        ...person,
-        _id: ids.get(id),
-        parentIds: (person.parentIds || []).map((parentId) => ids.get(parentId)).filter(Boolean),
-        partnerIds: (person.partnerIds || []).map((partnerId) => ids.get(partnerId)).filter(Boolean),
-        ...(extendedIds.has(id) ? { seedKey: `ashford-extended-v1:${id}` } : {}),
-      }));
-      await Person.insertMany(docs);
-    } else {
-      const keys = addedPeople.map((person) => `ashford-extended-v1:${person.id}`);
-      const existing = await Person.find({ seedKey: { $in: keys } }).select('seedKey');
-      const ids = new Map(existing.map((person) => [person.seedKey.slice('ashford-extended-v1:'.length), person._id]));
-      addedPeople.forEach((person) => {
-        if (!ids.has(person.id)) ids.set(person.id, new mongoose.Types.ObjectId());
-      });
-      const missing = addedPeople.filter((person) => !existing.some((row) => row.seedKey === `ashford-extended-v1:${person.id}`));
-      if (missing.length)
-        await Person.insertMany(
-          missing.map(({ id, ...person }) => ({
-            ...person,
-            _id: ids.get(id),
-            seedKey: `ashford-extended-v1:${id}`,
-            parentIds: (person.parentIds || []).map((parentId) => ids.get(parentId)).filter(Boolean),
-            partnerIds: (person.partnerIds || []).map((partnerId) => ids.get(partnerId)).filter(Boolean),
-          })),
-        );
-      const william = await Person.findOne({ firstName: 'William', lastName: 'Ashford', birthDate: new Date('1928-06-14') });
-      const margaret = await Person.findOne({ firstName: 'Margaret', lastName: 'Ashford', birthDate: new Date('1931-02-08') });
-      if (william) await Person.updateOne({ _id: william._id }, { $addToSet: { parentIds: ids.get('ashford-f-1') } });
-      if (margaret) await Person.updateOne({ _id: margaret._id }, { $addToSet: { parentIds: ids.get('ashford-m-1') } });
-    }
-    res.json({ added: addedPeople.length, total: await Person.countDocuments() });
   } catch (e) {
     next(e);
   }

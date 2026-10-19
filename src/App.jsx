@@ -193,7 +193,7 @@ function FamilyBranchLinks({ branches, people }) {
 }
 
 export default function App() {
-  const [people, setPeople] = useState(initialPeople);
+  const [people, setPeople] = useState([]);
   const memberList = useRef(null);
   const [selectedFamilyId, setSelectedFamilyId] = useState('');
   const [familyPickerOpen, setFamilyPickerOpen] = useState(false);
@@ -368,7 +368,10 @@ export default function App() {
           if (!h.ok) throw Error();
           const state = await h.json();
           if (!state.configured) {
-            if (active) setApiState('demo');
+            if (active) {
+              setPeople(initialPeople());
+              setApiState('demo');
+            }
             return;
           }
           if (state.database === 'connected') {
@@ -378,18 +381,17 @@ export default function App() {
           if (i < 7) await new Promise((r) => setTimeout(r, 1000));
         }
         if (!ready) throw Error();
-        const seeded = await fetch('/api/people/seed-extended', { method: 'POST' });
-        if (!seeded.ok) throw Error();
         const response = await fetch('/api/people');
         if (!response.ok) throw Error();
         const rows = (await response.json()).map(fromApi);
         if (active) {
+          localStorage.removeItem('kinfolk-demo-people');
           setPeople(rows);
           setSelectedId(rows[0]?.id || '');
           setApiState('connected');
         }
       } catch {
-        if (active) setApiState('demo');
+        if (active) setApiState('error');
       }
     })();
     return () => {
@@ -904,7 +906,7 @@ export default function App() {
               <div>
                 <strong>{treeName}</strong>
                 <small>
-                  {familyPeople.length} {familyPeople.length === 1 ? 'person' : 'people'}
+                  {apiState === 'checking' ? 'Loading…' : `${familyPeople.length} ${familyPeople.length === 1 ? 'person' : 'people'}`}
                 </small>
               </div>
             </div>
@@ -1018,12 +1020,12 @@ export default function App() {
                   <span>{fullName(p)}</span>
                 </button>
               ))}
-              {!filtered.length && <div className="empty-list">No people yet</div>}
+              {!filtered.length && <div className="empty-list">{apiState === 'checking' ? 'Loading family members…' : apiState === 'error' ? 'Could not load family members' : 'No people yet'}</div>}
             </div>
             <div className="sidebar-bottom">
               <div className="storage-status">
                 <span className={`status-light ${apiState}`} />
-                <span>{apiState === 'connected' ? 'Saved to MongoDB' : apiState === 'checking' ? 'Connecting…' : 'Saved in this browser'}</span>
+                <span>{apiState === 'connected' ? 'Saved to MongoDB' : apiState === 'checking' ? 'Connecting…' : apiState === 'demo' ? 'Saved in this browser' : 'Database unavailable'}</span>
               </div>
               <button className="theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
                 {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
@@ -1096,10 +1098,14 @@ export default function App() {
           <div className="tree-count">
             <UsersRound size={15} />
             <span>
-              {familyPeople.length} {familyPeople.length === 1 ? 'person' : 'people'}
+              {apiState === 'checking' ? 'Loading family…' : `${familyPeople.length} ${familyPeople.length === 1 ? 'person' : 'people'}`}
             </span>
-            <span className="toolbar-dot">·</span>
-            <span>{layout.generationCount} generations</span>
+            {apiState !== 'checking' && (
+              <>
+                <span className="toolbar-dot">·</span>
+                <span>{layout.generationCount} generations</span>
+              </>
+            )}
           </div>
           <div className="tree-toolbar-actions">
             <button
@@ -1304,17 +1310,32 @@ export default function App() {
                     </div>
                   );
                 })}
-                {!familyPeople.length && (
+                {apiState === 'checking' ? (
+                  <div className="tree-loading" role="status" aria-live="polite">
+                    <span className="loading-spinner" />
+                    <span>Loading your family tree…</span>
+                  </div>
+                ) : !familyPeople.length && (
                   <div className="tree-empty">
                     <div className="tree-empty-icon">
                       <GitFork size={26} />
                     </div>
-                    <h2>Start your family tree</h2>
-                    <p>Add a person, then link parents and partners to build the branches.</p>
-                    <button className="add-person-button" onClick={() => openAddPersonForm()}>
-                      <Plus size={16} />
-                      Add first person
-                    </button>
+                    {apiState === 'error' ? (
+                      <>
+                        <h2>Couldn’t load your family tree</h2>
+                        <p>Check that the API and MongoDB are running, then try again.</p>
+                        <button className="add-person-button" onClick={() => window.location.reload()}>Try again</button>
+                      </>
+                    ) : (
+                      <>
+                        <h2>Start your family tree</h2>
+                        <p>Add a person, then link parents and partners to build the branches.</p>
+                        <button className="add-person-button" onClick={() => openAddPersonForm()}>
+                          <Plus size={16} />
+                          Add first person
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

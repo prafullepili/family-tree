@@ -15,7 +15,7 @@ A responsive family history website built with React, SVG, Express, MongoDB, and
 4. In another terminal, start the website: `npm run dev`.
 5. Open the URL printed by Vite, usually `http://localhost:5173`.
 
-The frontend proxy forwards `/api` calls to Express on port 4000. When the API or database is unavailable, the app opens in demo mode with sample family records. Demo edits and tree positions are saved in the browser. With MongoDB connected, people, family links, and manually arranged node positions are stored in MongoDB.
+The frontend proxy forwards `/api` calls to Express on port 4000. If no MongoDB URI is configured, the app opens in demo mode with sample family records saved in the browser. When a URI is configured, MongoDB is the source of truth; if the database cannot be reached, the app shows an unavailable state instead of loading sample records. People, family links, and manually arranged node positions are stored in MongoDB.
 
 ## Production
 
