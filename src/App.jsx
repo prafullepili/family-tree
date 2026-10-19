@@ -1921,19 +1921,21 @@ export default function App() {
                       </button>
                     ),
                 )}
-                <button className="remove-person-button" onClick={() => setConfirmDelete(true)}>
-                  <Trash2 size={14} /> Remove person
-                </button>
-                <button
-                  className="details-cancel-button"
-                  onClick={() => {
-                    setModal(null);
-                    setDetailsOpen(false);
-                    setMobileDetailsOpen(false);
-                  }}
-                >
-                  Cancel
-                </button>
+                <div className="details-actions-row">
+                  <button className="remove-person-button" onClick={() => setConfirmDelete(true)}>
+                    <Trash2 size={14} /> Remove person
+                  </button>
+                  <button
+                    className="details-cancel-button"
+                    onClick={() => {
+                      setModal(null);
+                      setDetailsOpen(false);
+                      setMobileDetailsOpen(false);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </>
           ) : (

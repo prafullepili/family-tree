@@ -3123,26 +3123,50 @@ button {
   margin-top: 12px;
   border-top: 1px solid var(--border);
 }
-.remove-person-button {
-  width: 100%;
+.details-actions-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+.details-actions-row .remove-person-button,
+.details-actions-row .details-cancel-button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  gap: 6px;
-  height: 32px;
-  margin-top: 8px;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-  background: transparent;
+  gap: 7px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.details-actions-row .remove-person-button {
+  flex: 1;
+  justify-content: flex-start;
+  background: color-mix(in srgb, #ad726a 7%, var(--surface));
+  border-color: color-mix(in srgb, #ad726a 24%, var(--border));
+  color: #ad6258;
+}
+.details-actions-row .remove-person-button:hover {
+  background: color-mix(in srgb, #ad726a 14%, var(--surface));
+  border-color: #ad726a88;
+}
+.details-actions-row .details-cancel-button {
+  min-width: 88px;
+  background: var(--surface);
   color: var(--text-soft);
-  font-size: 11px !important;
 }
-.remove-person-button {
-  border: 0;
-  color: #ad726a;
-}
-.remove-person-button:hover {
-  background: #fbf0ee;
+.details-actions-row .details-cancel-button:hover {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
 }
 .details-empty {
   height: 60vh;
@@ -4414,22 +4438,6 @@ button {
   50% {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 40%, transparent);
   }
-}
-.details-cancel-button {
-  display: block;
-  margin: 6px 0 0;
-  padding: 5px 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-soft);
-  font: inherit;
-  font-size: 11px;
-  text-align: left;
-  cursor: pointer;
-}
-.details-cancel-button:hover {
-  color: var(--accent);
-  text-decoration: underline;
 }
 @media (max-width: 520px) {
   .canvas-lock-button {
