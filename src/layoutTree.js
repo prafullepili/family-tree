@@ -441,6 +441,18 @@ export function layoutTree(people) {
     }),
   );
 
+  const customEdgeKeys = new Set();
+  people.forEach((person) =>
+    (person.relationshipLinks || []).forEach((link) => {
+      const personId = link.personId?.id || link.personId;
+      if (!positions.has(person.id) || !positions.has(personId)) return;
+      const key = [person.id, personId].sort().join(':');
+      if (customEdgeKeys.has(key) || edges.some((edge) => [edge.fromId, edge.toId].sort().join(':') === key)) return;
+      customEdgeKeys.add(key);
+      edges.push({ kind: 'custom', fromId: person.id, toId: personId, label: link.label || 'Related', ...connectRectangles(positions.get(person.id), positions.get(personId)) });
+    }),
+  );
+
   const childrenByParents = new Map();
   people.forEach((person) => {
     const parentIds = [...(person.parentIds || [])].filter((id) => positions.has(id)).sort();

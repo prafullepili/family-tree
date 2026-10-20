@@ -106,19 +106,19 @@ function familyColorMap(people, focalId) {
   const visitedAncestors = new Set([focalId]);
   function addAncestors(personId, branch, depth, path) {
     const person = byId.get(personId);
-    (person?.parentIds || []).filter((id) => byId.has(id)).forEach((parentId, index) => {
-      if (path.has(parentId)) return;
-      const parent = byId.get(parentId);
-      const side = depth === 0
-        ? parent.gender === 'male' ? 'paternal' : parent.gender === 'female' ? 'maternal' : index === 0 ? 'paternal' : 'maternal'
-        : branch;
-      const ancestorGender = parent.gender === 'female' || parent.gender === 'male' ? parent.gender : 'unknown';
-      const color = depth === 0 ? (side === 'paternal' ? 'father' : 'mother') : `${side}-${ancestorGender}`;
-      if (!colors.has(parentId)) colors.set(parentId, color);
-      if (visitedAncestors.has(parentId)) return;
-      visitedAncestors.add(parentId);
-      addAncestors(parentId, side, depth + 1, new Set([...path, parentId]));
-    });
+    (person?.parentIds || [])
+      .filter((id) => byId.has(id))
+      .forEach((parentId, index) => {
+        if (path.has(parentId)) return;
+        const parent = byId.get(parentId);
+        const side = depth === 0 ? (parent.gender === 'male' ? 'paternal' : parent.gender === 'female' ? 'maternal' : index === 0 ? 'paternal' : 'maternal') : branch;
+        const ancestorGender = parent.gender === 'female' || parent.gender === 'male' ? parent.gender : 'unknown';
+        const color = depth === 0 ? (side === 'paternal' ? 'father' : 'mother') : `${side}-${ancestorGender}`;
+        if (!colors.has(parentId)) colors.set(parentId, color);
+        if (visitedAncestors.has(parentId)) return;
+        visitedAncestors.add(parentId);
+        addAncestors(parentId, side, depth + 1, new Set([...path, parentId]));
+      });
   }
   addAncestors(focalId, '', 0, new Set([focalId]));
 
@@ -190,7 +190,7 @@ function getFamilyGroups(people) {
   const byId = new Map(people.map((person) => [person.id, person]));
   const links = new Map(people.map((person) => [person.id, new Set()]));
   people.forEach((person) =>
-    [...(person.parentIds || []), ...(person.partnerIds || []), ...(person.siblingIds || [])].forEach((id) => {
+    [...(person.parentIds || []), ...(person.partnerIds || []), ...(person.siblingIds || []), ...(person.relationshipLinks || []).map((link) => link.personId)].forEach((id) => {
       if (byId.has(id)) {
         links.get(person.id).add(id);
         links.get(id).add(person.id);
@@ -232,6 +232,10 @@ function fromApi(p) {
     parentIds: (p.parentIds || []).map((x) => String(x._id || x)),
     partnerIds: (p.partnerIds || []).map((x) => String(x._id || x)),
     siblingIds: (p.siblingIds || []).map((x) => String(x._id || x)),
+    relationshipLinks: (p.relationshipLinks || []).map((link) => ({
+      personId: String(link.personId?._id || link.personId),
+      label: link.label || '',
+    })),
     partnerRelationships: (p.partnerRelationships || []).map((link) => ({
       partnerId: String(link.partnerId?._id || link.partnerId),
       label: link.label || '',
@@ -338,7 +342,6 @@ export default function App() {
   const viewportMode = useRef(isCompactViewport);
   const [query, setQuery] = useState('');
   const [modal, setModal] = useState(null);
-  const [addMenuId, setAddMenuId] = useState('');
   const [toast, setToast] = useState('');
   const [apiState, setApiState] = useState('checking');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -394,11 +397,7 @@ export default function App() {
   // tracking the pointer at every edge.
   const treeBoardLeft = treePaddingX + treeBoardOffsetX * zoom + Math.max(0, (treeViewportWidth - treeBaseWidth * zoom) / 2);
   const treeBoardTop = treePaddingY + treeBoardOffsetY * zoom + Math.max(0, (treeViewportHeight - treeBaseHeight * zoom) / 2);
-  const treeExtraWidth = Math.max(
-    0,
-    (layout.originX - 60 + treeBoardOffsetX) * zoom,
-    treePaddingX * 2 + treeBoardLeft + treeContentWidth - treeViewportWidth,
-  );
+  const treeExtraWidth = Math.max(0, (layout.originX - 60 + treeBoardOffsetX) * zoom, treePaddingX * 2 + treeBoardLeft + treeContentWidth - treeViewportWidth);
   const appliedTreeOffset = useRef({ x: treeBoardOffsetX, y: treeBoardOffsetY });
   const connectorNodePositions = [...layout.positions.values()];
   const connectorLabelPositions = [];
@@ -599,10 +598,7 @@ export default function App() {
     autoFitSignature.current = signature;
     const contentWidth = Math.max(196, maxNodeX - minNodeX);
     const contentHeight = Math.max(76, maxNodeY - minNodeY);
-    const fittedZoom = Math.max(
-      0.1,
-      Math.min(1, maxCanvasZoom, (viewport.clientWidth - 48) / contentWidth, (viewport.clientHeight - 48) / contentHeight),
-    );
+    const fittedZoom = Math.max(0.1, Math.min(1, maxCanvasZoom, (viewport.clientWidth - 48) / contentWidth, (viewport.clientHeight - 48) / contentHeight));
     zoomValue.current = fittedZoom;
     setZoom(fittedZoom);
     requestAnimationFrame(() => {
@@ -737,31 +733,6 @@ export default function App() {
     setToast(text);
     setTimeout(() => setToast(''), 2600);
   }
-  function findOpenTreePosition(kind, reference) {
-    const anchor = layout.positions.get(reference.id);
-    if (!anchor) return {};
-    const width = 196,
-      height = 82,
-      gap = kind === 'partner' ? 184 : kind === 'sibling' ? 120 : 44,
-      levelStep = 190,
-      stepSize = width + gap;
-    const y = anchor.rawY + (kind === 'child' ? levelStep : kind === 'parent' ? -levelStep : 0);
-    const occupied = [...layout.positions.values()];
-    const candidates = [];
-    if (kind === 'sibling' || kind === 'partner') {
-      for (let step = 1; step <= occupied.length + 1; step++) candidates.push(anchor.rawX + step * stepSize);
-    } else {
-      for (let step = 0; step <= occupied.length; step++) {
-        const offset = step * stepSize;
-        if (step === 0) candidates.push(anchor.rawX);
-        else candidates.push(anchor.rawX + offset, anchor.rawX - offset);
-      }
-    }
-    const x = candidates.find((candidate) =>
-      occupied.every((position) => Math.abs(y - position.rawY) >= height + 20 || candidate >= position.rawX + position.w + gap || candidate + width + gap <= position.rawX),
-    );
-    return { treeX: x ?? anchor.rawX + stepSize, treeY: y };
-  }
   async function refreshPeople() {
     const r = await fetch('/api/people');
     if (!r.ok) throw Error('Could not reload your family tree');
@@ -770,14 +741,13 @@ export default function App() {
   async function saveMember(values) {
     const prior = modal.person;
     const { childIds = [], ...memberValues } = values;
-    const placement = !prior && modal.parent && ['parent', 'partner', 'child', 'sibling'].includes(modal.kind) ? findOpenTreePosition(modal.kind, modal.parent) : {};
     const payload = {
       ...memberValues,
-      ...placement,
       parentIds: (values.parentIds || []).filter((id) => people.some((p) => p.id === id && p._id)),
       partnerIds: (values.partnerIds || []).filter((id) => people.some((p) => p.id === id && p._id)),
-      siblingIds: [...new Set([...(prior?.siblingIds || []), ...(!prior && modal.kind === 'sibling' && modal.parent ? [modal.parent.id] : [])])].filter((id) => people.some((p) => p.id === id && p._id)),
+      siblingIds: (values.siblingIds || []).filter((id) => people.some((p) => p.id === id && p._id)),
       partnerRelationships: (values.partnerRelationships || []).filter((link) => (values.partnerIds || []).includes(link.partnerId) && people.some((p) => p.id === link.partnerId && p._id)),
+      relationshipLinks: (values.relationshipLinks || []).filter((link) => link.label.trim() && people.some((p) => p.id === link.personId && p._id)),
     };
     if (apiState === 'connected') {
       try {
@@ -789,30 +759,20 @@ export default function App() {
         const data = await r.json();
         if (!r.ok) throw Error(data.error || 'Could not save this person');
         const saved = fromApi(data);
-        if (prior) {
-          const nextChildIds = new Set(childIds.filter((id) => people.some((person) => person.id === id && person._id)));
-          const currentChildren = people.filter((person) => (person.parentIds || []).includes(prior.id));
-          const childUpdates = [...new Map([...currentChildren, ...people.filter((person) => nextChildIds.has(person.id))].map((person) => [person.id, person])).values()]
-            .filter((child) => child._id && currentChildren.some((person) => person.id === child.id) !== nextChildIds.has(child.id))
-            .map(async (child) => {
-              const parentIds = nextChildIds.has(child.id) ? [...new Set([...(child.parentIds || []), saved.id])] : (child.parentIds || []).filter((id) => id !== saved.id);
-              const response = await fetch(`/api/people/${child._id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ parentIds }),
-              });
-              if (!response.ok) throw Error('Person saved, but a child link could not be updated');
+        const nextChildIds = new Set(childIds.filter((id) => people.some((person) => person.id === id && person._id)));
+        const currentChildren = prior ? people.filter((person) => (person.parentIds || []).includes(prior.id)) : [];
+        const childUpdates = [...new Map([...currentChildren, ...people.filter((person) => nextChildIds.has(person.id))].map((person) => [person.id, person])).values()]
+          .filter((child) => child._id && currentChildren.some((person) => person.id === child.id) !== nextChildIds.has(child.id))
+          .map(async (child) => {
+            const parentIds = nextChildIds.has(child.id) ? [...new Set([...(child.parentIds || []), saved.id])] : (child.parentIds || []).filter((id) => id !== saved.id);
+            const response = await fetch(`/api/people/${child._id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ parentIds }),
             });
-          await Promise.all(childUpdates);
-        }
-        if (!prior && modal.kind === 'parent' && modal.parent?._id) {
-          const link = await fetch(`/api/people/${modal.parent._id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ parentIds: [...(modal.parent.parentIds || []), saved.id] }),
+            if (!response.ok) throw Error('Person saved, but a child link could not be updated');
           });
-          if (!link.ok) throw Error('Person saved, but the parent link could not be saved');
-        }
+        await Promise.all(childUpdates);
         const rows = await refreshPeople();
         setPeople(rows);
         setSelectedId(saved.id);
@@ -829,43 +789,44 @@ export default function App() {
     const newPerson = {
       ...prior,
       ...values,
-      ...placement,
       id,
       _id: null,
-      siblingIds: [...new Set([...(prior?.siblingIds || []), ...(!prior && modal.kind === 'sibling' && modal.parent ? [modal.parent.id] : [])])],
       color: prior?.color || ['sage', 'rose', 'blue', 'peach', 'lavender', 'yellow', 'mint', 'pink'][people.length % 8],
     };
     let rows = prior ? people.map((p) => (p.id === id ? newPerson : p)) : [...people, newPerson];
     const currentChildren = new Set(prior ? people.filter((person) => (person.parentIds || []).includes(prior.id)).map((person) => person.id) : []);
     const nextChildren = new Set(childIds);
+    const currentPartners = new Set(prior?.partnerIds || []);
+    const nextPartners = new Set(values.partnerIds || []);
+    const currentSiblings = new Set(prior?.siblingIds || []);
+    const nextSiblings = new Set(values.siblingIds || []);
+    const nextCustom = new Map((values.relationshipLinks || []).map((link) => [link.personId, link.label.trim()]));
     rows = rows.map((p) => {
       if (p.id === id) return p;
       let updated = p;
-      if (prior && (currentChildren.has(p.id) || nextChildren.has(p.id))) {
+      if (currentChildren.has(p.id) || nextChildren.has(p.id)) {
         updated = {
           ...updated,
           parentIds: nextChildren.has(p.id) ? [...new Set([...(updated.parentIds || []), id])] : (updated.parentIds || []).filter((parentId) => parentId !== id),
         };
       }
-      const next = (values.partnerIds || []).includes(p.id);
+      const next = nextPartners.has(p.id);
       const relationship = (values.partnerRelationships || []).find((link) => link.partnerId === p.id)?.label;
       const partnerRelationships = (updated.partnerRelationships || []).filter((link) => link.partnerId !== id);
-      if (next)
-        return {
-          ...updated,
-          partnerIds: [...new Set([...(updated.partnerIds || []), id])],
-          partnerRelationships: relationship ? [...partnerRelationships, { partnerId: id, label: relationship }] : partnerRelationships,
-        };
-      if ((prior?.partnerIds || []).includes(p.id))
-        return {
-          ...updated,
-          partnerIds: (updated.partnerIds || []).filter((x) => x !== id),
-          partnerRelationships,
-        };
+      updated = {
+        ...updated,
+        partnerIds: next ? [...new Set([...(updated.partnerIds || []), id])] : currentPartners.has(p.id) ? (updated.partnerIds || []).filter((x) => x !== id) : updated.partnerIds || [],
+        partnerRelationships: next ? (relationship ? [...partnerRelationships, { partnerId: id, label: relationship }] : partnerRelationships) : partnerRelationships,
+        siblingIds: nextSiblings.has(p.id)
+          ? [...new Set([...(updated.siblingIds || []), id])]
+          : currentSiblings.has(p.id)
+            ? (updated.siblingIds || []).filter((x) => x !== id)
+            : updated.siblingIds || [],
+        relationshipLinks: (updated.relationshipLinks || []).filter((link) => link.personId !== id),
+      };
+      if (nextCustom.has(p.id)) updated.relationshipLinks = [...updated.relationshipLinks, { personId: id, label: nextCustom.get(p.id) }];
       return updated;
     });
-    if (!prior && modal.kind === 'parent' && modal.parent) rows = rows.map((p) => (p.id === modal.parent.id ? { ...p, parentIds: [...new Set([...(p.parentIds || []), id])] } : p));
-    if (!prior && modal.kind === 'sibling' && modal.parent) rows = rows.map((p) => (p.id === modal.parent.id ? { ...p, siblingIds: [...new Set([...(p.siblingIds || []), id])] } : p));
     setPeople(rows);
     setSelectedId(id);
     setModal(null);
@@ -889,6 +850,7 @@ export default function App() {
             partnerIds: (person.partnerIds || []).filter((id) => !removalIds.has(id)),
             siblingIds: (person.siblingIds || []).filter((id) => !removalIds.has(id)),
             partnerRelationships: (person.partnerRelationships || []).filter((link) => !removalIds.has(link.partnerId)),
+            relationshipLinks: (person.relationshipLinks || []).filter((link) => !removalIds.has(link.personId)),
             treeX: position?.rawX ?? person.treeX,
             treeY: position?.rawY ?? person.treeY,
           };
@@ -1126,17 +1088,13 @@ export default function App() {
     setSelectedId(personId);
     setSelectedNodeIds([]);
   }
-  function openAddPersonForm(kind = 'root', parent = null) {
-    setAddMenuId('');
-    setModal({ kind, parent, inline: true });
+  function openAddPersonForm() {
+    setModal({ inline: true });
     setDetailsOpen(true);
     if (window.innerWidth <= 1050) {
       setSidebarOpen(false);
       setMobileDetailsOpen(true);
     }
-  }
-  function addRelatedPerson(kind, person) {
-    openAddPersonForm(kind, person);
   }
   function openPersonDetails(personId) {
     selectPerson(personId);
@@ -1145,6 +1103,10 @@ export default function App() {
       setSidebarOpen(false);
       setMobileDetailsOpen(true);
     }
+  }
+  function openPersonEditor(person) {
+    openPersonDetails(person.id);
+    setModal({ person, inline: true });
   }
   function openLinkEditor() {
     if (selected) setModal({ person: selected, inline: true, focusLinks: true });
@@ -1157,7 +1119,7 @@ export default function App() {
   }
   function startDrag(e, p, pos) {
     if (e.button !== 0) return;
-    if (e.target.closest('.tree-node-info,.tree-node-delete,.tree-node-add,.tree-node-about,.tree-node-about-tooltip,.node-add-menu')) return;
+    if (e.target.closest('.tree-node-info,.tree-node-edit,.tree-node-delete,.tree-node-about,.tree-node-about-tooltip')) return;
     e.preventDefault();
     e.stopPropagation();
     if (movementLocked) {
@@ -1740,7 +1702,14 @@ export default function App() {
             onTouchEnd={handleTouchEnd}
             onTouchCancel={handleTouchEnd}
           >
-            <div className="tree-zoom-surface" style={{ width: `calc(100% + ${treeExtraWidth}px)`, minWidth: treeContentWidth, height: Math.max(treeBoardHeight * zoom, treeViewportHeight + treePaddingY * 2 + treeBoardOffsetY * zoom, treeBoardTop + treeBoardHeight * zoom + treePaddingY) }}>
+            <div
+              className="tree-zoom-surface"
+              style={{
+                width: `calc(100% + ${treeExtraWidth}px)`,
+                minWidth: treeContentWidth,
+                height: Math.max(treeBoardHeight * zoom, treeViewportHeight + treePaddingY * 2 + treeBoardOffsetY * zoom, treeBoardTop + treeBoardHeight * zoom + treePaddingY),
+              }}
+            >
               <div
                 className="tree-board"
                 style={{
@@ -1772,19 +1741,35 @@ export default function App() {
                           : `M${edge.x1} ${edge.y1} C${edge.c1x} ${edge.c1y} ${edge.c2x} ${edge.c2y} ${edge.x2} ${edge.y2}`);
                       const from = byId(edge.fromId),
                         to = byId(edge.toId);
-                      const relation = edge.kind === 'parent' ? relationshipLabel('Parent', from, to) : edge.kind === 'sibling' ? 'Sibling' : relationshipLabel('Partner', from, to) || 'Partner';
-                      const reverseRelation = edge.kind === 'parent' ? relationshipLabel('Child', to, from) : edge.kind === 'sibling' ? 'Sibling' : relationshipLabel('Partner', to, from) || 'Partner';
+                      const relation =
+                        edge.kind === 'parent'
+                          ? relationshipLabel('Parent', from, to)
+                          : edge.kind === 'sibling'
+                            ? 'Sibling'
+                            : edge.kind === 'custom'
+                              ? edge.label
+                              : relationshipLabel('Partner', from, to) || 'Partner';
+                      const reverseRelation =
+                        edge.kind === 'parent'
+                          ? relationshipLabel('Child', to, from)
+                          : edge.kind === 'sibling'
+                            ? 'Sibling'
+                            : edge.kind === 'custom'
+                              ? edge.label
+                              : relationshipLabel('Partner', to, from) || 'Partner';
                       const description = `${fullName(from)} · ${relation} · ${fullName(to)}`;
                       const linkId = `${edge.kind}-${edge.fromId}-${edge.toId}`;
                       const storedPartnerRelation = edge.kind === 'partner' ? partnerRelationship(from, to?.id) || partnerRelationship(to, from?.id) : '';
                       const genderedPartnerPair = (from?.gender === 'male' && to?.gender === 'female') || (from?.gender === 'female' && to?.gender === 'male');
                       const usesDefaultPartnerRole = ['', 'Husband', 'Wife', 'Spouse'].includes(storedPartnerRelation);
                       const visibleRelation =
-                        edge.kind === 'sibling'
-                          ? 'Sibling'
-                          : edge.kind === 'partner' && genderedPartnerPair && usesDefaultPartnerRole
-                            ? 'Husband · Wife'
-                            : storedPartnerRelation || `${relation} · ${reverseRelation}`;
+                        edge.kind === 'custom'
+                          ? edge.label
+                          : edge.kind === 'sibling'
+                            ? 'Sibling'
+                            : edge.kind === 'partner' && genderedPartnerPair && usesDefaultPartnerRole
+                              ? 'Husband · Wife'
+                              : storedPartnerRelation || `${relation} · ${reverseRelation}`;
                       const relationLabelPoint = linkLabelPoint(
                         edge,
                         visibleRelation,
@@ -1841,6 +1826,18 @@ export default function App() {
                           </small>
                         </span>
                         <span className="drag-grip">⠿</span>
+                      </button>
+                      <button
+                        className="tree-node-edit"
+                        title={`Edit ${fullName(person)}`}
+                        aria-label={`Edit ${fullName(person)}`}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openPersonEditor(person);
+                        }}
+                      >
+                        <Pencil size={13} />
                       </button>
                       <button
                         className="tree-node-info"
@@ -1933,26 +1930,6 @@ export default function App() {
                       >
                         <Trash2 size={13} />
                       </button>
-                      <button
-                        className="tree-node-add"
-                        title={`Add a family member related to ${fullName(person)}`}
-                        aria-label={`Add a family member related to ${fullName(person)}`}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setAddMenuId(addMenuId === person.id ? '' : person.id);
-                        }}
-                      >
-                        <Plus size={15} />
-                      </button>
-                      {addMenuId === person.id && (
-                        <div className="node-add-menu" onPointerDown={(e) => e.stopPropagation()}>
-                          <button onClick={() => addRelatedPerson('parent', person)}>Add parent</button>
-                          <button onClick={() => addRelatedPerson('partner', person)}>Add partner</button>
-                          <button onClick={() => addRelatedPerson('child', person)}>Add child</button>
-                          <button onClick={() => addRelatedPerson('sibling', person)}>Add sibling</button>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -2109,7 +2086,10 @@ export default function App() {
                     label: partnerDisplayLabel(selected, byId(id)),
                   })),
                   ...people.filter((p) => (p.parentIds || []).includes(selected.id)).map((p) => ({ id: p.id, role: 'Child' })),
-                  ...people.filter((p) => p.id !== selected.id && ((p.siblingIds || []).includes(selected.id) || (p.parentIds || []).some((parentId) => (selected.parentIds || []).includes(parentId)))).map((p) => ({ id: p.id, role: 'Sibling' })),
+                  ...people
+                    .filter((p) => p.id !== selected.id && ((p.siblingIds || []).includes(selected.id) || (p.parentIds || []).some((parentId) => (selected.parentIds || []).includes(parentId))))
+                    .map((p) => ({ id: p.id, role: 'Sibling' })),
+                  ...(selected.relationshipLinks || []).map((link) => ({ id: link.personId, role: link.label || 'Related' })),
                 ].map(
                   (link, i) =>
                     byId(link.id) && (
@@ -2179,85 +2159,109 @@ export default function App() {
   );
 }
 
-const partnerRelationshipOptions = ['Husband', 'Wife', 'Boyfriend', 'Girlfriend', 'Fiancé', 'Fiancée', 'Partner', 'Spouse', 'Former spouse', 'Former partner'];
+const relationshipOptions = [
+  'Father',
+  'Mother',
+  'Parent',
+  'Son',
+  'Daughter',
+  'Child',
+  'Husband',
+  'Wife',
+  'Boyfriend',
+  'Girlfriend',
+  'Fiancé',
+  'Fiancée',
+  'Partner',
+  'Spouse',
+  'Former spouse',
+  'Former partner',
+  'Brother',
+  'Sister',
+  'Sibling',
+  'Other',
+];
 function defaultPartnerLabel(gender) {
   return gender === 'male' ? 'Husband' : gender === 'female' ? 'Wife' : 'Spouse';
 }
-function PersonLinkPicker({ people, selectedIds, onChange, excludeId, placeholder, max = Infinity, relationships, onRelationshipsChange, defaultRelationship = 'Spouse', canSelect, className = '' }) {
+function RelationshipEditor({ people, relationships, onChange, excludeId }) {
   const [query, setQuery] = useState('');
-  const selected = people.filter((person) => selectedIds.includes(person.id));
-  const results = people
-    .filter((person) => person.id !== excludeId && !selectedIds.includes(person.id) && (!canSelect || canSelect(person)) && fullName(person).toLowerCase().includes(query.trim().toLowerCase()))
-    .slice(0, 6);
-  const hasRelationships = Boolean(relationships && onRelationshipsChange);
+  const [error, setError] = useState('');
+  const selectedIds = relationships.map((link) => link.personId);
+  const results = people.filter((person) => person.id !== excludeId && !selectedIds.includes(person.id) && fullName(person).toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6);
   function add(id) {
-    if (selectedIds.length >= max) return;
-    onChange([...selectedIds, id]);
-    if (hasRelationships) {
-      const linkedPerson = people.find((person) => person.id === id);
-      onRelationshipsChange([...relationships, { partnerId: id, label: defaultPartnerLabel(linkedPerson?.gender) || defaultRelationship }]);
-    }
+    onChange([...relationships, { personId: id, role: '', customLabel: '' }]);
     setQuery('');
   }
-  function remove(id) {
-    onChange(selectedIds.filter((selectedId) => selectedId !== id));
-    if (hasRelationships) onRelationshipsChange(relationships.filter((link) => link.partnerId !== id));
-  }
-  function setLabel(id, label) {
-    onRelationshipsChange(relationships.map((link) => (link.partnerId === id ? { ...link, label } : link)));
+  function update(index, changes) {
+    if (changes.role && ['Father', 'Mother', 'Parent'].includes(changes.role)) {
+      const parentCount = relationships.filter((link, rowIndex) => rowIndex !== index && ['Father', 'Mother', 'Parent'].includes(link.role)).length;
+      if (parentCount >= 2) {
+        setError('A person can have at most two parents.');
+        return;
+      }
+    }
+    if (changes.role && ['Son', 'Daughter', 'Child'].includes(changes.role)) {
+      const relatedPerson = people.find((person) => person.id === relationships[index]?.personId);
+      if (relatedPerson && relatedPerson.parentIds?.length >= 2 && !relatedPerson.parentIds.includes(excludeId)) {
+        setError('This person already has two parents.');
+        return;
+      }
+    }
+    setError('');
+    onChange(relationships.map((link, rowIndex) => (rowIndex === index ? { ...link, ...changes } : link)));
   }
   return (
-    <div className={`person-link-picker ${className}`.trim()}>
-      {hasRelationships ? (
-        <div className="partner-link-list">
-          {selected.map((person) => {
-            const relationship = relationships.find((link) => link.partnerId === person.id);
-            const label = relationship ? relationship.label : defaultRelationship;
-            const isCustom = !partnerRelationshipOptions.includes(label);
+    <div className="relationship-editor">
+      {relationships.length > 0 && (
+        <div className="relationship-list">
+          {relationships.map((link, index) => {
+            const person = people.find((item) => item.id === link.personId);
+            if (!person) return null;
             return (
-              <div className="partner-link-row" key={person.id}>
-                <strong>{fullName(person)}</strong>
+              <div className="relationship-row" key={`${link.personId}-${index}`}>
+                <strong title={fullName(person)}>{fullName(person)}</strong>
                 <select
                   aria-label={`Relationship with ${fullName(person)}`}
-                  value={isCustom ? 'Other' : label}
-                  onChange={(e) => setLabel(person.id, e.target.value === 'Other' ? (partnerRelationshipOptions.includes(label) ? '' : label) : e.target.value)}
+                  value={link.role}
+                  required
+                  onChange={(e) => update(index, { role: e.target.value, customLabel: e.target.value === 'Other' ? link.customLabel : '' })}
                 >
-                  {partnerRelationshipOptions.map((option) => (
-                    <option key={option}>{option}</option>
+                  <option value="" disabled>
+                    Select relationship
+                  </option>
+                  {relationshipOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option === 'Other' ? 'Custom…' : option}
+                    </option>
                   ))}
-                  <option>Other</option>
                 </select>
-                {(isCustom || label === '') && (
+                {link.role === 'Other' && (
                   <input
                     className="custom-relationship-input"
                     aria-label={`Custom relationship with ${fullName(person)}`}
-                    value={isCustom ? label : ''}
-                    onChange={(e) => setLabel(person.id, e.target.value)}
+                    value={link.customLabel}
+                    onChange={(e) => update(index, { customLabel: e.target.value })}
                     placeholder="Describe relationship"
+                    required
                   />
                 )}
-                <button type="button" className="remove-link-button" onClick={() => remove(person.id)} aria-label={`Remove ${fullName(person)}`}>
+                <button
+                  type="button"
+                  className="remove-link-button"
+                  onClick={() => onChange(relationships.filter((_, rowIndex) => rowIndex !== index))}
+                  aria-label={`Remove relationship with ${fullName(person)}`}
+                >
                   <X size={13} />
                 </button>
               </div>
             );
           })}
         </div>
-      ) : (
-        <div className="link-chip-list">
-          {selected.map((person) => (
-            <span className="link-chip" key={person.id}>
-              <span>{fullName(person)}</span>
-              <button type="button" className="link-chip-remove" aria-label={`Remove ${fullName(person)}`} onClick={() => remove(person.id)}>
-                <X size={12} />
-              </button>
-            </span>
-          ))}
-        </div>
       )}
-      <label className="link-search">
+      <label className="link-search relationship-search">
         <Search size={13} />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={placeholder} />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search and add a family relationship" />
       </label>
       {query && (
         <div className="link-search-results">
@@ -2268,6 +2272,11 @@ function PersonLinkPicker({ people, selectedIds, onChange, excludeId, placeholde
           ))}
           {!results.length && <span>No matching people</span>}
         </div>
+      )}
+      {error && (
+        <small className="relationship-error" role="alert">
+          {error}
+        </small>
       )}
     </div>
   );
@@ -2288,40 +2297,29 @@ function PersonModal({ modal, people, onClose, onSave }) {
     bio: p?.bio || '',
     notes: p?.notes || '',
   });
-  const solePartnerIds = (modal.parent?.partnerIds || []).filter((id) => people.some((person) => person.id === id));
-  const initialParents =
-    modal.kind === 'child'
-      ? [modal.parent.id, ...(solePartnerIds.length === 1 ? solePartnerIds : [])]
-      : modal.kind === 'sibling'
-        ? modal.parent?.parentIds || []
-        : modal.kind === 'parent'
-          ? []
-          : p?.parentIds || [];
-  const [parentIds, setParents] = useState(initialParents);
-  const initialPartners = modal.kind === 'partner' ? [modal.parent.id] : p?.partnerIds || [];
-  const [partnerIds, setPartners] = useState(initialPartners);
-  const [childIds, setChildren] = useState(() => (p ? people.filter((person) => (person.parentIds || []).includes(p.id)).map((person) => person.id) : []));
-  const [partnerRelationships, setPartnerRelationships] = useState(() =>
-    initialPartners.map((id) => ({
-      partnerId: id,
-      label: (() => {
-        const stored = partnerRelationship(p, id);
-        return ['', 'Husband', 'Wife', 'Spouse'].includes(stored) ? defaultPartnerLabel(people.find((person) => person.id === id)?.gender) : stored;
-      })(),
-    })),
-  );
-  const updatePartners = (ids) => {
-    setPartners(ids);
-    setPartnerRelationships((previous) =>
-      ids.map(
-        (id) =>
-          previous.find((link) => link.partnerId === id) || {
-            partnerId: id,
-            label: defaultPartnerLabel(people.find((person) => person.id === id)?.gender),
-          },
-      ),
-    );
-  };
+  const [relationships, setRelationships] = useState(() => {
+    if (!p) return [];
+    const rows = [];
+    const add = (personId, role, customLabel = '') => {
+      if (personId !== p.id && people.some((person) => person.id === personId) && !rows.some((link) => link.personId === personId)) rows.push({ personId, role, customLabel });
+    };
+    (p.parentIds || []).forEach((id) => {
+      const parent = people.find((person) => person.id === id);
+      add(id, parent?.gender === 'male' ? 'Father' : parent?.gender === 'female' ? 'Mother' : 'Parent');
+    });
+    people.filter((person) => (person.parentIds || []).includes(p.id)).forEach((child) => add(child.id, child.gender === 'male' ? 'Son' : child.gender === 'female' ? 'Daughter' : 'Child'));
+    (p.partnerIds || []).forEach((id) => {
+      const stored = partnerRelationship(p, id);
+      const fallback = defaultPartnerLabel(people.find((person) => person.id === id)?.gender);
+      const role = relationshipOptions.includes(stored) ? stored : relationshipOptions.includes(fallback) ? fallback : 'Spouse';
+      add(id, stored && !relationshipOptions.includes(stored) ? 'Other' : role, stored && !relationshipOptions.includes(stored) ? stored : '');
+    });
+    const relatedSiblings = new Set(p.siblingIds || []);
+    people.filter((person) => person.id !== p.id && (person.parentIds || []).some((parentId) => (p.parentIds || []).includes(parentId))).forEach((person) => relatedSiblings.add(person.id));
+    relatedSiblings.forEach((id) => add(id, 'Sibling'));
+    (p.relationshipLinks || []).forEach((link) => add(link.personId, 'Other', link.label));
+    return rows;
+  });
   useEffect(() => {
     if (!modal.focusLinks) return;
     const frame = requestAnimationFrame(() => familyLinksRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
@@ -2330,19 +2328,21 @@ function PersonModal({ modal, people, onClose, onSave }) {
   const change = (k, v) => setForm((x) => ({ ...x, [k]: v }));
   function submit(e) {
     e.preventDefault();
-    onSave({ ...form, parentIds, partnerIds, partnerRelationships, childIds });
+    const byRole = (roles) => relationships.filter((link) => roles.includes(link.role)).map((link) => link.personId);
+    const partnerIds = byRole(['Husband', 'Wife', 'Boyfriend', 'Girlfriend', 'Fiancé', 'Fiancée', 'Partner', 'Spouse', 'Former spouse', 'Former partner']);
+    const partnerRelationships = relationships.filter((link) => partnerIds.includes(link.personId)).map((link) => ({ partnerId: link.personId, label: link.role }));
+    const relationshipLinks = relationships.filter((link) => link.role === 'Other' && link.customLabel.trim()).map((link) => ({ personId: link.personId, label: link.customLabel.trim() }));
+    onSave({
+      ...form,
+      parentIds: byRole(['Father', 'Mother', 'Parent']),
+      partnerIds,
+      partnerRelationships,
+      siblingIds: byRole(['Brother', 'Sister', 'Sibling']),
+      relationshipLinks,
+      childIds: byRole(['Son', 'Daughter', 'Child']),
+    });
   }
-  const title = p
-    ? 'Edit person'
-    : modal.kind === 'parent'
-      ? 'Add a parent'
-      : modal.kind === 'child'
-        ? 'Add a child'
-        : modal.kind === 'sibling'
-          ? 'Add a sibling'
-          : modal.kind === 'partner'
-            ? 'Add a partner'
-            : 'Add a person';
+  const title = p ? 'Edit person' : 'Add a person';
   const editor = (
     <form className={modal.inline ? 'inline-person-editor' : 'simple-person-modal'} onSubmit={submit}>
       <header>
@@ -2360,82 +2360,63 @@ function PersonModal({ modal, people, onClose, onSave }) {
           <span>Photo URL</span>
           <input value={form.photoUrl} onChange={(e) => change('photoUrl', e.target.value)} placeholder="https://…" />
         </label>
-        <div className="simple-form-grid">
-          <label>
-            First name *
-            <input required value={form.firstName} onChange={(e) => change('firstName', e.target.value)} placeholder="First name" />
-          </label>
-          <label>
-            Last name
-            <input value={form.lastName} onChange={(e) => change('lastName', e.target.value)} placeholder="Last name" />
-          </label>
-          <label>
-            Gender
-            <select value={form.gender} onChange={(e) => change('gender', e.target.value)}>
-              <option value="unspecified">Not specified</option>
-              <option value="female">Female</option>
-              <option value="male">Male</option>
-              <option value="nonbinary">Nonbinary</option>
-            </select>
-          </label>
-          <label>
-            Born
-            <input type="date" value={form.birthDate} onChange={(e) => change('birthDate', e.target.value)} />
-          </label>
-          <label>
-            Died
-            <input type="date" value={form.deathDate} onChange={(e) => change('deathDate', e.target.value)} />
-          </label>
-          <label>
-            Birthplace
-            <input value={form.birthPlace} onChange={(e) => change('birthPlace', e.target.value)} placeholder="City, country" />
-          </label>
-          <label>
-            Occupation
-            <input value={form.occupation} onChange={(e) => change('occupation', e.target.value)} placeholder="Occupation" />
-          </label>
+        <div className="simple-form-grid person-basic-grid">
+          <div className="person-form-row two-field-row">
+            <label>
+              First name *
+              <input required value={form.firstName} onChange={(e) => change('firstName', e.target.value)} placeholder="First name" />
+            </label>
+            <label>
+              Last name
+              <input value={form.lastName} onChange={(e) => change('lastName', e.target.value)} placeholder="Last name" />
+            </label>
+          </div>
+          <div className="person-form-row three-field-row">
+            <label>
+              Born
+              <input type="date" value={form.birthDate} onChange={(e) => change('birthDate', e.target.value)} />
+            </label>
+            <label>
+              Died
+              <input type="date" value={form.deathDate} onChange={(e) => change('deathDate', e.target.value)} />
+            </label>
+            <label>
+              Gender
+              <select value={form.gender} onChange={(e) => change('gender', e.target.value)}>
+                <option value="unspecified">Not specified</option>
+                <option value="female">Female</option>
+                <option value="male">Male</option>
+                <option value="nonbinary">Nonbinary</option>
+              </select>
+            </label>
+          </div>
+          <div className="person-form-row two-field-row">
+            <label>
+              Birthplace
+              <input value={form.birthPlace} onChange={(e) => change('birthPlace', e.target.value)} placeholder="City, country" />
+            </label>
+            <label>
+              Occupation
+              <input value={form.occupation} onChange={(e) => change('occupation', e.target.value)} placeholder="Occupation" />
+            </label>
+          </div>
+        </div>
+        <div className="simple-link-fields" ref={familyLinksRef}>
+          <div className="simple-link-field relationship-field">
+            <strong>Relationships</strong>
+            <p className="relationship-help">Add a person, then choose how they are related.</p>
+            <RelationshipEditor people={people} relationships={relationships} onChange={setRelationships} excludeId={p?.id} />
+          </div>
+        </div>
+        <div className="simple-form-grid person-story-grid">
           <label className="wide-form-field">
             About
-            <textarea rows="3" value={form.bio} onChange={(e) => change('bio', e.target.value)} placeholder="A little about this person" />
+            <textarea rows="2" value={form.bio} onChange={(e) => change('bio', e.target.value)} placeholder="A little about this person" />
           </label>
           <label className="wide-form-field">
             Family notes
             <textarea rows="2" value={form.notes} onChange={(e) => change('notes', e.target.value)} placeholder="Notes for the family archive" />
           </label>
-        </div>
-        <div className="simple-link-fields" ref={familyLinksRef}>
-          <div className="simple-link-field">
-            <strong>Parents</strong>
-            <PersonLinkPicker people={people} selectedIds={parentIds} onChange={setParents} excludeId={p?.id || modal.parent?.id} placeholder="Search and link parents" max={2} />
-          </div>
-          <div className="simple-link-field">
-            <strong>Partner or spouse</strong>
-            <PersonLinkPicker
-              people={people}
-              selectedIds={partnerIds}
-              onChange={updatePartners}
-              excludeId={p?.id}
-              placeholder="Search and link partner"
-              relationships={partnerRelationships}
-              onRelationshipsChange={setPartnerRelationships}
-              defaultRelationship={defaultPartnerLabel(form.gender)}
-            />
-          </div>
-          <div className="simple-link-field">
-            <strong className="children-link-heading">
-              <span>Children</span>
-              <span className="children-link-count">{childIds.length} linked</span>
-            </strong>
-            <PersonLinkPicker
-              people={people}
-              selectedIds={childIds}
-              onChange={setChildren}
-              excludeId={p?.id}
-              placeholder="Search and link children"
-              canSelect={(person) => (person.parentIds || []).includes(p?.id) || ((person.parentIds || []).length < 2 && !(p?.parentIds || []).includes(person.id))}
-              className="children-link-picker"
-            />
-          </div>
         </div>
       </div>
       <footer>

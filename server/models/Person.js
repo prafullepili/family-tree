@@ -21,6 +21,12 @@ const PersonSchema = new mongoose.Schema(
         label: { type: String, trim: true, default: '' },
       },
     ],
+    relationshipLinks: [
+      {
+        personId: { type: mongoose.Schema.Types.ObjectId, ref: 'Person', required: true },
+        label: { type: String, trim: true, required: true },
+      },
+    ],
     notes: { type: String, trim: true, default: '' },
     seedKey: { type: String, default: undefined, index: true },
     treeX: { type: Number, default: null },

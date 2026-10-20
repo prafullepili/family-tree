@@ -3246,11 +3246,11 @@ button {
   overflow: auto;
 }
 .photo-url {
-  height: 40px;
+  height: 35px;
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
   padding: 0 10px;
   border: 1px dashed var(--border);
   border-radius: 7px;
@@ -3268,14 +3268,27 @@ button {
 }
 .simple-form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 11px 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 9px;
+}
+.person-form-row {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+.person-form-row.two-field-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.person-form-row.three-field-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
 }
 .simple-form-grid label {
   display: grid;
-  gap: 5px;
+  min-width: 0;
+  gap: 4px;
   color: var(--text-soft);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
 }
 .simple-form-grid input,
@@ -3283,11 +3296,12 @@ button {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 8px 9px;
+  min-width: 0;
+  padding: 6px 8px;
   outline: 0;
   background: var(--surface-soft);
   color: var(--text);
-  font-size: 12px !important;
+  font-size: 11px !important;
 }
 .simple-form-grid input:focus,
 .simple-form-grid textarea:focus {
@@ -3297,16 +3311,97 @@ button {
   resize: vertical;
   line-height: 1.5;
 }
+.three-field-row input[type='date'],
+.three-field-row select {
+  padding-right: 3px;
+  padding-left: 3px;
+  font-size: 10px !important;
+}
+.person-story-grid {
+  margin-top: 10px;
+}
 .wide-form-field {
   grid-column: 1/-1;
 }
 .simple-link-field {
-  margin-top: 14px;
-  padding-top: 13px;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid var(--border);
 }
 .simple-link-fields {
   scroll-margin-top: 12px;
+}
+.relationship-field > strong {
+  display: block;
+  font-size: 12px;
+}
+.relationship-help {
+  margin: 5px 0 9px;
+  color: var(--text-soft);
+  font-size: 10px;
+}
+.relationship-list {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 9px;
+}
+.relationship-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(138px, 0.82fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.relationship-row > strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.relationship-row select,
+.relationship-row input {
+  width: 100%;
+  min-width: 0;
+  height: 31px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 10px;
+}
+.relationship-row .custom-relationship-input {
+  grid-column: 1 / 3;
+}
+.relationship-row .remove-link-button {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+.relationship-row .remove-link-button:hover {
+  border-color: #ad726a55;
+  background: #ad726a14;
+  color: #ad726a;
+}
+.relationship-search {
+  margin-top: 0;
+}
+.relationship-error {
+  display: block;
+  margin-top: 7px;
+  color: #ad726a;
+  font-size: 10px;
 }
 .simple-link-field > strong {
   font-size: 11px;
@@ -3765,61 +3860,37 @@ button {
   background: var(--accent-bg);
   border-color: var(--accent);
 }
-.tree-node-add {
+.tree-node-edit {
   position: absolute;
   right: -7px;
   bottom: -7px;
-  z-index: 6;
-  width: 26px;
-  height: 26px;
+  z-index: 5;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 50%;
-  background: var(--accent);
-  color: #fff !important;
+  background: var(--surface);
+  color: var(--accent);
   box-shadow: 0 2px 7px #101a1430;
   opacity: 0;
   pointer-events: none;
   transition:
     opacity 0.12s,
-    transform 0.12s;
+    background 0.12s,
+    color 0.12s;
 }
-.tree-person:hover .tree-node-add,
-.tree-person.selected .tree-node-add,
-.tree-node-add:focus-visible {
+.tree-person:hover .tree-node-edit,
+.tree-person.selected .tree-node-edit,
+.tree-node-edit:focus-visible {
   opacity: 1;
   pointer-events: auto;
 }
-.tree-node-add:hover {
-  transform: scale(1.08);
-}
-.node-add-menu {
-  position: absolute;
-  right: 22px;
-  bottom: -37px;
-  z-index: 9;
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: 0 5px 16px #101a1430;
-}
-.node-add-menu button {
-  white-space: nowrap;
-  padding: 6px 9px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text) !important;
-  font-size: 10px !important;
-}
-.node-add-menu button:hover {
+.tree-node-edit:hover {
   background: var(--accent-bg);
-  color: var(--accent) !important;
+  border-color: var(--accent);
 }
 @media (hover: none), (pointer: coarse) {
   .tree-node-info {
@@ -4215,6 +4286,12 @@ button {
 .simple-form-grid select:focus {
   border-color: var(--accent);
 }
+.simple-form-grid .three-field-row input[type='date'],
+.simple-form-grid .three-field-row select {
+  min-width: 0;
+  padding: 6px 3px;
+  font-size: 10px !important;
+}
 
 .tree-node-about-wrap {
   left: -7px;
@@ -4568,6 +4645,7 @@ button {
 }
 .inline-person-editor .simple-form-grid {
   grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
 }
 .inline-person-editor .wide-form-field {
   grid-column: auto;
