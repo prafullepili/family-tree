@@ -328,10 +328,34 @@ export default function App() {
   const layout = useMemo(() => layoutTree(layoutPeople), [layoutPeople]);
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
-  const treeContentWidth = layout.width * zoom;
-  const treeExtraWidth = Math.max(0, (layout.originX - 60) * zoom);
-  const treeBoardLeft = Math.max(0, (treeViewportWidth - treeContentWidth) / 2);
-  const treeBoardTop = Math.max(0, (treeViewportHeight - layout.height * zoom) / 2);
+  const layoutPositions = [...layout.positions.values()];
+  const minNodeX = layoutPositions.length ? Math.min(...layoutPositions.map((position) => position.x)) : 0;
+  const minNodeY = layoutPositions.length ? Math.min(...layoutPositions.map((position) => position.y)) : 0;
+  const maxNodeX = layoutPositions.length ? Math.max(...layoutPositions.map((position) => position.x + position.w)) : layout.width;
+  const maxNodeY = layoutPositions.length ? Math.max(...layoutPositions.map((position) => position.y + position.h)) : layout.height;
+  const treeBaseWidth = Math.max(800, ...layoutPositions.map((position) => position.automaticX + layout.originX + position.w + 60));
+  const treeBaseHeight = Math.max(300, ...layoutPositions.map((position) => position.automaticY + layout.originY + position.h + 100));
+  // Manual dragging can put nodes above/left of the automatic layout's origin.
+  // Add canvas space for those coordinates so zooming never clips a moved node.
+  const treeBoardOffsetX = Math.max(0, 60 - minNodeX);
+  const treeBoardOffsetY = Math.max(0, 56 - minNodeY);
+  const treePaddingX = treeViewportWidth / 2;
+  const treePaddingY = treeViewportHeight / 2;
+  const maxCanvasZoom = Math.max(0.1, Math.min(2, (treeViewportWidth - 24) / 196));
+  const treeBoardWidth = Math.max(layout.width, maxNodeX) + treeBoardOffsetX;
+  const treeBoardHeight = Math.max(layout.height, maxNodeY) + treeBoardOffsetY;
+  const treeContentWidth = treeBoardWidth * zoom;
+  // Keep the automatic layout's origin fixed as manually moved nodes expand
+  // the canvas. Scroll padding cancels the changing origin so dragging keeps
+  // tracking the pointer at every edge.
+  const treeBoardLeft = treePaddingX + treeBoardOffsetX * zoom + Math.max(0, (treeViewportWidth - treeBaseWidth * zoom) / 2);
+  const treeBoardTop = treePaddingY + treeBoardOffsetY * zoom + Math.max(0, (treeViewportHeight - treeBaseHeight * zoom) / 2);
+  const treeExtraWidth = Math.max(
+    0,
+    (layout.originX - 60 + treeBoardOffsetX) * zoom,
+    treePaddingX * 2 + treeBoardLeft + treeContentWidth - treeViewportWidth,
+  );
+  const appliedTreeOffset = useRef({ x: treeBoardOffsetX, y: treeBoardOffsetY });
   const connectorNodePositions = [...layout.positions.values()];
   const connectorLabelPositions = [];
   const filtered = useMemo(() => {
@@ -403,13 +427,37 @@ export default function App() {
     const anchor = pendingZoomAnchor.current;
     if (!anchor) return;
     const viewport = treeScroll.current;
-    if (viewport) {
-      const rect = viewport.getBoundingClientRect();
-      viewport.scrollLeft = Math.max(0, anchor.x * zoom + treeBoardLeft - (anchor.clientX - rect.left));
-      viewport.scrollTop = Math.max(0, anchor.y * zoom + treeBoardTop - (anchor.clientY - rect.top));
-    }
     pendingZoomAnchor.current = null;
+    if (!viewport) return;
+    // Measure the transformed board after React applies the new scale. Using
+    // the board rect keeps the zoom anchor correct when the surface is centered
+    // or scroll bounds change (especially with a single node).
+    requestAnimationFrame(() => {
+      const board = viewport.querySelector('.tree-board');
+      if (!board) return;
+      const boardRect = board.getBoundingClientRect();
+      const pointX = boardRect.left + anchor.x * zoom;
+      const pointY = boardRect.top + anchor.y * zoom;
+      viewport.scrollLeft = Math.max(0, Math.min(viewport.scrollWidth - viewport.clientWidth, viewport.scrollLeft + pointX - anchor.clientX));
+      viewport.scrollTop = Math.max(0, Math.min(viewport.scrollHeight - viewport.clientHeight, viewport.scrollTop + pointY - anchor.clientY));
+    });
   }, [zoom, treeBoardLeft, treeBoardTop]);
+  useLayoutEffect(() => {
+    const viewport = treeScroll.current;
+    if (!viewport) return;
+    const nextOffset = treePaddingX + treeBoardOffsetX * zoom;
+    const delta = nextOffset - appliedTreeOffset.current.x;
+    appliedTreeOffset.current.x = nextOffset;
+    if (delta) viewport.scrollLeft = Math.max(0, Math.min(viewport.scrollWidth - viewport.clientWidth, viewport.scrollLeft + delta));
+  }, [treeBoardOffsetX, treePaddingX, zoom]);
+  useLayoutEffect(() => {
+    const viewport = treeScroll.current;
+    if (!viewport) return;
+    const nextOffset = treePaddingY + treeBoardOffsetY * zoom;
+    const delta = nextOffset - appliedTreeOffset.current.y;
+    appliedTreeOffset.current.y = nextOffset;
+    if (delta) viewport.scrollTop = Math.max(0, Math.min(viewport.scrollHeight - viewport.clientHeight, viewport.scrollTop + delta));
+  }, [treeBoardOffsetY, treePaddingY, zoom]);
   useLayoutEffect(() => {
     const viewport = treeScroll.current;
     if (!viewport) return;
@@ -430,7 +478,7 @@ export default function App() {
       e.preventDefault();
       e.stopPropagation();
       const baseZoom = pendingZoom.current?.nextZoom ?? zoomValue.current;
-      zoomAround(e.clientX, e.clientY, Math.max(0.1, Math.min(2, baseZoom * Math.exp(-e.deltaY * 0.01))));
+      zoomAround(e.clientX, e.clientY, Math.max(0.1, Math.min(maxCanvasZoom, baseZoom * Math.exp(-e.deltaY * 0.01))));
     };
     viewport.addEventListener('wheel', onWheel, { passive: false });
     return () => viewport.removeEventListener('wheel', onWheel);
@@ -918,12 +966,12 @@ export default function App() {
       pendingZoom.current = null;
       if (!request || Math.abs(request.nextZoom - zoomValue.current) < 0.0001) return;
       const viewport = treeScroll.current;
-      const surface = viewport?.querySelector('.tree-zoom-surface');
-      if (viewport && surface) {
-        const surfaceRect = surface.getBoundingClientRect();
+      const board = viewport?.querySelector('.tree-board');
+      if (viewport && board) {
+        const boardRect = board.getBoundingClientRect();
         pendingZoomAnchor.current = {
-          x: (request.clientX - surfaceRect.left - treeBoardLeft) / zoomValue.current,
-          y: (request.clientY - surfaceRect.top - treeBoardTop) / zoomValue.current,
+          x: (request.clientX - boardRect.left) / zoomValue.current,
+          y: (request.clientY - boardRect.top) / zoomValue.current,
           clientX: request.clientX,
           clientY: request.clientY,
         };
@@ -932,9 +980,21 @@ export default function App() {
     });
   }
   function zoomTo(nextZoom) {
+    nextZoom = Math.max(0.1, Math.min(maxCanvasZoom, nextZoom));
     const viewport = treeScroll.current;
     if (!viewport) {
       setZoom(nextZoom);
+      return;
+    }
+    const board = viewport.querySelector('.tree-board');
+    const boardRect = board?.getBoundingClientRect();
+    if (boardRect && layout.positions.size) {
+      const positions = [...layout.positions.values()];
+      const minX = Math.min(...positions.map((position) => position.x));
+      const maxX = Math.max(...positions.map((position) => position.x + position.w));
+      const minY = Math.min(...positions.map((position) => position.y));
+      const maxY = Math.max(...positions.map((position) => position.y + position.h));
+      zoomAround(boardRect.left + ((minX + maxX) / 2) * zoomValue.current, boardRect.top + ((minY + maxY) / 2) * zoomValue.current, nextZoom);
       return;
     }
     const rect = viewport.getBoundingClientRect();
@@ -946,12 +1006,20 @@ export default function App() {
     if (!viewport) return;
     const availableWidth = Math.max(1, viewport.clientWidth - 48);
     const availableHeight = Math.max(1, viewport.clientHeight - 48);
-    const fittedZoom = Math.max(0.1, Math.min(1, availableWidth / layout.width, availableHeight / layout.height));
+    const fittedZoom = Math.max(0.1, Math.min(1, availableWidth / treeBoardWidth, availableHeight / treeBoardHeight));
     zoomValue.current = fittedZoom;
     setZoom(fittedZoom);
     requestAnimationFrame(() => {
-      viewport.scrollLeft = 0;
-      viewport.scrollTop = 0;
+      const board = viewport.querySelector('.tree-board');
+      const boardRect = board?.getBoundingClientRect();
+      const viewportRect = viewport.getBoundingClientRect();
+      if (!boardRect || !layoutPositions.length) return;
+      const centerX = (minNodeX + maxNodeX) / 2;
+      const centerY = (minNodeY + maxNodeY) / 2;
+      const targetX = viewportRect.left + viewport.clientWidth / 2;
+      const targetY = viewportRect.top + viewport.clientHeight / 2;
+      viewport.scrollLeft = Math.max(0, Math.min(viewport.scrollWidth - viewport.clientWidth, viewport.scrollLeft + boardRect.left + centerX * fittedZoom - targetX));
+      viewport.scrollTop = Math.max(0, Math.min(viewport.scrollHeight - viewport.clientHeight, viewport.scrollTop + boardRect.top + centerY * fittedZoom - targetY));
     });
   }
   function handleTouchStart(e) {
@@ -971,7 +1039,7 @@ export default function App() {
     const centerX = (a.clientX + b.clientX) / 2;
     const centerY = (a.clientY + b.clientY) / 2;
     const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-    zoomAround(centerX, centerY, Math.max(0.1, Math.min(2, (pinch.current.zoom * distance) / pinch.current.distance)));
+    zoomAround(centerX, centerY, Math.max(0.1, Math.min(maxCanvasZoom, (pinch.current.zoom * distance) / pinch.current.distance)));
   }
   function handleTouchEnd(e) {
     if (e.touches.length < 2) pinch.current = null;
@@ -1543,7 +1611,7 @@ export default function App() {
                 <ZoomOut size={16} />
               </button>
               <span>{Math.round(zoom * 100)}%</span>
-              <button onClick={() => zoomTo(Math.min(2, +(zoomValue.current + 0.1).toFixed(2)))} aria-label="Zoom in">
+              <button onClick={() => zoomTo(Math.min(maxCanvasZoom, +(zoomValue.current + 0.1).toFixed(2)))} aria-label="Zoom in">
                 <ZoomIn size={16} />
               </button>
               <i />
@@ -1601,19 +1669,19 @@ export default function App() {
             onTouchEnd={handleTouchEnd}
             onTouchCancel={handleTouchEnd}
           >
-            <div className="tree-zoom-surface" style={{ width: `calc(100% + ${treeExtraWidth}px)`, minWidth: treeContentWidth, height: layout.height * zoom }}>
+            <div className="tree-zoom-surface" style={{ width: `calc(100% + ${treeExtraWidth}px)`, minWidth: treeContentWidth, height: Math.max(treeBoardHeight * zoom, treeViewportHeight + treePaddingY * 2 + treeBoardOffsetY * zoom, treeBoardTop + treeBoardHeight * zoom + treePaddingY) }}>
               <div
                 className="tree-board"
                 style={{
-                  width: layout.width,
-                  height: layout.height,
+                  width: treeBoardWidth,
+                  height: treeBoardHeight,
                   left: treeBoardLeft,
                   top: treeBoardTop,
                   transform: `scale(${zoom})`,
                   transformOrigin: 'top left',
                 }}
               >
-                <svg className="connector-svg" width={layout.width} height={layout.height} aria-label="Family relationships">
+                <svg className="connector-svg" width={treeBoardWidth} height={treeBoardHeight} aria-label="Family relationships">
                   <defs>
                     <marker id="family-link-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
                       <path d="M0 0 L8 4 L0 8 Z" fill="var(--line)" />
@@ -1804,7 +1872,7 @@ export default function App() {
             {marqueeRect && <div className="marquee-selection" style={{ left: marqueeRect.left, top: marqueeRect.top, width: marqueeRect.width, height: marqueeRect.height }} aria-hidden="true" />}
           </div>
           <div className="canvas-zoom-controls">
-            <button onClick={() => zoomTo(Math.min(2, +(zoomValue.current + 0.1).toFixed(2)))} aria-label="Zoom in">
+            <button onClick={() => zoomTo(Math.min(maxCanvasZoom, +(zoomValue.current + 0.1).toFixed(2)))} aria-label="Zoom in">
               <Plus size={17} />
             </button>
             <button onClick={() => zoomTo(Math.max(0.1, +(zoomValue.current - 0.1).toFixed(2)))} aria-label="Zoom out">
