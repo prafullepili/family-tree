@@ -2708,8 +2708,6 @@ button {
 .canvas-help-tooltip strong {
   color: var(--text);
 }
-.canvas-help:hover .canvas-help-tooltip,
-.canvas-help:focus-within .canvas-help-tooltip,
 .canvas-help.open .canvas-help-tooltip {
   opacity: 1;
   visibility: visible;
@@ -2718,7 +2716,7 @@ button {
 }
 .tree-scroll {
   position: absolute;
-  inset: 43px 0 0;
+  inset: 0;
   overflow: auto;
   scrollbar-color: var(--border) transparent;
   scrollbar-width: thin;
@@ -3508,7 +3506,7 @@ button {
     min-height: calc(100dvh - 110px);
   }
   .tree-scroll {
-    inset: 43px 0 0;
+    inset: 0;
     justify-content: flex-start;
   }
   .tree-board {

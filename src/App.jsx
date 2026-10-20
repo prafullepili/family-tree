@@ -265,14 +265,6 @@ export default function App() {
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [movementLocked, setMovementLocked] = useState(() => storageGet('kinfolk-canvas-movement-locked-v2') === 'true');
   const [marqueeRect, setMarqueeRect] = useState(null);
-  const [phoneLayout, setPhoneLayout] = useState(() => {
-    try {
-      const saved = JSON.parse(storageGet('kinfolk-phone-tree-layout-v1'));
-      return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
-    } catch {
-      return {};
-    }
-  });
   const [phoneLayoutPreview, setPhoneLayoutPreview] = useState({});
   const [theme, setTheme] = useState(() => storageGet('kinfolk-theme') || 'light');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -291,7 +283,7 @@ export default function App() {
   });
   const [treeViewportWidth, setTreeViewportWidth] = useState(0);
   const [treeViewportHeight, setTreeViewportHeight] = useState(0);
-  const initialAutoFitDone = useRef(false);
+  const autoFitSignature = useRef('');
   const manualZoomTouched = useRef(false);
   const viewportMode = useRef(isCompactViewport);
   const [query, setQuery] = useState('');
@@ -319,12 +311,12 @@ export default function App() {
   const selected = people.find((p) => p.id === selectedId) || null;
   const byId = (id) => people.find((p) => p.id === id);
   const layoutPeople = useMemo(() => {
-    if (!isCompactViewport) return familyPeople;
+    if (!isCompactViewport || !Object.keys(phoneLayoutPreview).length) return familyPeople;
     return familyPeople.map((person) => {
-      const savedPosition = phoneLayoutPreview[person.id] || phoneLayout[person.id];
-      return { ...person, treeX: savedPosition?.treeX ?? null, treeY: savedPosition?.treeY ?? null };
+      const preview = phoneLayoutPreview[person.id];
+      return preview ? { ...person, treeX: preview.treeX, treeY: preview.treeY } : person;
     });
-  }, [familyPeople, isCompactViewport, phoneLayout, phoneLayoutPreview]);
+  }, [familyPeople, isCompactViewport, phoneLayoutPreview]);
   const layout = useMemo(() => layoutTree(layoutPeople), [layoutPeople]);
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
@@ -391,8 +383,8 @@ export default function App() {
     storageSet('kinfolk-details-width', String(detailsWidth));
   }, [detailsWidth]);
   useEffect(() => {
-    storageSet('kinfolk-phone-tree-layout-v1', JSON.stringify(phoneLayout));
-  }, [phoneLayout]);
+    storageRemove('kinfolk-phone-tree-layout-v1');
+  }, []);
   useEffect(() => {
     storageSet(isCompactViewport ? 'kinfolk-phone-zoom-v1' : 'kinfolk-site-zoom-v1', String(zoom));
   }, [isCompactViewport, zoom]);
@@ -519,20 +511,36 @@ export default function App() {
     }
     previousOrigin.current = { x: layout.originX, y: layout.originY, hasPeople: familyPeople.length > 0 };
   }, [layout.originX, layout.originY, zoom, familyPeople.length]);
+  const layoutSignature = layoutPeople
+    .map((person) => `${person.id}:${person.treeX ?? ''}:${person.treeY ?? ''}:${(person.parentIds || []).join(',')}:${(person.partnerIds || []).join(',')}`)
+    .join('|');
   useLayoutEffect(() => {
-    if (initialAutoFitDone.current || !familyPeople.length || apiState === 'checking') return;
-    initialAutoFitDone.current = true;
-    const key = isCompactViewport ? 'kinfolk-phone-initial-fit-v1' : 'kinfolk-site-initial-fit-v1';
-    if (storageGet(key) === 'true' || manualZoomTouched.current) return;
+    if (!familyPeople.length || apiState === 'checking' || manualZoomTouched.current) return;
     const viewport = treeScroll.current;
-    if (!viewport) return;
-    const fittedZoom = Math.max(0.1, Math.min(1, (viewport.clientWidth - 48) / layout.width, (viewport.clientHeight - 48) / layout.height));
+    if (!viewport || !treeViewportWidth || !treeViewportHeight) return;
+    const signature = `${isCompactViewport ? 'compact' : 'wide'}:${layoutSignature}:${treeViewportWidth}x${treeViewportHeight}`;
+    if (autoFitSignature.current === signature) return;
+    autoFitSignature.current = signature;
+    const contentWidth = Math.max(196, maxNodeX - minNodeX);
+    const contentHeight = Math.max(76, maxNodeY - minNodeY);
+    const fittedZoom = Math.max(
+      0.1,
+      Math.min(1, maxCanvasZoom, (viewport.clientWidth - 48) / contentWidth, (viewport.clientHeight - 48) / contentHeight),
+    );
     zoomValue.current = fittedZoom;
     setZoom(fittedZoom);
-    viewport.scrollLeft = 0;
-    viewport.scrollTop = 0;
-    storageSet(key, 'true');
-  }, [apiState, familyPeople.length, isCompactViewport, layout.height, layout.width]);
+    requestAnimationFrame(() => {
+      const boardRect = viewport.querySelector('.tree-board')?.getBoundingClientRect();
+      const viewportRect = viewport.getBoundingClientRect();
+      if (!boardRect || !layoutPositions.length) return;
+      const centerX = (minNodeX + maxNodeX) / 2;
+      const centerY = (minNodeY + maxNodeY) / 2;
+      const targetX = viewportRect.left + viewport.clientWidth / 2;
+      const targetY = viewportRect.top + viewport.clientHeight / 2;
+      viewport.scrollLeft = Math.max(0, Math.min(viewport.scrollWidth - viewport.clientWidth, viewport.scrollLeft + boardRect.left + centerX * fittedZoom - targetX));
+      viewport.scrollTop = Math.max(0, Math.min(viewport.scrollHeight - viewport.clientHeight, viewport.scrollTop + boardRect.top + centerY * fittedZoom - targetY));
+    });
+  }, [apiState, familyPeople.length, isCompactViewport, layoutSignature, maxCanvasZoom, maxNodeX, maxNodeY, minNodeX, minNodeY, treeViewportHeight, treeViewportWidth]);
   useEffect(() => {
     if (apiState !== 'demo') return;
     const timer = setTimeout(() => storageSet('kinfolk-demo-people', JSON.stringify(people)), 250);
@@ -801,30 +809,18 @@ export default function App() {
             parentIds: (person.parentIds || []).filter((id) => !removalIds.has(id)),
             partnerIds: (person.partnerIds || []).filter((id) => !removalIds.has(id)),
             partnerRelationships: (person.partnerRelationships || []).filter((link) => !removalIds.has(link.partnerId)),
-            treeX: isCompactViewport ? person.treeX : position ? position.x - 60 : person.treeX,
-            treeY: isCompactViewport ? person.treeY : position ? position.y - 56 : person.treeY,
+            treeX: position?.rawX ?? person.treeX,
+            treeY: position?.rawY ?? person.treeY,
           };
         });
-      if (isCompactViewport) {
-        setPhoneLayout(
-          Object.fromEntries(
-            rows.map((person) => {
-              const position = layout.positions.get(person.id);
-              return [person.id, { treeX: position?.rawX ?? null, treeY: position?.rawY ?? null }];
-            }),
-          ),
-        );
-      }
       if (apiState === 'connected') {
-        if (!isCompactViewport) {
-          const positions = rows.filter((person) => person._id).map((person) => ({ id: person._id, treeX: person.treeX, treeY: person.treeY }));
-          const saved = await fetch('/api/people/layout/positions', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ positions }),
-          });
-          if (!saved.ok) throw Error('Could not preserve the current tree layout');
-        }
+        const positions = rows.filter((person) => person._id).map((person) => ({ id: person._id, treeX: person.treeX, treeY: person.treeY }));
+        const saved = await fetch('/api/people/layout/positions', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ positions }),
+        });
+        if (!saved.ok) throw Error('Could not preserve the current tree layout');
         const ids = removedPeople.filter((person) => person._id).map((person) => person._id);
         if (ids.length) {
           const response = await fetch('/api/people/batch', {
@@ -1006,7 +1002,9 @@ export default function App() {
     if (!viewport) return;
     const availableWidth = Math.max(1, viewport.clientWidth - 48);
     const availableHeight = Math.max(1, viewport.clientHeight - 48);
-    const fittedZoom = Math.max(0.1, Math.min(1, availableWidth / treeBoardWidth, availableHeight / treeBoardHeight));
+    const contentWidth = Math.max(1, maxNodeX - minNodeX);
+    const contentHeight = Math.max(1, maxNodeY - minNodeY);
+    const fittedZoom = Math.max(0.1, Math.min(1, maxCanvasZoom, availableWidth / contentWidth, availableHeight / contentHeight));
     zoomValue.current = fittedZoom;
     setZoom(fittedZoom);
     requestAnimationFrame(() => {
@@ -1097,6 +1095,7 @@ export default function App() {
       mode: 'person',
       id: p.id,
       personId: p._id,
+      compactViewport: isCompactViewport,
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
@@ -1172,6 +1171,7 @@ export default function App() {
       if (d.mode === 'select-only') return;
       if (d.mode === 'touch-pending') d.mode = d.readyForMarquee ? 'marquee' : 'pan';
       if (d.mode === 'select') d.mode = 'pan';
+      if (d.mode === 'person' || d.mode === 'pan') manualZoomTouched.current = true;
       if (d.mode === 'marquee') {
         const viewport = treeScroll.current;
         if (!viewport) return;
@@ -1201,7 +1201,7 @@ export default function App() {
       if (!d.frame)
         d.frame = requestAnimationFrame(() => {
           d.frame = 0;
-          if (isCompactViewport) {
+          if (d.compactViewport) {
             const deltaX = d.lastX - d.x;
             const deltaY = d.lastY - d.y;
             const nextPositions = d.familyPositions
@@ -1284,64 +1284,42 @@ export default function App() {
         .map((position) => ({ id: position.person.id, x: position.rawX, y: position.rawY, w: position.w, h: position.h }));
       const resolved = resolveNodeOverlaps(moving, stationary);
       const resolvedById = new Map(resolved.map((position) => [position.id, position]));
-      if (!isCompactViewport)
-        setPeople((previous) =>
-          previous.map((person) => {
-            const position = resolvedById.get(person.id);
-            return position ? { ...person, treeX: position.x, treeY: position.y } : person;
-          }),
-        );
+      setPeople((previous) =>
+        previous.map((person) => {
+          const position = resolvedById.get(person.id);
+          return position ? { ...person, treeX: position.x, treeY: position.y } : person;
+        }),
+      );
       setSelectedId(d.id);
       if (!d.groupSelection) setSelectedNodeIds([]);
-      if (isCompactViewport) {
-        setPhoneLayout((previous) => {
-          const next = { ...previous };
-          resolvedById.forEach((position, id) => {
-            next[id] = { treeX: position.x, treeY: position.y };
-          });
-          return next;
-        });
+      if (d.compactViewport) {
         setPhoneLayoutPreview((previous) => {
           const next = { ...previous };
           movingIds.forEach((id) => delete next[id]);
           return next;
         });
-        notify(d.familyPositions ? 'Phone positions saved on this device' : 'Phone position saved on this device');
-      } else if (d.familyPositions) {
-        const positions = d.familyPositions
-          .filter((position) => position.personId)
-          .map((position) => {
-            const resolvedPosition = resolvedById.get(position.id);
-            return resolvedPosition ? { id: position.personId, treeX: resolvedPosition.x, treeY: resolvedPosition.y } : null;
-          })
-          .filter(Boolean);
-        if (positions.length) {
-          try {
-            const response = await fetch('/api/people/layout/positions', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ positions }),
-            });
-            if (!response.ok) throw Error();
-            notify(d.groupSelection ? 'Selected positions saved' : 'Family positions saved');
-          } catch {
-            notify('Family moved for this session; positions could not be saved');
-          }
-        } else notify('Family moved');
-      } else if (d.personId) {
-        const position = resolvedById.get(d.id);
+      }
+      const draggedPersonIds = new Map((d.familyPositions || [{ id: d.id, personId: d.personId }]).map((person) => [person.id, person.personId]));
+      const databasePositions = moving
+        .map((position) => {
+          const resolvedPosition = resolvedById.get(position.id);
+          const personId = draggedPersonIds.get(position.id);
+          return resolvedPosition && personId ? { id: personId, treeX: resolvedPosition.x, treeY: resolvedPosition.y } : null;
+        })
+        .filter(Boolean);
+      if (databasePositions.length) {
         try {
-          const r = await fetch(`/api/people/${d.personId}`, {
+          const response = await fetch('/api/people/layout/positions', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ treeX: position?.x ?? d.lastX, treeY: position?.y ?? d.lastY }),
+            body: JSON.stringify({ positions: databasePositions }),
           });
-          if (!r.ok) throw Error();
-          notify('Position saved');
+          if (!response.ok) throw Error();
+          notify(d.familyPositions ? 'Selected positions saved' : 'Position saved');
         } catch {
-          notify('Moved for this session; the position could not be saved');
+          notify(d.familyPositions ? 'Moved for this session; positions could not be saved' : 'Moved for this session; the position could not be saved');
         }
-      }
+      } else notify(d.familyPositions ? 'Positions saved on this device' : 'Position saved on this device');
     }
     window.addEventListener('pointermove', onMove, { passive: false });
     window.addEventListener('pointerup', onUp);
