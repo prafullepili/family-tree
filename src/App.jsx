@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { initialPeople } from './demoFamily.js';
 import { layoutTree, resolveNodeOverlaps } from './layoutTree.js';
+import { relationshipPlacement } from './relationshipPlacement.js';
 
 const fullName = (p) => [p?.firstName, p?.lastName].filter(Boolean).join(' ') || 'Unnamed person';
 function storageGet(key) {
@@ -741,8 +742,15 @@ export default function App() {
   async function saveMember(values) {
     const prior = modal.person;
     const { childIds = [], ...memberValues } = values;
+    const currentPositions = new Map([...layoutTree(people).positions, ...layout.positions]);
+    const placement = relationshipPlacement(people, values, prior, currentPositions);
+    const anchoredPeople = placement ? people.map((person) => {
+      const position = currentPositions.get(person.id);
+      return position ? { ...person, treeX: position.rawX, treeY: position.rawY } : person;
+    }) : people;
     const payload = {
       ...memberValues,
+      ...placement,
       parentIds: (values.parentIds || []).filter((id) => people.some((p) => p.id === id && p._id)),
       partnerIds: (values.partnerIds || []).filter((id) => people.some((p) => p.id === id && p._id)),
       siblingIds: (values.siblingIds || []).filter((id) => people.some((p) => p.id === id && p._id)),
@@ -751,6 +759,17 @@ export default function App() {
     };
     if (apiState === 'connected') {
       try {
+        if (placement) {
+          const positions = anchoredPeople.filter((person) => person._id && person.id !== prior?.id &&
+            (!Number.isFinite(people.find((item) => item.id === person.id)?.treeX) || !Number.isFinite(people.find((item) => item.id === person.id)?.treeY)))
+            .map((person) => ({ id: person._id, treeX: person.treeX, treeY: person.treeY }));
+          if (positions.length) {
+            const response = await fetch('/api/people/layout/positions', {
+              method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ positions }),
+            });
+            if (!response.ok) throw Error('Could not preserve the family positions');
+          }
+        }
         const r = await fetch(prior ? `/api/people/${prior._id}` : '/api/people', {
           method: prior ? 'PATCH' : 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -789,11 +808,12 @@ export default function App() {
     const newPerson = {
       ...prior,
       ...values,
+      ...placement,
       id,
       _id: null,
       color: prior?.color || ['sage', 'rose', 'blue', 'peach', 'lavender', 'yellow', 'mint', 'pink'][people.length % 8],
     };
-    let rows = prior ? people.map((p) => (p.id === id ? newPerson : p)) : [...people, newPerson];
+    let rows = prior ? anchoredPeople.map((p) => (p.id === id ? newPerson : p)) : [...anchoredPeople, newPerson];
     const currentChildren = new Set(prior ? people.filter((person) => (person.parentIds || []).includes(prior.id)).map((person) => person.id) : []);
     const nextChildren = new Set(childIds);
     const currentPartners = new Set(prior?.partnerIds || []);
