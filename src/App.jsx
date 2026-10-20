@@ -26,6 +26,7 @@ import {
   Camera,
   RefreshCw,
   Info,
+  Palette,
 } from 'lucide-react';
 import { initialPeople } from './demoFamily.js';
 import { layoutTree, resolveNodeOverlaps } from './layoutTree.js';
@@ -96,6 +97,51 @@ function descendantIds(people, personId) {
   }
   return [...found];
 }
+function familyColorMap(people, focalId) {
+  const byId = new Map(people.map((person) => [person.id, person]));
+  const colors = new Map();
+  if (!byId.has(focalId)) return colors;
+  colors.set(focalId, 'focal');
+
+  const visitedAncestors = new Set([focalId]);
+  function addAncestors(personId, branch, depth, path) {
+    const person = byId.get(personId);
+    (person?.parentIds || []).filter((id) => byId.has(id)).forEach((parentId, index) => {
+      if (path.has(parentId)) return;
+      const parent = byId.get(parentId);
+      const side = depth === 0
+        ? parent.gender === 'male' ? 'paternal' : parent.gender === 'female' ? 'maternal' : index === 0 ? 'paternal' : 'maternal'
+        : branch;
+      const ancestorGender = parent.gender === 'female' || parent.gender === 'male' ? parent.gender : 'unknown';
+      const color = depth === 0 ? (side === 'paternal' ? 'father' : 'mother') : `${side}-${ancestorGender}`;
+      if (!colors.has(parentId)) colors.set(parentId, color);
+      if (visitedAncestors.has(parentId)) return;
+      visitedAncestors.add(parentId);
+      addAncestors(parentId, side, depth + 1, new Set([...path, parentId]));
+    });
+  }
+  addAncestors(focalId, '', 0, new Set([focalId]));
+
+  const childrenByParent = new Map();
+  people.forEach((person) =>
+    (person.parentIds || []).forEach((parentId) => {
+      if (!childrenByParent.has(parentId)) childrenByParent.set(parentId, []);
+      childrenByParent.get(parentId).push(person);
+    }),
+  );
+  const visitedDescendants = new Set([focalId]);
+  function addDescendants(personId) {
+    (childrenByParent.get(personId) || []).forEach((child) => {
+      if (visitedDescendants.has(child.id)) return;
+      const gender = child.gender === 'female' || child.gender === 'male' ? child.gender : 'unknown';
+      if (!colors.has(child.id)) colors.set(child.id, `descendant-${gender}`);
+      visitedDescendants.add(child.id);
+      addDescendants(child.id);
+    });
+  }
+  addDescendants(focalId);
+  return colors;
+}
 function linkLabelPoint(edge, label, positions, placedLabels, straight = false) {
   const halfWidth = Math.max(22, label.length * 3.1);
   const curveXs = [edge.x1, edge.x2, edge.c1x, edge.c2x].filter(Number.isFinite);
@@ -144,7 +190,7 @@ function getFamilyGroups(people) {
   const byId = new Map(people.map((person) => [person.id, person]));
   const links = new Map(people.map((person) => [person.id, new Set()]));
   people.forEach((person) =>
-    [...(person.parentIds || []), ...(person.partnerIds || [])].forEach((id) => {
+    [...(person.parentIds || []), ...(person.partnerIds || []), ...(person.siblingIds || [])].forEach((id) => {
       if (byId.has(id)) {
         links.get(person.id).add(id);
         links.get(id).add(person.id);
@@ -185,6 +231,7 @@ function fromApi(p) {
     id: String(p._id),
     parentIds: (p.parentIds || []).map((x) => String(x._id || x)),
     partnerIds: (p.partnerIds || []).map((x) => String(x._id || x)),
+    siblingIds: (p.siblingIds || []).map((x) => String(x._id || x)),
     partnerRelationships: (p.partnerRelationships || []).map((link) => ({
       partnerId: String(link.partnerId?._id || link.partnerId),
       label: link.label || '',
@@ -261,8 +308,11 @@ export default function App() {
   const [familyPickerOpen, setFamilyPickerOpen] = useState(false);
   const [familyQuery, setFamilyQuery] = useState('');
   const [linkStyle, setLinkStyle] = useState(() => (['direct', 'classic'].includes(storageGet('kinfolk-link-style')) ? storageGet('kinfolk-link-style') : 'classic'));
+  const [familyColorsEnabled, setFamilyColorsEnabled] = useState(() => storageGet('kinfolk-family-colors-v1') === 'true');
   const [selectedId, setSelectedId] = useState(() => initialCache.people[0]?.id || '');
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
+  const [aboutTooltipId, setAboutTooltipId] = useState('');
+  const [dismissedAboutTooltipId, setDismissedAboutTooltipId] = useState('');
   const [movementLocked, setMovementLocked] = useState(() => storageGet('kinfolk-canvas-movement-locked-v2') === 'true');
   const [marqueeRect, setMarqueeRect] = useState(null);
   const [phoneLayoutPreview, setPhoneLayoutPreview] = useState({});
@@ -308,6 +358,8 @@ export default function App() {
   const families = useMemo(() => getFamilyGroups(people), [people]);
   const selectedFamily = selectedFamilyId === '__all__' ? null : families.find((group) => group.id === selectedFamilyId) || [...families].sort((a, b) => b.people.length - a.people.length)[0];
   const familyPeople = selectedFamilyId === '__all__' ? people : selectedFamily?.people || people;
+  const familyColorFocusId = familyPeople.some((person) => person.id === selectedId) ? selectedId : familyPeople[0]?.id;
+  const familyColors = useMemo(() => familyColorMap(familyPeople, familyColorFocusId), [familyPeople, familyColorFocusId]);
   const selected = people.find((p) => p.id === selectedId) || null;
   const byId = (id) => people.find((p) => p.id === id);
   const layoutPeople = useMemo(() => {
@@ -414,6 +466,9 @@ export default function App() {
   useEffect(() => {
     storageSet('kinfolk-link-style', linkStyle);
   }, [linkStyle]);
+  useEffect(() => {
+    storageSet('kinfolk-family-colors-v1', String(familyColorsEnabled));
+  }, [familyColorsEnabled]);
   useLayoutEffect(() => {
     zoomValue.current = zoom;
     const anchor = pendingZoomAnchor.current;
@@ -479,6 +534,27 @@ export default function App() {
     if (!sidebarOpen || !selectedId) return;
     memberList.current?.querySelector('.member-list-item.active')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [selectedId, sidebarOpen]);
+  useEffect(() => {
+    if (!aboutTooltipId) return;
+    const closeOnOutsidePointer = (event) => {
+      if (!event.target?.closest?.('.tree-node-about-wrap.is-open')) {
+        setDismissedAboutTooltipId(aboutTooltipId);
+        setAboutTooltipId('');
+      }
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') {
+        setDismissedAboutTooltipId(aboutTooltipId);
+        setAboutTooltipId('');
+      }
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer, true);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer, true);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [aboutTooltipId]);
   useEffect(() => {
     setSelectedNodeIds([]);
   }, [selectedFamilyId]);
@@ -700,6 +776,7 @@ export default function App() {
       ...placement,
       parentIds: (values.parentIds || []).filter((id) => people.some((p) => p.id === id && p._id)),
       partnerIds: (values.partnerIds || []).filter((id) => people.some((p) => p.id === id && p._id)),
+      siblingIds: [...new Set([...(prior?.siblingIds || []), ...(!prior && modal.kind === 'sibling' && modal.parent ? [modal.parent.id] : [])])].filter((id) => people.some((p) => p.id === id && p._id)),
       partnerRelationships: (values.partnerRelationships || []).filter((link) => (values.partnerIds || []).includes(link.partnerId) && people.some((p) => p.id === link.partnerId && p._id)),
     };
     if (apiState === 'connected') {
@@ -755,6 +832,7 @@ export default function App() {
       ...placement,
       id,
       _id: null,
+      siblingIds: [...new Set([...(prior?.siblingIds || []), ...(!prior && modal.kind === 'sibling' && modal.parent ? [modal.parent.id] : [])])],
       color: prior?.color || ['sage', 'rose', 'blue', 'peach', 'lavender', 'yellow', 'mint', 'pink'][people.length % 8],
     };
     let rows = prior ? people.map((p) => (p.id === id ? newPerson : p)) : [...people, newPerson];
@@ -787,6 +865,7 @@ export default function App() {
       return updated;
     });
     if (!prior && modal.kind === 'parent' && modal.parent) rows = rows.map((p) => (p.id === modal.parent.id ? { ...p, parentIds: [...new Set([...(p.parentIds || []), id])] } : p));
+    if (!prior && modal.kind === 'sibling' && modal.parent) rows = rows.map((p) => (p.id === modal.parent.id ? { ...p, siblingIds: [...new Set([...(p.siblingIds || []), id])] } : p));
     setPeople(rows);
     setSelectedId(id);
     setModal(null);
@@ -808,6 +887,7 @@ export default function App() {
             ...person,
             parentIds: (person.parentIds || []).filter((id) => !removalIds.has(id)),
             partnerIds: (person.partnerIds || []).filter((id) => !removalIds.has(id)),
+            siblingIds: (person.siblingIds || []).filter((id) => !removalIds.has(id)),
             partnerRelationships: (person.partnerRelationships || []).filter((link) => !removalIds.has(link.partnerId)),
             treeX: position?.rawX ?? person.treeX,
             treeY: position?.rawY ?? person.treeY,
@@ -1077,7 +1157,7 @@ export default function App() {
   }
   function startDrag(e, p, pos) {
     if (e.button !== 0) return;
-    if (e.target.closest('.tree-node-info,.tree-node-delete,.tree-node-add,.tree-node-about,.node-add-menu')) return;
+    if (e.target.closest('.tree-node-info,.tree-node-delete,.tree-node-add,.tree-node-about,.tree-node-about-tooltip,.node-add-menu')) return;
     e.preventDefault();
     e.stopPropagation();
     if (movementLocked) {
@@ -1556,13 +1636,26 @@ export default function App() {
           </div>
         </header>
         <div className="tree-toolbar-simple">
-          <label className="link-style-toolbar-field">
-            <span>LINK STYLE</span>
-            <select className="link-style-select" value={linkStyle} onChange={(e) => setLinkStyle(e.target.value)}>
-              <option value="direct">Direct links</option>
-              <option value="classic">Classic branches</option>
-            </select>
-          </label>
+          <div className="tree-toolbar-settings">
+            <label className="link-style-toolbar-field">
+              <span>LINK STYLE</span>
+              <select className="link-style-select" value={linkStyle} onChange={(e) => setLinkStyle(e.target.value)}>
+                <option value="direct">Direct links</option>
+                <option value="classic">Classic branches</option>
+              </select>
+            </label>
+            <button
+              className={`family-color-toggle ${familyColorsEnabled ? 'active' : ''}`}
+              type="button"
+              aria-label={familyColorsEnabled ? 'Turn off family branch colors' : 'Turn on family branch colors'}
+              aria-pressed={familyColorsEnabled}
+              title="Color ancestors and descendants around the selected person"
+              onClick={() => setFamilyColorsEnabled((enabled) => !enabled)}
+            >
+              <Palette size={14} />
+              <span>Family colors</span>
+            </button>
+          </div>
           <div className="tree-count">
             <UsersRound size={15} />
             <span>{apiState === 'checking' && (!hasMongoSnapshot || !people.length) ? 'Loading family…' : `${familyPeople.length} ${familyPeople.length === 1 ? 'person' : 'people'}`}</span>
@@ -1724,7 +1817,7 @@ export default function App() {
                     <div
                       key={person.id}
                       data-person-id={person.id}
-                      className={`tree-person ${selectedId === person.id || selectedNodeIds.includes(person.id) ? 'selected' : ''}`}
+                      className={`tree-person ${selectedId === person.id || selectedNodeIds.includes(person.id) ? 'selected' : ''} ${familyColorsEnabled && familyColors.has(person.id) ? `family-colored family-color-${familyColors.get(person.id)}` : ''}`}
                       style={{ left: pos.x, top: pos.y }}
                       onPointerDown={(e) => {
                         if (e.pointerType === 'touch') startDrag(e, person, pos);
@@ -1764,16 +1857,66 @@ export default function App() {
                       >
                         {isDetailsVisible ? <EyeOff size={13} /> : <Eye size={13} />}
                       </button>
-                      <div className="tree-node-about-wrap">
-                        <button className="tree-node-about" aria-label={`Information about ${fullName(person)}`} onPointerDown={(e) => e.stopPropagation()}>
+                      <div
+                        className={`tree-node-about-wrap ${aboutTooltipId === person.id ? 'is-open' : ''} ${dismissedAboutTooltipId === person.id ? 'is-dismissed' : ''}`}
+                        onPointerEnter={(event) => {
+                          if (event.pointerType !== 'touch' && dismissedAboutTooltipId === person.id) {
+                            setDismissedAboutTooltipId('');
+                          }
+                        }}
+                      >
+                        <button
+                          className="tree-node-about"
+                          aria-label={`Information about ${fullName(person)}`}
+                          aria-describedby={`tree-person-tooltip-${person.id}`}
+                          aria-expanded={aboutTooltipId === person.id}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (aboutTooltipId === person.id) {
+                              setDismissedAboutTooltipId(person.id);
+                              setAboutTooltipId('');
+                            } else {
+                              setDismissedAboutTooltipId('');
+                              setAboutTooltipId(person.id);
+                            }
+                          }}
+                        >
                           <Info size={13} />
                         </button>
-                        <div className="tree-node-about-tooltip" onPointerDown={(e) => e.stopPropagation()}>
-                          <strong>{fullName(person)}</strong>
-                          <span>Gender: {person.gender && person.gender !== 'unspecified' ? person.gender : 'Not specified'}</span>
-                          <span>Born: {person.birthDate ? year(person.birthDate) : 'Not added'}</span>
-                          {person.birthPlace && <span>Place: {person.birthPlace}</span>}
-                          {person.occupation && <span>Occupation: {person.occupation}</span>}
+                        <div
+                          id={`tree-person-tooltip-${person.id}`}
+                          className="tree-node-about-tooltip"
+                          role="tooltip"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                        >
+                          <div className="tree-node-about-heading">
+                            <span>PERSON DETAILS</span>
+                            <strong>{fullName(person)}</strong>
+                          </div>
+                          <div className="tree-node-about-facts">
+                            <div className="tree-node-about-fact">
+                              <span>Gender</span>
+                              <strong>{person.gender && person.gender !== 'unspecified' ? `${person.gender[0].toUpperCase()}${person.gender.slice(1)}` : 'Not specified'}</strong>
+                            </div>
+                            <div className="tree-node-about-fact">
+                              <span>Born</span>
+                              <strong>{person.birthDate ? year(person.birthDate) : 'Not added'}</strong>
+                            </div>
+                            {person.birthPlace && (
+                              <div className="tree-node-about-fact">
+                                <span>Birthplace</span>
+                                <strong>{person.birthPlace}</strong>
+                              </div>
+                            )}
+                            {person.occupation && (
+                              <div className="tree-node-about-fact">
+                                <span>Occupation</span>
+                                <strong>{person.occupation}</strong>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <button
@@ -1813,42 +1956,42 @@ export default function App() {
                     </div>
                   );
                 })}
-                {apiState === 'checking' && (!hasMongoSnapshot || !people.length) ? (
-                  <div className="tree-loading" role="status" aria-live="polite">
-                    <span className="loading-spinner" />
-                    <span>Loading your family tree…</span>
-                  </div>
-                ) : (
-                  !familyPeople.length && (
-                    <div className="tree-empty">
-                      <div className="tree-empty-icon">
-                        <GitFork size={26} />
-                      </div>
-                      {apiState === 'error' ? (
-                        <>
-                          <h2>Couldn’t load your family tree</h2>
-                          <p>Check that the API and MongoDB are running, then try again.</p>
-                          <button className="add-person-button" onClick={refreshFromDatabase} disabled={isRefreshing}>
-                            {isRefreshing ? 'Refreshing…' : 'Try again'}
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <h2>Start your family tree</h2>
-                          <p>Add a person, then link parents and partners to build the branches.</p>
-                          <button className="add-person-button" onClick={() => openAddPersonForm()}>
-                            <Plus size={16} />
-                            Add first person
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )
-                )}
               </div>
             </div>
             {marqueeRect && <div className="marquee-selection" style={{ left: marqueeRect.left, top: marqueeRect.top, width: marqueeRect.width, height: marqueeRect.height }} aria-hidden="true" />}
           </div>
+          {apiState === 'checking' && (!hasMongoSnapshot || !people.length) ? (
+            <div className="tree-loading" role="status" aria-live="polite">
+              <span className="loading-spinner" />
+              <span>Loading your family tree…</span>
+            </div>
+          ) : (
+            !familyPeople.length && (
+              <div className="tree-empty">
+                <div className="tree-empty-icon">
+                  <GitFork size={26} />
+                </div>
+                {apiState === 'error' ? (
+                  <>
+                    <h2>Couldn’t load your family tree</h2>
+                    <p>Check that the API and MongoDB are running, then try again.</p>
+                    <button className="add-person-button" onClick={refreshFromDatabase} disabled={isRefreshing}>
+                      {isRefreshing ? 'Refreshing…' : 'Try again'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <h2>Start your family tree</h2>
+                    <p>Add a person, then link parents and partners to build the branches.</p>
+                    <button className="add-person-button" onClick={() => openAddPersonForm()}>
+                      <Plus size={16} />
+                      Add first person
+                    </button>
+                  </>
+                )}
+              </div>
+            )
+          )}
           <div className="canvas-zoom-controls">
             <button onClick={() => zoomTo(Math.min(maxCanvasZoom, +(zoomValue.current + 0.1).toFixed(2)))} aria-label="Zoom in">
               <Plus size={17} />
@@ -1966,7 +2109,7 @@ export default function App() {
                     label: partnerDisplayLabel(selected, byId(id)),
                   })),
                   ...people.filter((p) => (p.parentIds || []).includes(selected.id)).map((p) => ({ id: p.id, role: 'Child' })),
-                  ...people.filter((p) => p.id !== selected.id && (p.parentIds || []).some((parentId) => (selected.parentIds || []).includes(parentId))).map((p) => ({ id: p.id, role: 'Sibling' })),
+                  ...people.filter((p) => p.id !== selected.id && ((p.siblingIds || []).includes(selected.id) || (p.parentIds || []).some((parentId) => (selected.parentIds || []).includes(parentId)))).map((p) => ({ id: p.id, role: 'Sibling' })),
                 ].map(
                   (link, i) =>
                     byId(link.id) && (

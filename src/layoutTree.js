@@ -403,6 +403,17 @@ export function layoutTree(people) {
   });
 
   const siblingGroups = new Map();
+  const siblingEdgeKeys = new Set();
+  const inferredSiblingPairs = new Set();
+  const addSiblingEdge = (firstId, secondId) => {
+    if (!positions.has(firstId) || !positions.has(secondId) || firstId === secondId) return;
+    const key = [firstId, secondId].sort().join(':');
+    if (siblingEdgeKeys.has(key)) return;
+    siblingEdgeKeys.add(key);
+    const first = positions.get(firstId);
+    const second = positions.get(secondId);
+    edges.push({ kind: 'sibling', fromId: firstId, toId: secondId, ...connectRectangles(first, second) });
+  };
   people.forEach((person) => {
     const parentKey = [...(person.parentIds || [])]
       .filter((id) => positions.has(id))
@@ -414,12 +425,21 @@ export function layoutTree(people) {
   });
   siblingGroups.forEach((siblings) => {
     const ordered = siblings.sort((a, b) => positions.get(a.id).x - positions.get(b.id).x);
+    for (let first = 0; first < ordered.length; first++) {
+      for (let second = first + 1; second < ordered.length; second++) {
+        inferredSiblingPairs.add([ordered[first].id, ordered[second].id].sort().join(':'));
+      }
+    }
     for (let index = 0; index < ordered.length - 1; index++) {
-      const left = positions.get(ordered[index].id);
-      const right = positions.get(ordered[index + 1].id);
-      edges.push({ kind: 'sibling', fromId: ordered[index].id, toId: ordered[index + 1].id, ...connectRectangles(left, right) });
+      addSiblingEdge(ordered[index].id, ordered[index + 1].id);
     }
   });
+  people.forEach((person) =>
+    (person.siblingIds || []).forEach((siblingId) => {
+      const key = [person.id, siblingId].sort().join(':');
+      if (!inferredSiblingPairs.has(key)) addSiblingEdge(person.id, siblingId);
+    }),
+  );
 
   const childrenByParents = new Map();
   people.forEach((person) => {

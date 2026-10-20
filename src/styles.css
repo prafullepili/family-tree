@@ -2891,11 +2891,13 @@ button {
 .tree-empty {
   position: absolute;
   inset: 0;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
+  padding: 20px;
 }
 .tree-loading {
   position: absolute;
@@ -4078,6 +4080,7 @@ button {
 }
 .tree-person:hover .tree-node-about,
 .tree-person.selected .tree-node-about,
+.tree-node-about-wrap.is-open .tree-node-about,
 .tree-node-about:focus-visible {
   opacity: 1;
   pointer-events: auto;
@@ -4087,30 +4090,33 @@ button {
   border-color: var(--accent);
 }
 .tree-person:has(.tree-node-about-wrap:hover),
-.tree-person:has(.tree-node-about-wrap:focus-within) {
+.tree-person:has(.tree-node-about-wrap:focus-within),
+.tree-person:has(.tree-node-about-wrap.is-open) {
   z-index: 25;
 }
 .tree-node-about-tooltip {
   position: absolute;
-  top: calc(100% + 7px);
-  right: 0;
-  width: 220px;
+  top: -7px;
+  right: calc(100% + 11px);
+  width: 248px;
+  max-width: min(248px, calc(100vw - 32px));
   display: grid;
-  gap: 5px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
+  gap: 9px;
+  padding: 13px 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  backdrop-filter: blur(12px);
   color: var(--text);
-  box-shadow: 0 8px 24px #111a1426;
-  font-size: 10px;
-  line-height: 1.4;
+  box-shadow: 0 14px 34px #0c17112e, 0 2px 8px #0c171118;
+  font-size: 11px;
+  line-height: 1.45;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-3px);
+  transform: translateX(4px);
   transition:
-    opacity 0.12s,
-    transform 0.12s,
+    opacity 0.16s ease,
+    transform 0.16s ease,
     visibility 0.12s;
   pointer-events: auto;
   user-select: text;
@@ -4122,17 +4128,79 @@ button {
   user-select: text;
   -webkit-user-select: text;
 }
-.tree-node-about-wrap:hover .tree-node-about-tooltip,
-.tree-node-about-wrap:focus-within .tree-node-about-tooltip {
+.tree-node-about-wrap:not(.is-dismissed):focus-within .tree-node-about-tooltip,
+.tree-node-about-wrap.is-open .tree-node-about-tooltip {
   opacity: 1;
   visibility: visible;
-  transform: translateY(0);
+  transform: translateX(0);
 }
-.tree-node-about-tooltip strong {
-  font-size: 12px;
+@media (hover: hover) {
+  .tree-node-about-wrap:not(.is-dismissed):hover .tree-node-about-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0);
+  }
 }
-.tree-node-about-tooltip span {
+.tree-node-about-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 15px;
+  right: -5px;
+  width: 8px;
+  height: 8px;
+  transform: rotate(45deg);
+  border-top: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent));
+  border-right: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent));
+  background: var(--surface);
+}
+.tree-node-about-heading {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--border);
+}
+.tree-node-about-heading > span {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 1px;
+}
+.tree-node-about-heading > strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.tree-node-about-facts {
+  display: grid;
+  gap: 1px;
+}
+.tree-node-about-fact {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+.tree-node-about-fact > span {
+  flex: none;
+  color: var(--muted);
+  font-size: 10px;
+}
+.tree-node-about-fact > strong {
+  min-width: 0;
   color: var(--text-soft);
+  font-size: 10px;
+  font-weight: 650;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tree-node-about-tooltip {
+    transition: none;
+  }
 }
 .simple-form-grid select {
   width: 100%;
@@ -4150,10 +4218,6 @@ button {
 
 .tree-node-about-wrap {
   left: -7px;
-  right: auto;
-}
-.tree-node-about-tooltip {
-  left: 0;
   right: auto;
 }
 
@@ -4654,4 +4718,185 @@ button {
 .add-person-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.tree-toolbar-settings {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-width: 0;
+}
+.tree-toolbar-settings .link-style-toolbar-field {
+  margin-right: 0;
+}
+.family-color-toggle {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.14s,
+    border-color 0.14s,
+    color 0.14s;
+}
+.family-color-toggle:hover,
+.family-color-toggle.active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.family-color-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.tree-person.family-colored {
+  --family-card-bg: #fff;
+  --family-card-border: #dfe5df;
+  --family-card-text: #314139;
+  --family-card-muted: #68766d;
+}
+.tree-person.family-color-focal {
+  --family-card-bg: #fff;
+  --family-card-border: #75d8e9;
+}
+.tree-person.family-color-father,
+.tree-person.family-color-paternal-male {
+  --family-card-bg: #c9eff8;
+  --family-card-border: #53c6df;
+}
+.tree-person.family-color-mother,
+.tree-person.family-color-maternal-male {
+  --family-card-bg: #ffdddd;
+  --family-card-border: #ff9f9f;
+}
+.tree-person.family-color-paternal-female {
+  --family-card-bg: #dcf0ad;
+  --family-card-border: #9ccf65;
+}
+.tree-person.family-color-maternal-female {
+  --family-card-bg: #ffebbb;
+  --family-card-border: #f5c65e;
+}
+.tree-person.family-color-paternal-unknown {
+  --family-card-bg: #e1f3f7;
+  --family-card-border: #8ecfdd;
+}
+.tree-person.family-color-maternal-unknown {
+  --family-card-bg: #f8e9e8;
+  --family-card-border: #e0b1ac;
+}
+.tree-person.family-color-descendant-male {
+  --family-card-bg: #dfdcff;
+  --family-card-border: #aaa4ff;
+}
+.tree-person.family-color-descendant-female {
+  --family-card-bg: #f5d8ef;
+  --family-card-border: #e8a9d7;
+}
+.tree-person.family-color-descendant-unknown {
+  --family-card-bg: #ecefed;
+  --family-card-border: #c8d0ca;
+}
+.tree-person.family-colored .tree-person-card {
+  border-color: var(--family-card-border);
+  background: var(--family-card-bg);
+}
+.tree-person.family-colored .tree-person-copy strong {
+  color: var(--family-card-text);
+}
+.tree-person.family-colored .tree-person-copy small,
+.tree-person.family-colored .drag-grip {
+  color: var(--family-card-muted);
+}
+.tree-person.selected.family-colored .tree-person-card {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent),
+    0 4px 13px #1a2a1d0d;
+}
+.theme-dark .tree-person.family-colored {
+  --family-card-text: #edf4ee;
+  --family-card-muted: #bdc9bf;
+}
+.theme-dark .tree-person.family-color-focal {
+  --family-card-bg: #293c32;
+  --family-card-border: #83c9d8;
+}
+.theme-dark .tree-person.family-color-father,
+.theme-dark .tree-person.family-color-paternal-male {
+  --family-card-bg: #29444b;
+  --family-card-border: #5bbbd1;
+}
+.theme-dark .tree-person.family-color-mother,
+.theme-dark .tree-person.family-color-maternal-male {
+  --family-card-bg: #4b353a;
+  --family-card-border: #d58f9a;
+}
+.theme-dark .tree-person.family-color-paternal-female {
+  --family-card-bg: #3b472c;
+  --family-card-border: #a8ca71;
+}
+.theme-dark .tree-person.family-color-maternal-female {
+  --family-card-bg: #4b412b;
+  --family-card-border: #dfbd65;
+}
+.theme-dark .tree-person.family-color-paternal-unknown {
+  --family-card-bg: #2e4145;
+  --family-card-border: #80bdca;
+}
+.theme-dark .tree-person.family-color-maternal-unknown {
+  --family-card-bg: #43393a;
+  --family-card-border: #c59b98;
+}
+.theme-dark .tree-person.family-color-descendant-male {
+  --family-card-bg: #3a3851;
+  --family-card-border: #aaa4ec;
+}
+.theme-dark .tree-person.family-color-descendant-female {
+  --family-card-bg: #493649;
+  --family-card-border: #d898c8;
+}
+.theme-dark .tree-person.family-color-descendant-unknown {
+  --family-card-bg: #343c37;
+  --family-card-border: #778279;
+}
+@media (max-width: 520px) {
+  .tree-toolbar-simple {
+    gap: 6px;
+    padding-right: 9px;
+    padding-left: 9px;
+  }
+  .tree-toolbar-settings {
+    gap: 6px;
+  }
+  .family-color-toggle {
+    width: 30px;
+    padding: 0;
+  }
+  .family-color-toggle span {
+    display: none;
+  }
+}
+@media (max-width: 380px) {
+  .tree-toolbar-simple {
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+  .tree-toolbar-settings .link-style-toolbar-field .link-style-select {
+    width: 102px;
+  }
+  .tree-count span:first-of-type {
+    display: none;
+  }
 }

@@ -66,8 +66,8 @@ app.delete('/api/people/batch', async (req, res, next) => {
     if (!ids.length) return res.status(400).json({ error: 'At least one person id is required.' });
     const result = await Person.deleteMany({ _id: { $in: ids } });
     await Person.updateMany(
-      { $or: [{ parentIds: { $in: ids } }, { partnerIds: { $in: ids } }, { 'partnerRelationships.partnerId': { $in: ids } }] },
-      { $pull: { parentIds: { $in: ids }, partnerIds: { $in: ids }, partnerRelationships: { partnerId: { $in: ids } } } },
+      { $or: [{ parentIds: { $in: ids } }, { partnerIds: { $in: ids } }, { siblingIds: { $in: ids } }, { 'partnerRelationships.partnerId': { $in: ids } }] },
+      { $pull: { parentIds: { $in: ids }, partnerIds: { $in: ids }, siblingIds: { $in: ids }, partnerRelationships: { partnerId: { $in: ids } } } },
     );
     res.json({ deletedCount: result.deletedCount });
   } catch (e) {
@@ -87,10 +87,15 @@ async function syncPartners(person) {
     }),
   );
 }
+async function syncSiblings(person) {
+  await Person.updateMany({ siblingIds: person._id }, { $pull: { siblingIds: person._id } });
+  await Promise.all((person.siblingIds || []).map((siblingId) => Person.updateOne({ _id: siblingId }, { $addToSet: { siblingIds: person._id } })));
+}
 app.post('/api/people', async (req, res, next) => {
   try {
     const person = await Person.create(req.body);
     await syncPartners(person);
+    await syncSiblings(person);
     res.status(201).json(person);
   } catch (e) {
     next(e);
@@ -101,6 +106,7 @@ app.patch('/api/people/:id', async (req, res, next) => {
     const person = await Person.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     if (!person) return res.status(404).json({ error: 'Person not found' });
     await syncPartners(person);
+    await syncSiblings(person);
     res.json(person);
   } catch (e) {
     next(e);
@@ -111,8 +117,8 @@ app.delete('/api/people/:id', async (req, res, next) => {
     const person = await Person.findByIdAndDelete(req.params.id);
     if (!person) return res.status(404).json({ error: 'Person not found' });
     await Person.updateMany(
-      { $or: [{ parentIds: person._id }, { partnerIds: person._id }, { 'partnerRelationships.partnerId': person._id }] },
-      { $pull: { parentIds: person._id, partnerIds: person._id, partnerRelationships: { partnerId: person._id } } },
+      { $or: [{ parentIds: person._id }, { partnerIds: person._id }, { siblingIds: person._id }, { 'partnerRelationships.partnerId': person._id }] },
+      { $pull: { parentIds: person._id, partnerIds: person._id, siblingIds: person._id, partnerRelationships: { partnerId: person._id } } },
     );
     res.status(204).end();
   } catch (e) {
