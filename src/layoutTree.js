@@ -59,11 +59,12 @@ function connectParentChild(parent, child) {
 const NODE_COLLISION_GAP = 18;
 
 function hasNodeCollision(candidate, placed) {
-  return placed.some((other) =>
-    candidate.x < other.x + other.w + NODE_COLLISION_GAP &&
-    candidate.x + candidate.w + NODE_COLLISION_GAP > other.x &&
-    candidate.y < other.y + other.h + NODE_COLLISION_GAP &&
-    candidate.y + candidate.h + NODE_COLLISION_GAP > other.y,
+  return placed.some(
+    (other) =>
+      candidate.x < other.x + other.w + NODE_COLLISION_GAP &&
+      candidate.x + candidate.w + NODE_COLLISION_GAP > other.x &&
+      candidate.y < other.y + other.h + NODE_COLLISION_GAP &&
+      candidate.y + candidate.h + NODE_COLLISION_GAP > other.y,
   );
 }
 
@@ -316,7 +317,7 @@ export function layoutTree(people) {
     const automaticY = level * generationGap + partnerBranchOffset;
     const rawX = Number.isFinite(person.treeX) ? person.treeX : automaticX;
     const rawY = Number.isFinite(person.treeY) ? person.treeY : automaticY;
-    positions.set(person.id, { x: rawX, y: rawY, rawX, rawY, w: nodeWidth, h: nodeHeight, person });
+    positions.set(person.id, { x: rawX, y: rawY, rawX, rawY, automaticX, automaticY, w: nodeWidth, h: nodeHeight, person });
   });
 
   const collisionSafe = resolveNodeOverlaps(
@@ -329,8 +330,10 @@ export function layoutTree(people) {
     original.rawY = position.y;
   });
 
-  const minX = Math.min(0, ...[...positions.values()].map((position) => position.rawX));
-  const minY = Math.min(0, ...[...positions.values()].map((position) => position.rawY));
+  // Keep the canvas origin based on the automatic layout. Including manually
+  // moved nodes here cancels their movement whenever they cross x/y = 0.
+  const minX = Math.min(0, ...[...positions.values()].map((position) => position.automaticX));
+  const minY = Math.min(0, ...[...positions.values()].map((position) => position.automaticY));
   const originX = 60 - minX;
   const originY = 56 - minY;
   positions.forEach((position) => {

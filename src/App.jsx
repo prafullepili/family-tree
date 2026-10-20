@@ -110,25 +110,15 @@ function linkLabelPoint(edge, label, positions, placedLabels, straight = false) 
   const candidates = [];
   for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8]) {
     const u = 1 - t;
-    const x = straight
-      ? edge.x1 + (edge.x2 - edge.x1) * t
-      : u ** 3 * edge.x1 + 3 * u ** 2 * t * edge.c1x + 3 * u * t ** 2 * edge.c2x + t ** 3 * edge.x2;
-    const curveY = straight
-      ? edge.y1 + (edge.y2 - edge.y1) * t
-      : u ** 3 * edge.y1 + 3 * u ** 2 * t * edge.c1y + 3 * u * t ** 2 * edge.c2y + t ** 3 * edge.y2;
+    const x = straight ? edge.x1 + (edge.x2 - edge.x1) * t : u ** 3 * edge.x1 + 3 * u ** 2 * t * edge.c1x + 3 * u * t ** 2 * edge.c2x + t ** 3 * edge.x2;
+    const curveY = straight ? edge.y1 + (edge.y2 - edge.y1) * t : u ** 3 * edge.y1 + 3 * u ** 2 * t * edge.c1y + 3 * u * t ** 2 * edge.c2y + t ** 3 * edge.y2;
     for (const offsetY of [0, -24, 24, -42, 42, -60, 60, -78, 78]) {
       const point = { x, y: curveY - 9 + offsetY };
       let collisions = 0;
       nearbyPositions.forEach((position) => {
         const nodeRight = position.x + position.w;
         const nodeBottom = position.y + position.h;
-        if (
-          point.x + halfWidth > position.x - 6 &&
-          point.x - halfWidth < nodeRight + 6 &&
-          point.y + 8 > position.y - 6 &&
-          point.y - 8 < nodeBottom + 6
-        )
-          collisions += 1;
+        if (point.x + halfWidth > position.x - 6 && point.x - halfWidth < nodeRight + 6 && point.y + 8 > position.y - 6 && point.y - 8 < nodeBottom + 6) collisions += 1;
       });
       placedLabels.forEach((placed) => {
         if (Math.abs(point.x - placed.x) < halfWidth + placed.halfWidth + 6 && Math.abs(point.y - placed.y) < 18) collisions += 1;
@@ -273,7 +263,7 @@ export default function App() {
   const [linkStyle, setLinkStyle] = useState(() => (['direct', 'classic'].includes(storageGet('kinfolk-link-style')) ? storageGet('kinfolk-link-style') : 'classic'));
   const [selectedId, setSelectedId] = useState(() => initialCache.people[0]?.id || '');
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
-  const [movementLocked, setMovementLocked] = useState(() => storageGet('kinfolk-canvas-movement-locked-v1') !== 'false');
+  const [movementLocked, setMovementLocked] = useState(() => storageGet('kinfolk-canvas-movement-locked-v2') === 'true');
   const [marqueeRect, setMarqueeRect] = useState(null);
   const [phoneLayout, setPhoneLayout] = useState(() => {
     try {
@@ -357,7 +347,7 @@ export default function App() {
     storageSet('kinfolk-theme', theme);
   }, [theme]);
   useEffect(() => {
-    storageSet('kinfolk-canvas-movement-locked-v1', String(movementLocked));
+    storageSet('kinfolk-canvas-movement-locked-v2', String(movementLocked));
   }, [movementLocked]);
   useEffect(() => {
     const updateViewportMode = () => setIsCompactViewport(window.innerWidth <= 1050);
@@ -1021,10 +1011,10 @@ export default function App() {
   }
   function startDrag(e, p, pos) {
     if (e.button !== 0) return;
+    if (e.target.closest('.tree-node-info,.tree-node-delete,.tree-node-add,.tree-node-about,.node-add-menu')) return;
     e.preventDefault();
     e.stopPropagation();
-    const isSelected = selectedId === p.id || selectedNodeIds.includes(p.id);
-    if (!isSelected || movementLocked) {
+    if (movementLocked) {
       const gesture = { mode: 'select-only', id: p.id, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, moved: false, held: false };
       drag.current = gesture;
       gesture.holdTimer = window.setTimeout(() => {
@@ -1034,7 +1024,7 @@ export default function App() {
     }
     const movingGroup = selectedNodeIds.length > 1 && selectedNodeIds.includes(p.id);
     const viewport = treeScroll.current;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    if (e.pointerId != null && e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
     const gesture = {
       mode: 'person',
       id: p.id,
@@ -1288,10 +1278,14 @@ export default function App() {
     window.addEventListener('pointermove', onMove, { passive: false });
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
+    window.addEventListener('mousemove', onMove, { passive: false });
+    window.addEventListener('mouseup', onUp);
     return () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
       if (drag.current?.holdTimer) clearTimeout(drag.current.holdTimer);
       if (drag.current?.frame) cancelAnimationFrame(drag.current.frame);
     };
@@ -1539,7 +1533,7 @@ export default function App() {
               onClick={() => setMovementLocked((locked) => !locked)}
               aria-pressed={movementLocked}
               aria-label={movementLocked ? 'Unlock node movement' : 'Lock node movement'}
-              title={movementLocked ? 'Node movement is locked. Unlock to move selected nodes.' : 'Node movement is unlocked. Lock to prevent moving nodes.'}
+              title={movementLocked ? 'Node movement is locked. Unlock to move people.' : 'Node movement is unlocked. Lock to prevent moving people.'}
             >
               {movementLocked ? <Lock size={14} /> : <Unlock size={14} />}
               <span>{movementLocked ? 'Locked' : 'Unlocked'}</span>
@@ -1572,10 +1566,19 @@ export default function App() {
               <Info size={17} />
             </button>
             <div id="canvas-help-tooltip" className="canvas-help-tooltip" role="tooltip">
-              <p><strong>Select and move:</strong> Select a person first, unlock node movement with the lock button, then drag. Lock movement to prevent accidental moves. Selected people move together.</p>
-              <p><strong>Select a group:</strong> On laptop, drag empty canvas. On phone, hold empty canvas briefly, then drag to draw a rectangle.</p>
-              <p><strong>Move the canvas:</strong> On phone, drag empty space. On laptop, hold Space while dragging or use the middle mouse button.</p>
-              <p><strong>More:</strong> Hold a person for details. Use the eye icon to show details on laptop. Ctrl + mouse wheel or trackpad pinch zooms. Ctrl+A selects this family; Delete removes the selection. Use the + on a node to add a family member.</p>
+              <p>
+                <strong>Select and move:</strong> Drag any person to move them. Click or tap to select; selected people move together. Use the lock button to prevent accidental moves.
+              </p>
+              <p>
+                <strong>Select a group:</strong> On laptop, drag empty canvas. On phone, hold empty canvas briefly, then drag to draw a rectangle.
+              </p>
+              <p>
+                <strong>Move the canvas:</strong> On phone, drag empty space. On laptop, hold Space while dragging or use the middle mouse button.
+              </p>
+              <p>
+                <strong>More:</strong> Hold a person for details. Use the eye icon to show details on laptop. Ctrl + mouse wheel or trackpad pinch zooms. Ctrl+A selects this family; Delete removes the
+                selection. Use the + on a node to add a family member.
+              </p>
             </div>
           </div>
           {selectedNodeIds.length > 1 && (
@@ -1643,7 +1646,13 @@ export default function App() {
                           : edge.kind === 'partner' && genderedPartnerPair && usesDefaultPartnerRole
                             ? 'Husband · Wife'
                             : storedPartnerRelation || `${relation} · ${reverseRelation}`;
-                      const relationLabelPoint = linkLabelPoint(edge, visibleRelation, connectorNodePositions, connectorLabelPositions, linkStyle === 'classic' && (edge.kind === 'partner' || edge.kind === 'sibling'));
+                      const relationLabelPoint = linkLabelPoint(
+                        edge,
+                        visibleRelation,
+                        connectorNodePositions,
+                        connectorLabelPositions,
+                        linkStyle === 'classic' && (edge.kind === 'partner' || edge.kind === 'sibling'),
+                      );
                       return (
                         <g key={`${linkId}-${i}`}>
                           <path
@@ -1671,11 +1680,14 @@ export default function App() {
                       data-person-id={person.id}
                       className={`tree-person ${selectedId === person.id || selectedNodeIds.includes(person.id) ? 'selected' : ''}`}
                       style={{ left: pos.x, top: pos.y }}
-                      onPointerDown={(e) => startDrag(e, person, pos)}
+                      onPointerDown={(e) => {
+                        if (e.pointerType === 'touch') startDrag(e, person, pos);
+                      }}
+                      onMouseDown={(e) => startDrag(e, person, pos)}
                     >
                       <button
                         className="tree-person-card"
-                      aria-label={`Select ${fullName(person)}; select first, then drag to move; press and hold to open details`}
+                        aria-label={`Select ${fullName(person)}; drag to move; press and hold to open details`}
                         onContextMenu={(e) => e.preventDefault()}
                         onClick={(e) => {
                           if (e.detail === 0) openPersonDetails(person.id);
@@ -1922,9 +1934,6 @@ export default function App() {
                     ),
                 )}
                 <div className="details-actions-row">
-                  <button className="remove-person-button" onClick={() => setConfirmDelete(true)}>
-                    <Trash2 size={14} /> Remove person
-                  </button>
                   <button
                     className="details-cancel-button"
                     onClick={() => {
@@ -1934,6 +1943,9 @@ export default function App() {
                     }}
                   >
                     Cancel
+                  </button>
+                  <button className="remove-person-button" onClick={() => setConfirmDelete(true)}>
+                    <Trash2 size={14} /> Remove person
                   </button>
                 </div>
               </div>

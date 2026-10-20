@@ -2663,7 +2663,10 @@ button {
   color: var(--accent);
   box-shadow: 0 2px 9px #15201720;
   cursor: pointer;
-  transition: background 0.16s, box-shadow 0.16s, transform 0.16s;
+  transition:
+    background 0.16s,
+    box-shadow 0.16s,
+    transform 0.16s;
 }
 .canvas-help-button:hover,
 .canvas-help-button:focus-visible {
@@ -2690,7 +2693,10 @@ button {
   visibility: hidden;
   transform: translateY(-5px) scale(0.98);
   transform-origin: top left;
-  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s;
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    visibility 0.16s;
   pointer-events: none;
 }
 .canvas-help-tooltip p {
@@ -3079,7 +3085,10 @@ button {
   color: var(--text);
   text-align: left;
   cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    transform 120ms ease;
 }
 .details-links > button:not(.remove-person-button):not(.details-cancel-button):hover {
   border-color: var(--accent);
@@ -3145,7 +3154,10 @@ button {
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
 }
 .details-actions-row .remove-person-button {
   flex: 1;
@@ -4431,12 +4443,16 @@ button {
   border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
   background: var(--accent-bg);
   color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent), 0 0 13px color-mix(in srgb, var(--accent) 30%, transparent);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent),
+    0 0 13px color-mix(in srgb, var(--accent) 30%, transparent);
   animation: lockGlow 2.2s ease-in-out infinite;
 }
 @keyframes lockGlow {
   50% {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 40%, transparent);
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent),
+      0 0 18px color-mix(in srgb, var(--accent) 40%, transparent);
   }
 }
 @media (max-width: 520px) {
