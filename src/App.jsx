@@ -187,6 +187,59 @@ function applyDragPositions(people, drag) {
     return start ? { ...person, treeX: start.x + dx, treeY: start.y + dy } : person;
   });
 }
+function compactGenerationPositions(people) {
+  const byId = new Map(people.map((person) => [person.id, person]));
+  const levels = new Map();
+  function levelFor(id, path = new Set()) {
+    if (levels.has(id)) return levels.get(id);
+    if (path.has(id)) return 0;
+    const person = byId.get(id);
+    const parentLevels = (person?.parentIds || []).filter((parentId) => byId.has(parentId)).map((parentId) => levelFor(parentId, new Set(path).add(id)));
+    const level = parentLevels.length ? Math.max(...parentLevels) + 1 : 0;
+    levels.set(id, level);
+    return level;
+  }
+  people.forEach((person) => levelFor(person.id));
+  // A spouse without recorded parents belongs on their partner's generation.
+  for (let pass = 0; pass < people.length; pass += 1) {
+    let changed = false;
+    people.forEach((person) => {
+      (person.partnerIds || []).forEach((partnerId) => {
+        if (!byId.has(partnerId)) return;
+        const sharedLevel = Math.max(levels.get(person.id) || 0, levels.get(partnerId) || 0);
+        if (levels.get(person.id) !== sharedLevel) {
+          levels.set(person.id, sharedLevel);
+          changed = true;
+        }
+        if (levels.get(partnerId) !== sharedLevel) {
+          levels.set(partnerId, sharedLevel);
+          changed = true;
+        }
+      });
+    });
+    if (!changed) break;
+  }
+  const automatic = layoutTree(people.map((person) => ({ ...person, treeX: null, treeY: null })));
+  const rows = new Map();
+  people.forEach((person) => {
+    const level = levels.get(person.id) || 0;
+    if (!rows.has(level)) rows.set(level, []);
+    rows.get(level).push(person);
+  });
+  const nodeWidth = 196;
+  const horizontalGap = 32;
+  const generationGap = 170;
+  const positions = [];
+  [...rows.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .forEach(([level, members]) => {
+      members.sort((a, b) => (automatic.positions.get(a.id)?.automaticX || 0) - (automatic.positions.get(b.id)?.automaticX || 0));
+      const rowWidth = members.length * nodeWidth + Math.max(0, members.length - 1) * horizontalGap;
+      const startX = -rowWidth / 2;
+      members.forEach((person, index) => positions.push({ id: person.id, treeX: startX + index * (nodeWidth + horizontalGap), treeY: level * generationGap }));
+    });
+  return positions;
+}
 function getFamilyGroups(people) {
   const byId = new Map(people.map((person) => [person.id, person]));
   const links = new Map(people.map((person) => [person.id, new Set()]));
@@ -607,7 +660,8 @@ export default function App() {
     autoFitSignature.current = signature;
     const contentWidth = Math.max(196, maxNodeX - minNodeX);
     const contentHeight = Math.max(76, maxNodeY - minNodeY);
-    const fittedZoom = Math.max(0.1, Math.min(1, maxCanvasZoom, (viewport.clientWidth - 48) / contentWidth, (viewport.clientHeight - 48) / contentHeight));
+    const minimumReadableZoom = treeVisualStyle === 'pedigree' && !isCompactViewport ? 0.42 : 0.1;
+    const fittedZoom = Math.max(minimumReadableZoom, Math.min(1, maxCanvasZoom, (viewport.clientWidth - 48) / contentWidth, (viewport.clientHeight - 48) / contentHeight));
     zoomValue.current = fittedZoom;
     setZoom(fittedZoom);
     requestAnimationFrame(() => {
@@ -621,7 +675,7 @@ export default function App() {
       viewport.scrollLeft = Math.max(0, Math.min(viewport.scrollWidth - viewport.clientWidth, viewport.scrollLeft + boardRect.left + centerX * fittedZoom - targetX));
       viewport.scrollTop = Math.max(0, Math.min(viewport.scrollHeight - viewport.clientHeight, viewport.scrollTop + boardRect.top + centerY * fittedZoom - targetY));
     });
-  }, [apiState, familyPeople.length, isCompactViewport, layoutSignature, maxCanvasZoom, maxNodeX, maxNodeY, minNodeX, minNodeY, treeViewportHeight, treeViewportWidth]);
+  }, [apiState, familyPeople.length, isCompactViewport, layoutSignature, maxCanvasZoom, maxNodeX, maxNodeY, minNodeX, minNodeY, treeViewportHeight, treeViewportWidth, treeVisualStyle]);
   useEffect(() => {
     if (apiState !== 'demo') return;
     const timer = setTimeout(() => storageSet('kinfolk-demo-people', JSON.stringify(people)), 250);
@@ -1094,11 +1148,15 @@ export default function App() {
     if (!familyPeople.length || isArranging) return;
     setIsArranging(true);
     try {
-      const automaticLayout = layoutTree(familyPeople.map((person) => ({ ...person, treeX: null, treeY: null })));
-      const arrangedPositions = familyPeople.map((person) => {
-        const position = automaticLayout.positions.get(person.id);
-        return { id: person.id, treeX: position.rawX, treeY: position.rawY };
-      });
+      const arrangedPositions = treeVisualStyle === 'pedigree'
+        ? compactGenerationPositions(familyPeople)
+        : (() => {
+            const automaticLayout = layoutTree(familyPeople.map((person) => ({ ...person, treeX: null, treeY: null })));
+            return familyPeople.map((person) => {
+              const position = automaticLayout.positions.get(person.id);
+              return { id: person.id, treeX: position.rawX, treeY: position.rawY };
+            });
+          })();
       if (apiState === 'connected') {
         const databasePositions = arrangedPositions
           .map((position) => ({ ...position, id: people.find((person) => person.id === position.id)?._id }))
