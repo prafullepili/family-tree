@@ -581,9 +581,6 @@ export default function App() {
     storageSet('kinfolk-tree-visual-style-v2', treeVisualStyle);
   }, [treeVisualStyle]);
   useEffect(() => {
-    if (treeVisualStyle === 'pedigree' && linkStyle !== 'classic') setLinkStyle('classic');
-  }, [treeVisualStyle, linkStyle]);
-  useEffect(() => {
     if (!treeStyleMenuOpen && !linkStyleMenuOpen) return;
     const closeMenu = (event) => {
       if (!treeStyleControlRef.current?.contains(event.target)) setTreeStyleMenuOpen(false);
@@ -2273,6 +2270,7 @@ export default function App() {
                     className={treeVisualStyle === value ? 'active' : ''}
                     onClick={() => {
                       setTreeVisualStyle(value);
+                      if (value === 'pedigree') setLinkStyle('classic');
                       setTreeStyleMenuOpen(false);
                     }}
                   >
