@@ -4124,6 +4124,24 @@ button {
 .connector-hit:focus {
   outline: none;
 }
+.relationship-link.is-highlighted .connector,
+.connector.family-route.is-highlighted {
+  stroke: #f0a928 !important;
+  stroke-width: 4 !important;
+  opacity: 1 !important;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, #f0a928 60%, transparent));
+}
+.relationship-link.is-highlighted .connector-relation {
+  fill: #d88900;
+  font-size: 11px;
+}
+.tree-person.link-highlighted {
+  z-index: 6;
+}
+.tree-person.link-highlighted .tree-person-card {
+  border-color: #f0a928 !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #f0a928 30%, transparent), 0 8px 20px #17203326 !important;
+}
 
 .tree-node-about-wrap {
   position: absolute;

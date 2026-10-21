@@ -315,15 +315,17 @@ function readMongoPeopleCache() {
 function PersonAvatar({ person, size = 'small' }) {
   return <div className={`person-avatar ${size} ${person?.color || 'sage'}`}>{person?.photoUrl ? <img src={person.photoUrl} alt="" /> : <span>{initials(person)}</span>}</div>;
 }
-function FamilyBranchLinks({ branches, people, orthogonal = false }) {
+function FamilyBranchLinks({ branches, people, orthogonal = false, highlightedLink, onHighlight }) {
   const byId = new Map(people.map((person) => [person.id, person]));
   return (
     <g className="family-branch-links">
       {branches.map((branch, index) => {
         const bus = `M${branch.sourceX} ${branch.sourceY} V${branch.branchY}`;
+        const branchKey = `family-${index}`;
+        const branchHighlighted = highlightedLink?.key?.startsWith(`${branchKey}-`);
         return (
           <g key={`family-branch-${index}`}>
-            <path className="connector family-route" d={bus} />
+            <path className={`connector family-route ${branchHighlighted ? 'is-highlighted' : ''}`} d={bus} />
             {branch.childXs.map((x, i) => {
               const child = byId.get(branch.children[i]);
               const label = child?.gender === 'male' ? 'Son' : child?.gender === 'female' ? 'Daughter' : 'Child';
@@ -336,8 +338,21 @@ function FamilyBranchLinks({ branches, people, orthogonal = false }) {
                   : `M${branch.sourceX} ${branch.branchY} C${branch.sourceX} ${branch.branchY + 24} ${x} ${childTop - 42} ${x} ${childTop}`;
               const labelX = (x + branch.sourceX) / 2;
               const labelY = (childTop + branch.branchY) / 2 - 7;
+              const linkKey = `${branchKey}-${branch.children[i]}`;
+              const linkHighlighted = highlightedLink?.key === linkKey;
+              const linkedIds = [...branch.parentIds, branch.children[i]];
               return (
-                <g key={branch.children[i]}>
+                <g key={branch.children[i]} className={`relationship-link ${linkHighlighted ? 'is-highlighted' : ''}`}>
+                  <path
+                    className="connector-hit"
+                    d={curve}
+                    tabIndex="0"
+                    aria-label={`${label} relationship`}
+                    onPointerEnter={() => onHighlight({ key: linkKey, ids: linkedIds })}
+                    onPointerLeave={() => onHighlight(null)}
+                    onFocus={() => onHighlight({ key: linkKey, ids: linkedIds })}
+                    onBlur={() => onHighlight(null)}
+                  />
                   <path
                     className="connector family-route family-drop"
                     d={curve}
@@ -373,6 +388,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState('');
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [aboutTooltipId, setAboutTooltipId] = useState('');
+  const [highlightedLink, setHighlightedLink] = useState(null);
   const [dismissedAboutTooltipId, setDismissedAboutTooltipId] = useState('');
   const [movementLocked, setMovementLocked] = useState(() => storageGet('kinfolk-canvas-movement-locked-v2') === 'true');
   const [marqueeRect, setMarqueeRect] = useState(null);
@@ -1873,7 +1889,15 @@ export default function App() {
                       <path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" />
                     </marker>
                   </defs>
-                  {linkStyle !== 'direct' && <FamilyBranchLinks branches={layout.familyBranches} people={familyPeople} orthogonal={treeVisualStyle === 'pedigree'} />}
+                  {linkStyle !== 'direct' && (
+                    <FamilyBranchLinks
+                      branches={layout.familyBranches}
+                      people={familyPeople}
+                      orthogonal={treeVisualStyle === 'pedigree'}
+                      highlightedLink={highlightedLink}
+                      onHighlight={setHighlightedLink}
+                    />
+                  )}
                   {layout.edges
                     .filter((edge) => linkStyle === 'direct' || edge.kind !== 'parent')
                     .map((edge, i) => {
@@ -1925,7 +1949,17 @@ export default function App() {
                         linkStyle === 'classic' && (edge.kind === 'partner' || edge.kind === 'sibling'),
                       );
                       return (
-                        <g key={`${linkId}-${i}`}>
+                        <g key={`${linkId}-${i}`} className={`relationship-link ${highlightedLink?.key === linkId ? 'is-highlighted' : ''}`}>
+                          <path
+                            className="connector-hit"
+                            d={d}
+                            tabIndex="0"
+                            aria-label={description}
+                            onPointerEnter={() => setHighlightedLink({ key: linkId, ids: [edge.fromId, edge.toId] })}
+                            onPointerLeave={() => setHighlightedLink(null)}
+                            onFocus={() => setHighlightedLink({ key: linkId, ids: [edge.fromId, edge.toId] })}
+                            onBlur={() => setHighlightedLink(null)}
+                          />
                           <path
                             className={`connector ${edge.kind}`}
                             d={d}
@@ -1949,7 +1983,7 @@ export default function App() {
                     <div
                       key={person.id}
                       data-person-id={person.id}
-                      className={`tree-person gender-${person.gender || 'unspecified'} ${selectedId === person.id || selectedNodeIds.includes(person.id) ? 'selected' : ''} ${familyColorsEnabled && familyColors.has(person.id) ? `family-colored family-color-${familyColors.get(person.id)}` : ''}`}
+                      className={`tree-person gender-${person.gender || 'unspecified'} ${highlightedLink?.ids?.includes(person.id) ? 'link-highlighted' : ''} ${selectedId === person.id || selectedNodeIds.includes(person.id) ? 'selected' : ''} ${familyColorsEnabled && familyColors.has(person.id) ? `family-colored family-color-${familyColors.get(person.id)}` : ''}`}
                       style={{ left: pos.x, top: pos.y }}
                       onPointerDown={(e) => {
                         if (e.pointerType === 'touch') startDrag(e, person, pos);
