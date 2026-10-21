@@ -5220,21 +5220,33 @@ button {
 }
 @media (max-width: 520px) {
   .tree-toolbar-simple {
+    height: 82px;
+    flex-wrap: wrap;
+    align-content: center;
     gap: 6px;
     padding-right: 9px;
     padding-left: 9px;
   }
   .tree-toolbar-settings {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 30px;
     gap: 6px;
+  }
+  .tree-toolbar-settings .link-style-toolbar-field,
+  .tree-style-toolbar-field {
+    min-width: 0;
+  }
+  .tree-toolbar-settings .link-style-select,
+  .tree-style-toolbar-field .link-style-select {
+    width: 100%;
+    min-width: 0;
   }
   .family-color-toggle {
     width: 30px;
     padding: 0;
   }
   .family-color-toggle span {
-    display: none;
-  }
-  .tree-style-toolbar-field {
     display: none;
   }
   .tree-toolbar-simple > .tree-count,
@@ -5248,6 +5260,13 @@ button {
   }
   .arrange-family-button span {
     display: none;
+  }
+  .tree-toolbar-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .simple-canvas {
+    min-height: calc(100dvh - 145px);
   }
 }
 @media (max-width: 380px) {
