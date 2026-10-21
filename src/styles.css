@@ -5069,6 +5069,145 @@ button {
 .tree-style-dashboard #partner-link-arrow path {
   fill: #2563eb;
 }
+
+/* Portrait pedigree: compact genealogy cards based on the supplied reference. */
+.tree-style-pedigree {
+  --pedigree-blue: #00afd1;
+  --pedigree-pink: #ff7479;
+  --pedigree-line: #9ca0a3;
+  --pedigree-canvas: #f4f4f4;
+  --pedigree-card: #ffffff;
+  --pedigree-text: #101213;
+  --pedigree-muted: #62676a;
+  --pedigree-avatar: #f8f8f8;
+  --pedigree-control: #ffffff;
+}
+.tree-style-pedigree.theme-dark {
+  --pedigree-blue: #37cbe5;
+  --pedigree-pink: #ff8b92;
+  --pedigree-line: #65716b;
+  --pedigree-canvas: #121914;
+  --pedigree-card: #202a25;
+  --pedigree-text: #f2f6f3;
+  --pedigree-muted: #a7b2ab;
+  --pedigree-avatar: #2c3832;
+  --pedigree-control: #26312b;
+}
+.tree-style-pedigree .simple-canvas {
+  background: var(--pedigree-canvas);
+  background-image: radial-gradient(color-mix(in srgb, var(--pedigree-line) 18%, transparent) 0.65px, transparent 0.65px);
+  background-size: 20px 20px;
+}
+.tree-style-pedigree .tree-person-card {
+  position: relative;
+  height: 76px;
+  padding: 9px 26px 9px 9px;
+  gap: 9px;
+  overflow: visible;
+  border: 2px solid #a5adb2;
+  border-radius: 7px;
+  background: var(--pedigree-card);
+  color: var(--pedigree-text);
+  box-shadow: 0 2px 5px #36404a18;
+}
+.tree-style-pedigree .tree-person.gender-male .tree-person-card {
+  border-color: var(--pedigree-blue);
+}
+.tree-style-pedigree .tree-person.gender-female .tree-person-card {
+  border-color: var(--pedigree-pink);
+}
+.tree-style-pedigree .tree-person.selected .tree-person-card {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--pedigree-blue), 0 7px 18px #26343d2b;
+}
+.tree-style-pedigree .person-avatar.large {
+  width: 47px;
+  height: 47px;
+  border: 1px solid #cfd3d5;
+  background: var(--pedigree-avatar);
+  color: var(--pedigree-muted);
+  filter: grayscale(1);
+}
+.tree-style-pedigree .tree-person-copy {
+  gap: 2px;
+}
+.tree-style-pedigree .tree-person-copy strong {
+  color: var(--pedigree-text);
+  font-size: 13px;
+  line-height: 1.08;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.tree-style-pedigree .tree-person-copy small {
+  color: var(--pedigree-muted);
+  font-size: 11px;
+}
+.tree-style-pedigree .drag-grip {
+  display: none;
+}
+.tree-style-pedigree .tree-node-camera {
+  position: absolute;
+  left: 48px;
+  top: 45px;
+  z-index: 4;
+  width: 19px;
+  height: 19px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d3d6d8;
+  border-radius: 50%;
+  background: var(--pedigree-control);
+  color: var(--pedigree-text);
+  box-shadow: 0 1px 3px #27313820;
+}
+.tree-style-pedigree .tree-node-add {
+  position: absolute;
+  left: 50%;
+  bottom: -22px;
+  z-index: 4;
+  width: 38px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 3px 0 0;
+  transform: translateX(-50%);
+  border: 0;
+  border-radius: 0 0 20px 20px;
+  background: var(--pedigree-control);
+  color: var(--pedigree-text);
+  box-shadow: 0 5px 7px #28303620;
+  cursor: pointer;
+}
+.tree-style-pedigree .tree-node-add:hover {
+  color: var(--pedigree-blue);
+}
+.tree-style-pedigree .tree-node-edit {
+  right: 4px;
+  bottom: 11px;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  background: transparent;
+  color: #50575a;
+  box-shadow: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+.tree-style-pedigree .connector,
+.tree-style-pedigree .connector.partner {
+  stroke: var(--pedigree-line);
+  stroke-width: 1.6;
+}
+.tree-style-pedigree .connector-relation {
+  display: none;
+}
+.tree-style-pedigree .tree-person.family-colored .tree-person-card {
+  background: var(--family-card-bg);
+}
+.tree-style-pedigree.theme-dark .tree-person.family-colored .tree-person-card {
+  color: var(--family-card-text);
+}
 @media (max-width: 520px) {
   .tree-toolbar-simple {
     gap: 6px;

@@ -262,7 +262,7 @@ function readMongoPeopleCache() {
 function PersonAvatar({ person, size = 'small' }) {
   return <div className={`person-avatar ${size} ${person?.color || 'sage'}`}>{person?.photoUrl ? <img src={person.photoUrl} alt="" /> : <span>{initials(person)}</span>}</div>;
 }
-function FamilyBranchLinks({ branches, people }) {
+function FamilyBranchLinks({ branches, people, orthogonal = false }) {
   const byId = new Map(people.map((person) => [person.id, person]));
   return (
     <g className="family-branch-links">
@@ -276,9 +276,11 @@ function FamilyBranchLinks({ branches, people }) {
               const label = child?.gender === 'male' ? 'Son' : child?.gender === 'female' ? 'Daughter' : 'Child';
               const childTop = branch.childTops[i];
               const curvesLeft = x < branch.sourceX;
-              const curve = curvesLeft
-                ? `M${x} ${childTop} C${x} ${childTop - 42} ${branch.sourceX} ${branch.branchY + 24} ${branch.sourceX} ${branch.branchY}`
-                : `M${branch.sourceX} ${branch.branchY} C${branch.sourceX} ${branch.branchY + 24} ${x} ${childTop - 42} ${x} ${childTop}`;
+              const curve = orthogonal
+                ? `M${branch.sourceX} ${branch.branchY} H${x} V${childTop}`
+                : curvesLeft
+                  ? `M${x} ${childTop} C${x} ${childTop - 42} ${branch.sourceX} ${branch.branchY + 24} ${branch.sourceX} ${branch.branchY}`
+                  : `M${branch.sourceX} ${branch.branchY} C${branch.sourceX} ${branch.branchY + 24} ${x} ${childTop - 42} ${x} ${childTop}`;
               const labelX = (x + branch.sourceX) / 2;
               const labelY = (childTop + branch.branchY) / 2 - 7;
               return (
@@ -286,8 +288,8 @@ function FamilyBranchLinks({ branches, people }) {
                   <path
                     className="connector family-route family-drop"
                     d={curve}
-                    markerStart={curvesLeft ? 'url(#family-link-arrow)' : undefined}
-                    markerEnd={!curvesLeft ? 'url(#family-link-arrow)' : undefined}
+                    markerStart={!orthogonal && curvesLeft ? 'url(#family-link-arrow)' : undefined}
+                    markerEnd={!orthogonal && !curvesLeft ? 'url(#family-link-arrow)' : undefined}
                   />
                   <text className="connector-relation family-role" x={labelX} y={labelY} textAnchor="middle" dominantBaseline="central">
                     <title>{label}</title>
@@ -313,9 +315,9 @@ export default function App() {
   const [familyPickerOpen, setFamilyPickerOpen] = useState(false);
   const [familyQuery, setFamilyQuery] = useState('');
   const [linkStyle, setLinkStyle] = useState(() => (['direct', 'classic'].includes(storageGet('kinfolk-link-style')) ? storageGet('kinfolk-link-style') : 'classic'));
-  const [treeVisualStyle, setTreeVisualStyle] = useState(() => storageGet('kinfolk-tree-visual-style') || 'dashboard');
+  const [treeVisualStyle, setTreeVisualStyle] = useState(() => storageGet('kinfolk-tree-visual-style-v2') || 'pedigree');
   const [familyColorsEnabled, setFamilyColorsEnabled] = useState(() => storageGet('kinfolk-family-colors-v1') === 'true');
-  const [selectedId, setSelectedId] = useState(() => initialCache.people[0]?.id || '');
+  const [selectedId, setSelectedId] = useState('');
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [aboutTooltipId, setAboutTooltipId] = useState('');
   const [dismissedAboutTooltipId, setDismissedAboutTooltipId] = useState('');
@@ -421,7 +423,7 @@ export default function App() {
     storageSet('kinfolk-canvas-movement-locked-v2', String(movementLocked));
   }, [movementLocked]);
   useEffect(() => {
-    storageSet('kinfolk-tree-visual-style', treeVisualStyle);
+    storageSet('kinfolk-tree-visual-style-v2', treeVisualStyle);
   }, [treeVisualStyle]);
   useEffect(() => {
     const updateViewportMode = () => setIsCompactViewport(window.innerWidth <= 1050);
@@ -666,7 +668,7 @@ export default function App() {
           storageRemove('kinfolk-demo-people');
           setHasMongoSnapshot(true);
           setPeople(rows);
-          setSelectedId((selectedId) => (rows.some((person) => person.id === selectedId) ? selectedId : rows[0]?.id || ''));
+          setSelectedId((selectedId) => (rows.some((person) => person.id === selectedId) ? selectedId : ''));
           setApiState('connected');
           setRefreshFailed(false);
         }
@@ -713,7 +715,7 @@ export default function App() {
       storageSet(mongoPeopleCacheKey, JSON.stringify({ people: rows, updatedAt: Date.now() }));
       setPeople(rows);
       setHasMongoSnapshot(true);
-      setSelectedId((selectedId) => (rows.some((person) => person.id === selectedId) ? selectedId : rows[0]?.id || ''));
+      setSelectedId((selectedId) => (rows.some((person) => person.id === selectedId) ? selectedId : ''));
       setApiState('connected');
       setRefreshFailed(false);
       notify(`Synced ${rows.length} ${rows.length === 1 ? 'person' : 'people'} from MongoDB`);
@@ -1153,8 +1155,8 @@ export default function App() {
     setSelectedId(personId);
     setSelectedNodeIds([]);
   }
-  function openAddPersonForm() {
-    setModal({ inline: true });
+  function openAddPersonForm(relativeToId = '') {
+    setModal({ inline: true, relativeToId, focusLinks: Boolean(relativeToId) });
     setDetailsOpen(true);
     if (window.innerWidth <= 1050) {
       setSidebarOpen(false);
@@ -1184,7 +1186,7 @@ export default function App() {
   }
   function startDrag(e, p, pos) {
     if (e.button !== 0) return;
-    if (e.target.closest('.tree-node-info,.tree-node-edit,.tree-node-delete,.tree-node-about,.tree-node-about-tooltip')) return;
+    if (e.target.closest('.tree-node-info,.tree-node-edit,.tree-node-delete,.tree-node-add,.tree-node-about,.tree-node-about-tooltip')) return;
     e.preventDefault();
     e.stopPropagation();
     if (movementLocked) {
@@ -1675,6 +1677,7 @@ export default function App() {
               <span>TREE STYLE</span>
               <select className="link-style-select" value={treeVisualStyle} onChange={(event) => setTreeVisualStyle(event.target.value)}>
                 <option value="dashboard">Dashboard cards</option>
+                <option value="pedigree">Portrait pedigree</option>
                 <option value="classic">Classic cards</option>
               </select>
             </label>
@@ -1812,15 +1815,19 @@ export default function App() {
                       <path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" />
                     </marker>
                   </defs>
-                  {linkStyle !== 'direct' && <FamilyBranchLinks branches={layout.familyBranches} people={familyPeople} />}
+                  {linkStyle !== 'direct' && <FamilyBranchLinks branches={layout.familyBranches} people={familyPeople} orthogonal={treeVisualStyle === 'pedigree'} />}
                   {layout.edges
                     .filter((edge) => linkStyle === 'direct' || edge.kind !== 'parent')
                     .map((edge, i) => {
                       const d =
-                        edge.path ||
-                        (linkStyle === 'classic' && (edge.kind === 'partner' || edge.kind === 'sibling')
-                          ? `M${edge.x1} ${edge.y1} L${edge.x2} ${edge.y2}`
-                          : `M${edge.x1} ${edge.y1} C${edge.c1x} ${edge.c1y} ${edge.c2x} ${edge.c2y} ${edge.x2} ${edge.y2}`);
+                        treeVisualStyle === 'pedigree'
+                          ? Math.abs(edge.y2 - edge.y1) < 4
+                            ? `M${edge.x1} ${edge.y1} H${edge.x2}`
+                            : `M${edge.x1} ${edge.y1} V${(edge.y1 + edge.y2) / 2} H${edge.x2} V${edge.y2}`
+                          : edge.path ||
+                            (linkStyle === 'classic' && (edge.kind === 'partner' || edge.kind === 'sibling')
+                              ? `M${edge.x1} ${edge.y1} L${edge.x2} ${edge.y2}`
+                              : `M${edge.x1} ${edge.y1} C${edge.c1x} ${edge.c1y} ${edge.c2x} ${edge.c2y} ${edge.x2} ${edge.y2}`);
                       const from = byId(edge.fromId),
                         to = byId(edge.toId);
                       const relation =
@@ -1864,8 +1871,8 @@ export default function App() {
                           <path
                             className={`connector ${edge.kind}`}
                             d={d}
-                            markerStart={treeVisualStyle === 'dashboard' && edge.kind === 'parent' ? undefined : `url(#${edge.kind === 'partner' ? 'partner-link-arrow' : 'family-link-arrow'})`}
-                            markerEnd={`url(#${edge.kind === 'partner' ? 'partner-link-arrow' : 'family-link-arrow'})`}
+                            markerStart={treeVisualStyle === 'pedigree' || (treeVisualStyle === 'dashboard' && edge.kind === 'parent') ? undefined : `url(#${edge.kind === 'partner' ? 'partner-link-arrow' : 'family-link-arrow'})`}
+                            markerEnd={treeVisualStyle === 'pedigree' ? undefined : `url(#${edge.kind === 'partner' ? 'partner-link-arrow' : 'family-link-arrow'})`}
                           />
                           <text className="connector-relation" x={relationLabelPoint.x} y={relationLabelPoint.y} textAnchor="middle" dominantBaseline="central">
                             <title>
@@ -1884,7 +1891,7 @@ export default function App() {
                     <div
                       key={person.id}
                       data-person-id={person.id}
-                      className={`tree-person ${selectedId === person.id || selectedNodeIds.includes(person.id) ? 'selected' : ''} ${familyColorsEnabled && familyColors.has(person.id) ? `family-colored family-color-${familyColors.get(person.id)}` : ''}`}
+                      className={`tree-person gender-${person.gender || 'unspecified'} ${selectedId === person.id || selectedNodeIds.includes(person.id) ? 'selected' : ''} ${familyColorsEnabled && familyColors.has(person.id) ? `family-colored family-color-${familyColors.get(person.id)}` : ''}`}
                       style={{ left: pos.x, top: pos.y }}
                       onPointerDown={(e) => {
                         if (e.pointerType === 'touch') startDrag(e, person, pos);
@@ -1900,6 +1907,11 @@ export default function App() {
                         }}
                       >
                         <PersonAvatar person={person} size="large" />
+                        {treeVisualStyle === 'pedigree' && (
+                          <span className="tree-node-camera" aria-hidden="true">
+                            <Camera size={10} />
+                          </span>
+                        )}
                         <span className="tree-person-copy">
                           <strong>{fullName(person)}</strong>
                           <small>
@@ -1909,6 +1921,20 @@ export default function App() {
                         </span>
                         <span className="drag-grip">⠿</span>
                       </button>
+                      {treeVisualStyle === 'pedigree' && (
+                        <button
+                          className="tree-node-add"
+                          title={`Add a relative for ${fullName(person)}`}
+                          aria-label={`Add a relative for ${fullName(person)}`}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openAddPersonForm(person.id);
+                          }}
+                        >
+                          <Plus size={17} />
+                        </button>
+                      )}
                       <button
                         className="tree-node-edit"
                         title={`Edit ${fullName(person)}`}
@@ -2402,7 +2428,7 @@ function PersonModal({ modal, people, onClose, onSave }) {
     notes: p?.notes || '',
   });
   const [relationships, setRelationships] = useState(() => {
-    if (!p) return [];
+    if (!p) return modal.relativeToId && people.some((person) => person.id === modal.relativeToId) ? [{ personId: modal.relativeToId, role: '', customLabel: '' }] : [];
     const rows = [];
     const add = (personId, role, customLabel = '') => {
       if (personId !== p.id && people.some((person) => person.id === personId) && !rows.some((link) => link.personId === personId)) rows.push({ personId, role, customLabel });
