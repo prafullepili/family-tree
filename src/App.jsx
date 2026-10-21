@@ -27,6 +27,7 @@ import {
   RefreshCw,
   Info,
   Palette,
+  Network,
 } from 'lucide-react';
 import { initialPeople } from './demoFamily.js';
 import { layoutTree, resolveNodeOverlaps } from './layoutTree.js';
@@ -2286,7 +2287,7 @@ export default function App() {
               title="Tree style"
               onClick={() => setTreeStyleMenuOpen((open) => !open)}
             >
-              <Palette size={18} />
+              <Network size={18} />
             </button>
           </div>
         </section>
