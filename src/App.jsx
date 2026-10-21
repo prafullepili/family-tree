@@ -477,6 +477,8 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const canvasHelpRef = useRef(null);
+  const [treeStyleMenuOpen, setTreeStyleMenuOpen] = useState(false);
+  const treeStyleControlRef = useRef(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [detailsWidth, setDetailsWidth] = useState(() => {
@@ -574,6 +576,14 @@ export default function App() {
   useEffect(() => {
     storageSet('kinfolk-tree-visual-style-v2', treeVisualStyle);
   }, [treeVisualStyle]);
+  useEffect(() => {
+    if (!treeStyleMenuOpen) return;
+    const closeMenu = (event) => {
+      if (!treeStyleControlRef.current?.contains(event.target)) setTreeStyleMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', closeMenu);
+    return () => window.removeEventListener('pointerdown', closeMenu);
+  }, [treeStyleMenuOpen]);
   useEffect(() => {
     const updateViewportMode = () => setIsCompactViewport(window.innerWidth <= 1050);
     window.addEventListener('resize', updateViewportMode);
@@ -2243,14 +2253,42 @@ export default function App() {
               <span>−</span>
             </button>
           </div>
-          <label className="mobile-tree-style-control">
-            <span>Tree style</span>
-            <select value={treeVisualStyle} onChange={(event) => setTreeVisualStyle(event.target.value)} aria-label="Tree style">
-              <option value="dashboard">Dashboard</option>
-              <option value="pedigree">Portrait</option>
-              <option value="classic">Classic</option>
-            </select>
-          </label>
+          <div className={`mobile-tree-style-control ${treeStyleMenuOpen ? 'is-open' : ''}`} ref={treeStyleControlRef}>
+            {treeStyleMenuOpen && (
+              <div className="tree-style-selection" role="menu" aria-label="Select tree style">
+                {[
+                  ['dashboard', 'Dashboard cards'],
+                  ['pedigree', 'Portrait pedigree'],
+                  ['classic', 'Classic cards'],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={treeVisualStyle === value}
+                    className={treeVisualStyle === value ? 'active' : ''}
+                    onClick={() => {
+                      setTreeVisualStyle(value);
+                      setTreeStyleMenuOpen(false);
+                    }}
+                  >
+                    <i aria-hidden="true" />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              className="tree-style-fab"
+              aria-label="Choose tree style"
+              aria-expanded={treeStyleMenuOpen}
+              title="Tree style"
+              onClick={() => setTreeStyleMenuOpen((open) => !open)}
+            >
+              <Palette size={18} />
+            </button>
+          </div>
         </section>
       </main>
       {mobileDetailsOpen && <button className="details-scrim" onClick={clearSelection} aria-label="Close person details and clear selection" />}

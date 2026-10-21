@@ -2881,7 +2881,76 @@ button {
   color: var(--text-soft);
 }
 .mobile-tree-style-control {
-  display: none;
+  position: absolute;
+  right: 14px;
+  bottom: 96px;
+  z-index: 6;
+}
+.tree-style-fab {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 95%, transparent);
+  color: var(--text-soft);
+  box-shadow: 0 4px 14px #111a1530;
+  backdrop-filter: blur(7px);
+  cursor: pointer;
+}
+.tree-style-fab:hover,
+.mobile-tree-style-control.is-open .tree-style-fab {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.tree-style-selection {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: 178px;
+  display: grid;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface) 97%, transparent);
+  box-shadow: 0 10px 30px #111a1540;
+  backdrop-filter: blur(9px);
+}
+.tree-style-selection button {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.tree-style-selection button:hover,
+.tree-style-selection button.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.tree-style-selection button i {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+}
+.tree-style-selection button.active i {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .canvas-zoom-controls button:hover {
   background: var(--accent-bg);
@@ -4832,7 +4901,7 @@ button {
   margin-right: 0;
 }
 .tree-style-toolbar-field {
-  display: grid;
+  display: none;
   gap: 2px;
   color: var(--muted);
   font-size: 8px;
@@ -5264,37 +5333,8 @@ button {
     min-height: calc(100dvh - 110px);
   }
   .mobile-tree-style-control {
-    position: absolute;
     right: 9px;
     bottom: 92px;
-    z-index: 6;
-    width: 132px;
-    display: grid;
-    gap: 3px;
-    padding: 7px 8px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--surface) 94%, transparent);
-    box-shadow: 0 4px 14px #111a1530;
-    backdrop-filter: blur(7px);
-  }
-  .mobile-tree-style-control span {
-    color: var(--muted);
-    font-size: 8px;
-    font-weight: 800;
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
-  }
-  .mobile-tree-style-control select {
-    width: 100%;
-    height: 28px;
-    padding: 0 24px 0 7px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface-soft);
-    color: var(--text);
-    font: inherit;
-    font-size: 11px;
   }
 }
 @media (max-width: 380px) {
