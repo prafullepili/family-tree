@@ -2886,7 +2886,14 @@ button {
   bottom: 96px;
   z-index: 6;
 }
-.tree-style-fab {
+.mobile-link-style-control {
+  position: absolute;
+  right: 14px;
+  bottom: 144px;
+  z-index: 6;
+}
+.tree-style-fab,
+.link-style-fab {
   width: 40px;
   height: 40px;
   display: grid;
@@ -2901,7 +2908,9 @@ button {
   cursor: pointer;
 }
 .tree-style-fab:hover,
-.mobile-tree-style-control.is-open .tree-style-fab {
+.link-style-fab:hover,
+.mobile-tree-style-control.is-open .tree-style-fab,
+.mobile-link-style-control.is-open .link-style-fab {
   border-color: var(--accent);
   background: var(--accent-bg);
   color: var(--accent);
@@ -4898,7 +4907,7 @@ button {
   min-width: 0;
 }
 .tree-toolbar-settings .link-style-toolbar-field {
-  margin-right: 0;
+  display: none;
 }
 .tree-style-toolbar-field {
   display: none;
@@ -5335,6 +5344,10 @@ button {
   .mobile-tree-style-control {
     right: 16px;
     bottom: 92px;
+  }
+  .mobile-link-style-control {
+    right: 16px;
+    bottom: 140px;
   }
 }
 @media (max-width: 380px) {

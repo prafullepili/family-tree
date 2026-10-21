@@ -28,6 +28,7 @@ import {
   Info,
   Palette,
   Network,
+  Share2,
 } from 'lucide-react';
 import { initialPeople } from './demoFamily.js';
 import { layoutTree, resolveNodeOverlaps } from './layoutTree.js';
@@ -480,6 +481,8 @@ export default function App() {
   const canvasHelpRef = useRef(null);
   const [treeStyleMenuOpen, setTreeStyleMenuOpen] = useState(false);
   const treeStyleControlRef = useRef(null);
+  const [linkStyleMenuOpen, setLinkStyleMenuOpen] = useState(false);
+  const linkStyleControlRef = useRef(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [detailsWidth, setDetailsWidth] = useState(() => {
@@ -578,13 +581,17 @@ export default function App() {
     storageSet('kinfolk-tree-visual-style-v2', treeVisualStyle);
   }, [treeVisualStyle]);
   useEffect(() => {
-    if (!treeStyleMenuOpen) return;
+    if (treeVisualStyle === 'pedigree' && linkStyle !== 'classic') setLinkStyle('classic');
+  }, [treeVisualStyle, linkStyle]);
+  useEffect(() => {
+    if (!treeStyleMenuOpen && !linkStyleMenuOpen) return;
     const closeMenu = (event) => {
       if (!treeStyleControlRef.current?.contains(event.target)) setTreeStyleMenuOpen(false);
+      if (!linkStyleControlRef.current?.contains(event.target)) setLinkStyleMenuOpen(false);
     };
     window.addEventListener('pointerdown', closeMenu);
     return () => window.removeEventListener('pointerdown', closeMenu);
-  }, [treeStyleMenuOpen]);
+  }, [treeStyleMenuOpen, linkStyleMenuOpen]);
   useEffect(() => {
     const updateViewportMode = () => setIsCompactViewport(window.innerWidth <= 1050);
     window.addEventListener('resize', updateViewportMode);
@@ -2284,6 +2291,41 @@ export default function App() {
               onClick={() => setTreeStyleMenuOpen((open) => !open)}
             >
               <Network size={18} />
+            </button>
+          </div>
+          <div className={`mobile-link-style-control ${linkStyleMenuOpen ? 'is-open' : ''}`} ref={linkStyleControlRef}>
+            {linkStyleMenuOpen && (
+              <div className="tree-style-selection" role="menu" aria-label="Select link style">
+                {[
+                  ['direct', 'Direct links'],
+                  ['classic', 'Classic branches'],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={linkStyle === value}
+                    className={linkStyle === value ? 'active' : ''}
+                    onClick={() => {
+                      setLinkStyle(value);
+                      setLinkStyleMenuOpen(false);
+                    }}
+                  >
+                    <i aria-hidden="true" />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              className="link-style-fab"
+              aria-label="Choose link style"
+              aria-expanded={linkStyleMenuOpen}
+              title="Link style"
+              onClick={() => setLinkStyleMenuOpen((open) => !open)}
+            >
+              <Share2 size={18} />
             </button>
           </div>
         </section>
