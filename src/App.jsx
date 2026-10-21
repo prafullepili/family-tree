@@ -347,6 +347,8 @@ export default function App() {
   const [apiState, setApiState] = useState('checking');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshFailed, setRefreshFailed] = useState(false);
+  const [confirmArrange, setConfirmArrange] = useState(false);
+  const [isArranging, setIsArranging] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteDescendants, setDeleteDescendants] = useState(() => storageGet('kinfolk-delete-descendants') === 'true');
   const drag = useRef(null);
@@ -1082,6 +1084,45 @@ export default function App() {
       viewport.scrollTop = Math.max(0, Math.min(viewport.scrollHeight - viewport.clientHeight, viewport.scrollTop + boardRect.top + centerY * fittedZoom - targetY));
     });
   }
+  async function arrangeFamily() {
+    if (!familyPeople.length || isArranging) return;
+    setIsArranging(true);
+    try {
+      const automaticLayout = layoutTree(familyPeople.map((person) => ({ ...person, treeX: null, treeY: null })));
+      const arrangedPositions = familyPeople.map((person) => {
+        const position = automaticLayout.positions.get(person.id);
+        return { id: person.id, treeX: position.rawX, treeY: position.rawY };
+      });
+      if (apiState === 'connected') {
+        const databasePositions = arrangedPositions
+          .map((position) => ({ ...position, id: people.find((person) => person.id === position.id)?._id }))
+          .filter((position) => position.id);
+        const response = await fetch('/api/people/layout/positions', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ positions: databasePositions }),
+        });
+        if (!response.ok) throw Error('Could not save the arranged family');
+      }
+      const positionById = new Map(arrangedPositions.map((position) => [position.id, position]));
+      setPeople((current) =>
+        current.map((person) => {
+          const position = positionById.get(person.id);
+          return position ? { ...person, treeX: position.treeX, treeY: position.treeY } : person;
+        }),
+      );
+      setPhoneLayoutPreview({});
+      setSelectedNodeIds([]);
+      setConfirmArrange(false);
+      manualZoomTouched.current = false;
+      autoFitSignature.current = '';
+      notify(apiState === 'connected' ? 'Family arranged and saved' : 'Family arranged for this browser');
+    } catch (error) {
+      notify(error.message || 'Could not arrange the family');
+    } finally {
+      setIsArranging(false);
+    }
+  }
   function handleTouchStart(e) {
     if (e.touches.length !== 2) return;
     e.preventDefault();
@@ -1650,6 +1691,16 @@ export default function App() {
           </div>
           <div className="tree-toolbar-actions">
             <button
+              className="arrange-family-button"
+              onClick={() => setConfirmArrange(true)}
+              disabled={!familyPeople.length || isArranging}
+              aria-label="Arrange family into a clear layout"
+              title="Arrange generations and save the new positions"
+            >
+              <GitFork size={14} />
+              <span>{isArranging ? 'Arranging…' : 'Arrange'}</span>
+            </button>
+            <button
               className={`canvas-lock-button ${movementLocked ? 'locked' : 'unlocked'}`}
               onClick={() => setMovementLocked((locked) => !locked)}
               aria-pressed={movementLocked}
@@ -2169,6 +2220,28 @@ export default function App() {
               <button onClick={() => setConfirmDelete(false)}>Cancel</button>
               <button className="danger-action" onClick={removePerson}>
                 Remove {selectedNodeIds.length > 1 ? 'selected people' : 'person'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {confirmArrange && (
+        <div
+          className="simple-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isArranging) setConfirmArrange(false);
+          }}
+        >
+          <div className="delete-dialog arrange-dialog" role="dialog" aria-modal="true" aria-labelledby="arrange-family-title">
+            <div className="arrange-dialog-icon" aria-hidden="true">
+              <GitFork size={20} />
+            </div>
+            <h2 id="arrange-family-title">Arrange this family?</h2>
+            <p>The visible family will be placed in clear generation rows with partners and siblings together. The new positions will be saved for every device.</p>
+            <div>
+              <button onClick={() => setConfirmArrange(false)} disabled={isArranging}>Cancel</button>
+              <button className="arrange-action" onClick={arrangeFamily} disabled={isArranging}>
+                {isArranging ? 'Arranging…' : 'Arrange family'}
               </button>
             </div>
           </div>
