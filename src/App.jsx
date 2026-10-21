@@ -1155,8 +1155,8 @@ export default function App() {
     setSelectedId(personId);
     setSelectedNodeIds([]);
   }
-  function openAddPersonForm(relativeToId = '') {
-    setModal({ inline: true, relativeToId, focusLinks: Boolean(relativeToId) });
+  function openAddPersonForm() {
+    setModal({ inline: true });
     setDetailsOpen(true);
     if (window.innerWidth <= 1050) {
       setSidebarOpen(false);
@@ -1186,7 +1186,7 @@ export default function App() {
   }
   function startDrag(e, p, pos) {
     if (e.button !== 0) return;
-    if (e.target.closest('.tree-node-info,.tree-node-edit,.tree-node-delete,.tree-node-add,.tree-node-about,.tree-node-about-tooltip')) return;
+    if (e.target.closest('.tree-node-info,.tree-node-edit,.tree-node-delete,.tree-node-about,.tree-node-about-tooltip')) return;
     e.preventDefault();
     e.stopPropagation();
     if (movementLocked) {
@@ -1921,20 +1921,6 @@ export default function App() {
                         </span>
                         <span className="drag-grip">⠿</span>
                       </button>
-                      {treeVisualStyle === 'pedigree' && (
-                        <button
-                          className="tree-node-add"
-                          title={`Add a relative for ${fullName(person)}`}
-                          aria-label={`Add a relative for ${fullName(person)}`}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openAddPersonForm(person.id);
-                          }}
-                        >
-                          <Plus size={17} />
-                        </button>
-                      )}
                       <button
                         className="tree-node-edit"
                         title={`Edit ${fullName(person)}`}
@@ -2428,7 +2414,7 @@ function PersonModal({ modal, people, onClose, onSave }) {
     notes: p?.notes || '',
   });
   const [relationships, setRelationships] = useState(() => {
-    if (!p) return modal.relativeToId && people.some((person) => person.id === modal.relativeToId) ? [{ personId: modal.relativeToId, role: '', customLabel: '' }] : [];
+    if (!p) return [];
     const rows = [];
     const add = (personId, role, customLabel = '') => {
       if (personId !== p.id && people.some((person) => person.id === personId) && !rows.some((link) => link.personId === personId)) rows.push({ personId, role, customLabel });
