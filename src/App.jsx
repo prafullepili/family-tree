@@ -227,16 +227,95 @@ function compactGenerationPositions(people) {
     rows.get(level).push(person);
   });
   const nodeWidth = 196;
-  const horizontalGap = 32;
+  const coupleGap = 14;
+  const familyGap = 42;
   const generationGap = 170;
   const positions = [];
+  const positionById = new Map();
   [...rows.entries()]
     .sort((a, b) => a[0] - b[0])
     .forEach(([level, members]) => {
-      members.sort((a, b) => (automatic.positions.get(a.id)?.automaticX || 0) - (automatic.positions.get(b.id)?.automaticX || 0));
-      const rowWidth = members.length * nodeWidth + Math.max(0, members.length - 1) * horizontalGap;
-      const startX = -rowWidth / 2;
-      members.forEach((person, index) => positions.push({ id: person.id, treeX: startX + index * (nodeWidth + horizontalGap), treeY: level * generationGap }));
+      const memberIds = new Set(members.map((person) => person.id));
+      const seen = new Set();
+      const units = [];
+      members.forEach((person) => {
+        if (seen.has(person.id)) return;
+        const unit = [];
+        const queue = [person.id];
+        seen.add(person.id);
+        while (queue.length) {
+          const id = queue.shift();
+          unit.push(byId.get(id));
+          (byId.get(id)?.partnerIds || []).forEach((partnerId) => {
+            if (memberIds.has(partnerId) && !seen.has(partnerId)) {
+              seen.add(partnerId);
+              queue.push(partnerId);
+            }
+          });
+        }
+        unit.sort((a, b) => (automatic.positions.get(a.id)?.automaticX || 0) - (automatic.positions.get(b.id)?.automaticX || 0));
+        const parentXs = unit.flatMap((member) => (member.parentIds || []).map((parentId) => positionById.get(parentId)?.treeX).filter(Number.isFinite));
+        units.push({
+          members: unit,
+          parentKey: [...new Set(unit.flatMap((member) => member.parentIds || []).filter((parentId) => positionById.has(parentId)))].sort().join('|'),
+          anchor: parentXs.length ? parentXs.reduce((sum, x) => sum + x, 0) / parentXs.length : null,
+          automaticX: unit.reduce((sum, member) => sum + (automatic.positions.get(member.id)?.automaticX || 0), 0) / unit.length,
+          width: unit.length * nodeWidth + Math.max(0, unit.length - 1) * coupleGap,
+        });
+      });
+      units.sort((a, b) => {
+        if (Number.isFinite(a.anchor) && Number.isFinite(b.anchor)) return a.anchor - b.anchor || a.automaticX - b.automaticX;
+        if (Number.isFinite(a.anchor)) return -1;
+        if (Number.isFinite(b.anchor)) return 1;
+        return a.automaticX - b.automaticX;
+      });
+      const blockMap = new Map();
+      units.forEach((unit, index) => {
+        const key = unit.parentKey || `root-${index}`;
+        if (!blockMap.has(key)) blockMap.set(key, { units: [], anchor: unit.anchor, automaticX: unit.automaticX });
+        blockMap.get(key).units.push(unit);
+      });
+      const blocks = [...blockMap.values()].map((block) => ({
+        ...block,
+        width: block.units.reduce((sum, unit) => sum + unit.width, 0) + Math.max(0, block.units.length - 1) * familyGap,
+      }));
+      blocks.sort((a, b) => {
+        if (Number.isFinite(a.anchor) && Number.isFinite(b.anchor)) return a.anchor - b.anchor || a.automaticX - b.automaticX;
+        if (Number.isFinite(a.anchor)) return -1;
+        if (Number.isFinite(b.anchor)) return 1;
+        return a.automaticX - b.automaticX;
+      });
+      if (blocks.every((block) => !Number.isFinite(block.anchor))) {
+        const rowWidth = blocks.reduce((sum, block) => sum + block.width, 0) + Math.max(0, blocks.length - 1) * familyGap;
+        let cursor = -rowWidth / 2;
+        blocks.forEach((block) => {
+          block.x = cursor;
+          cursor += block.width + familyGap;
+        });
+      } else {
+        let rightEdge = -Infinity;
+        blocks.forEach((block) => {
+          const desiredX = Number.isFinite(block.anchor) ? block.anchor - block.width / 2 : rightEdge + familyGap;
+          block.x = Math.max(desiredX, rightEdge + familyGap);
+          rightEdge = block.x + block.width;
+        });
+        const anchoredBlocks = blocks.filter((block) => Number.isFinite(block.anchor));
+        const correction = anchoredBlocks.reduce((sum, block) => sum + block.anchor - (block.x + block.width / 2), 0) / anchoredBlocks.length;
+        blocks.forEach((block) => {
+          block.x += correction;
+        });
+      }
+      blocks.forEach((block) => {
+        let unitX = block.x;
+        block.units.forEach((unit) => {
+          unit.members.forEach((person, index) => {
+            const position = { id: person.id, treeX: unitX + index * (nodeWidth + coupleGap), treeY: level * generationGap };
+            positions.push(position);
+            positionById.set(person.id, position);
+          });
+          unitX += unit.width + familyGap;
+        });
+      });
     });
   return positions;
 }
@@ -341,13 +420,14 @@ function FamilyBranchLinks({ branches, people, orthogonal = false, highlightedLi
               const linkKey = `${branchKey}-${branch.children[i]}`;
               const linkHighlighted = highlightedLink?.key === linkKey;
               const linkedIds = [...branch.parentIds, branch.children[i]];
+              const parentNames = branch.parentIds.map((id) => fullName(byId.get(id))).join(' and ');
               return (
                 <g key={branch.children[i]} className={`relationship-link ${linkHighlighted ? 'is-highlighted' : ''}`}>
                   <path
                     className="connector-hit"
                     d={curve}
                     tabIndex="0"
-                    aria-label={`${label} relationship`}
+                    aria-label={`${parentNames} to ${fullName(child)} · ${label}`}
                     onPointerEnter={() => onHighlight({ key: linkKey, ids: linkedIds })}
                     onPointerLeave={() => onHighlight(null)}
                     onFocus={() => onHighlight({ key: linkKey, ids: linkedIds })}
