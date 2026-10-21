@@ -1231,11 +1231,7 @@ export default function App() {
     manualZoomTouched.current = true;
     const viewport = treeScroll.current;
     if (!viewport) return;
-    const availableWidth = Math.max(1, viewport.clientWidth - 48);
-    const availableHeight = Math.max(1, viewport.clientHeight - 48);
-    const contentWidth = Math.max(1, maxNodeX - minNodeX);
-    const contentHeight = Math.max(1, maxNodeY - minNodeY);
-    const fittedZoom = Math.max(0.1, Math.min(1, maxCanvasZoom, availableWidth / contentWidth, availableHeight / contentHeight));
+    const fittedZoom = Math.min(1, maxCanvasZoom);
     zoomValue.current = fittedZoom;
     setZoom(fittedZoom);
     requestAnimationFrame(() => {
@@ -1898,7 +1894,7 @@ export default function App() {
                 <ZoomIn size={16} />
               </button>
               <i />
-              <button onClick={fitTreeToView} aria-label="Fit tree to view">
+              <button onClick={fitTreeToView} aria-label="Reset tree to 100% and center" title="100% and center">
                 <Maximize2 size={15} />
               </button>
             </div>
