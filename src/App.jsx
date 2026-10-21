@@ -2243,6 +2243,14 @@ export default function App() {
               <span>−</span>
             </button>
           </div>
+          <label className="mobile-tree-style-control">
+            <span>Tree style</span>
+            <select value={treeVisualStyle} onChange={(event) => setTreeVisualStyle(event.target.value)} aria-label="Tree style">
+              <option value="dashboard">Dashboard</option>
+              <option value="pedigree">Portrait</option>
+              <option value="classic">Classic</option>
+            </select>
+          </label>
         </section>
       </main>
       {mobileDetailsOpen && <button className="details-scrim" onClick={clearSelection} aria-label="Close person details and clear selection" />}
