@@ -4808,6 +4808,17 @@ button {
 .tree-toolbar-settings .link-style-toolbar-field {
   margin-right: 0;
 }
+.tree-style-toolbar-field {
+  display: grid;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.tree-style-toolbar-field .link-style-select {
+  width: 134px;
+}
 .family-color-toggle {
   height: 30px;
   display: inline-flex;
@@ -4996,6 +5007,68 @@ button {
   --family-card-bg: #343c37;
   --family-card-border: #778279;
 }
+
+/* Experimental Style 4: modern dashboard flow cards. */
+.tree-style-dashboard {
+  --dashboard-line: #0f9f76;
+  --dashboard-card: #ffffff;
+  --dashboard-card-text: #172033;
+  --dashboard-card-muted: #64748b;
+  --dashboard-canvas: #f5f7fa;
+}
+.tree-style-dashboard.theme-dark {
+  --dashboard-line: #58d7ad;
+  --dashboard-card: #202a25;
+  --dashboard-card-text: #f1f5f3;
+  --dashboard-card-muted: #9cacA3;
+  --dashboard-canvas: #131a16;
+}
+.tree-style-dashboard .simple-canvas {
+  background-color: var(--dashboard-canvas);
+  background-image: radial-gradient(color-mix(in srgb, var(--dashboard-line) 20%, transparent) 0.7px, transparent 0.7px);
+}
+.tree-style-dashboard .tree-person-card {
+  border: 1px solid color-mix(in srgb, var(--dashboard-line) 30%, #d9e0dc);
+  border-radius: 14px;
+  background: var(--dashboard-card);
+  box-shadow: 0 8px 20px color-mix(in srgb, #0f172a 13%, transparent);
+  color: var(--dashboard-card-text);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+.tree-style-dashboard .tree-person-card:hover,
+.tree-style-dashboard .tree-person.selected .tree-person-card {
+  transform: translateY(-2px);
+  border-color: var(--dashboard-line);
+  box-shadow: 0 12px 28px color-mix(in srgb, #0f172a 18%, transparent);
+}
+.tree-style-dashboard .tree-person-copy strong {
+  color: var(--dashboard-card-text);
+}
+.tree-style-dashboard .tree-person-copy small,
+.tree-style-dashboard .drag-grip {
+  color: var(--dashboard-card-muted);
+}
+.tree-style-dashboard .person-avatar {
+  background: color-mix(in srgb, var(--dashboard-line) 14%, #fff);
+  color: var(--dashboard-line);
+}
+.tree-style-dashboard .connector {
+  stroke: var(--dashboard-line);
+  stroke-width: 2.4;
+  opacity: 0.9;
+}
+.tree-style-dashboard .connector.partner {
+  stroke: #2563eb;
+}
+.tree-style-dashboard .connector-relation {
+  fill: var(--dashboard-card-text);
+}
+.tree-style-dashboard #family-link-arrow path {
+  fill: var(--dashboard-line);
+}
+.tree-style-dashboard #partner-link-arrow path {
+  fill: #2563eb;
+}
 @media (max-width: 520px) {
   .tree-toolbar-simple {
     gap: 6px;
@@ -5010,6 +5083,14 @@ button {
     padding: 0;
   }
   .family-color-toggle span {
+    display: none;
+  }
+  .tree-style-toolbar-field {
+    display: none;
+  }
+  .tree-toolbar-simple > .tree-count,
+  .zoom-tools > span,
+  .zoom-tools > i {
     display: none;
   }
   .arrange-family-button {

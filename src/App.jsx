@@ -313,6 +313,7 @@ export default function App() {
   const [familyPickerOpen, setFamilyPickerOpen] = useState(false);
   const [familyQuery, setFamilyQuery] = useState('');
   const [linkStyle, setLinkStyle] = useState(() => (['direct', 'classic'].includes(storageGet('kinfolk-link-style')) ? storageGet('kinfolk-link-style') : 'classic'));
+  const [treeVisualStyle, setTreeVisualStyle] = useState(() => storageGet('kinfolk-tree-visual-style') || 'dashboard');
   const [familyColorsEnabled, setFamilyColorsEnabled] = useState(() => storageGet('kinfolk-family-colors-v1') === 'true');
   const [selectedId, setSelectedId] = useState(() => initialCache.people[0]?.id || '');
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
@@ -419,6 +420,9 @@ export default function App() {
   useEffect(() => {
     storageSet('kinfolk-canvas-movement-locked-v2', String(movementLocked));
   }, [movementLocked]);
+  useEffect(() => {
+    storageSet('kinfolk-tree-visual-style', treeVisualStyle);
+  }, [treeVisualStyle]);
   useEffect(() => {
     const updateViewportMode = () => setIsCompactViewport(window.innerWidth <= 1050);
     window.addEventListener('resize', updateViewportMode);
@@ -1442,7 +1446,7 @@ export default function App() {
   const treeName = selectedFamilyId === '__all__' ? 'All families' : selectedFamily?.name || 'Your family';
   return (
     <div
-      className={`family-app theme-${theme} ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'} ${detailsOpen ? 'details-open' : 'details-closed'} ${modal?.inline ? 'editing-person' : ''}`}
+      className={`family-app theme-${theme} tree-style-${treeVisualStyle} ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'} ${detailsOpen ? 'details-open' : 'details-closed'} ${modal?.inline ? 'editing-person' : ''}`}
       style={{ '--details-width': `${detailsWidth}px` }}
     >
       {sidebarOpen && (
@@ -1667,6 +1671,13 @@ export default function App() {
                 <option value="classic">Classic branches</option>
               </select>
             </label>
+            <label className="tree-style-toolbar-field">
+              <span>TREE STYLE</span>
+              <select className="link-style-select" value={treeVisualStyle} onChange={(event) => setTreeVisualStyle(event.target.value)}>
+                <option value="dashboard">Dashboard cards</option>
+                <option value="classic">Classic cards</option>
+              </select>
+            </label>
             <button
               className={`family-color-toggle ${familyColorsEnabled ? 'active' : ''}`}
               type="button"
@@ -1853,7 +1864,7 @@ export default function App() {
                           <path
                             className={`connector ${edge.kind}`}
                             d={d}
-                            markerStart={`url(#${edge.kind === 'partner' ? 'partner-link-arrow' : 'family-link-arrow'})`}
+                            markerStart={treeVisualStyle === 'dashboard' && edge.kind === 'parent' ? undefined : `url(#${edge.kind === 'partner' ? 'partner-link-arrow' : 'family-link-arrow'})`}
                             markerEnd={`url(#${edge.kind === 'partner' ? 'partner-link-arrow' : 'family-link-arrow'})`}
                           />
                           <text className="connector-relation" x={relationLabelPoint.x} y={relationLabelPoint.y} textAnchor="middle" dominantBaseline="central">
