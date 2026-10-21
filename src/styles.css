@@ -4133,7 +4133,9 @@ button {
 }
 .relationship-link.is-highlighted .connector-relation {
   fill: #d88900;
-  font-size: 11px;
+  font-size: 18px;
+  font-weight: 800;
+  stroke-width: 6px;
 }
 .tree-person.link-highlighted {
   z-index: 6;
@@ -5198,6 +5200,17 @@ button {
 }
 .tree-style-pedigree .connector-relation {
   display: none;
+}
+.tree-style-pedigree .relationship-link.is-highlighted .connector-relation {
+  display: block;
+  fill: #f5ad2d;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  paint-order: stroke;
+  stroke: var(--pedigree-canvas);
+  stroke-width: 9px;
+  stroke-linejoin: round;
 }
 .tree-style-pedigree .tree-person.family-colored .tree-person-card {
   background: var(--family-card-bg);
