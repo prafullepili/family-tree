@@ -5385,18 +5385,40 @@ button {
   fill: #f0a928;
 }
 
-/* Large-tree focus mode with D3-routed bundled paths. */
+/* Direction-aware D3 curves keep large trees calm and easy to trace. */
 .link-style-bundled .connector {
-  stroke: color-mix(in srgb, var(--accent) 66%, var(--line));
-  stroke-width: 1.6;
-  opacity: 0.42;
-  transition: opacity 0.16s ease, stroke 0.16s ease, stroke-width 0.16s ease;
+  stroke: color-mix(in srgb, var(--line) 78%, var(--accent));
+  stroke-width: 1.35;
+  stroke-linecap: round;
+  opacity: 0.5;
+  transition: opacity 0.16s ease, stroke 0.16s ease, stroke-width 0.16s ease, filter 0.16s ease;
+}
+.link-style-bundled #smooth-link-dot circle {
+  fill: color-mix(in srgb, var(--line) 78%, var(--accent));
+}
+.theme-dark.link-style-bundled .connector {
+  stroke: #8fa9b8;
+  opacity: 0.68;
+}
+.theme-dark.link-style-bundled #smooth-link-dot circle {
+  fill: #a9bfcb;
 }
 .link-style-bundled .connector.partner {
-  stroke: color-mix(in srgb, #8b7cf6 72%, var(--line));
+  stroke: color-mix(in srgb, #8b7cf6 58%, var(--line));
+  stroke-width: 1.75;
+  stroke-dasharray: 5 4;
+}
+.link-style-bundled .connector.sibling {
+  stroke-dasharray: 2 5;
+}
+.link-style-bundled .family-branch-links > g > .family-route {
+  opacity: 0.34;
+}
+.link-style-bundled .family-drop {
+  stroke-linejoin: round;
 }
 .link-style-bundled.has-link-focus .relationship-link:not(.is-node-related) .connector {
-  opacity: 0.055;
+  opacity: 0.07;
 }
 .link-style-bundled .connector-relation {
   opacity: 0;

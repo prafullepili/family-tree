@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { curveBundle, line as d3Line } from 'd3-shape';
+import { curveBumpX, curveBumpY, line as d3Line } from 'd3-shape';
 import {
   Plus,
   Search,
@@ -61,15 +61,12 @@ function storageRemove(key) {
   }
 }
 const initials = (p) => `${p?.firstName?.[0] || ''}${p?.lastName?.[0] || ''}`.toUpperCase() || '?';
-const bundledLine = d3Line().curve(curveBundle.beta(0.86));
-function bundledRelationshipPath(edge) {
-  const middleX = (edge.x1 + edge.x2) / 2;
-  const middleY = (edge.y1 + edge.y2) / 2;
-  const horizontal = Math.abs(edge.x2 - edge.x1) > Math.abs(edge.y2 - edge.y1);
-  const points = horizontal
-    ? [[edge.x1, edge.y1], [middleX, edge.y1], [middleX, middleY], [middleX, edge.y2], [edge.x2, edge.y2]]
-    : [[edge.x1, edge.y1], [edge.x1, middleY], [middleX, middleY], [edge.x2, middleY], [edge.x2, edge.y2]];
-  return bundledLine(points);
+const horizontalRelationshipLine = d3Line().curve(curveBumpX);
+const verticalRelationshipLine = d3Line().curve(curveBumpY);
+function smartRelationshipPath(edge) {
+  const points = [[edge.x1, edge.y1], [edge.x2, edge.y2]];
+  const horizontalRelationship = edge.kind === 'partner' || edge.kind === 'sibling' || Math.abs(edge.y2 - edge.y1) < 20;
+  return (horizontalRelationship ? horizontalRelationshipLine : verticalRelationshipLine)(points);
 }
 const year = (date) => (date ? new Date(date).getUTCFullYear() : '—');
 function formatLongDate(value) {
@@ -432,7 +429,7 @@ function readMongoPeopleCache() {
 function PersonAvatar({ person, size = 'small' }) {
   return <div className={`person-avatar ${size} ${person?.color || 'sage'}`}>{person?.photoUrl ? <img src={person.photoUrl} alt="" /> : <span>{initials(person)}</span>}</div>;
 }
-function FamilyBranchLinks({ branches, people, orthogonal = false, highlightedLink, highlightedNodeId, highlightedAncestorIds, onHighlight }) {
+function FamilyBranchLinks({ branches, people, orthogonal = false, endpointDots = false, highlightedLink, highlightedNodeId, highlightedAncestorIds, onHighlight }) {
   const byId = new Map(people.map((person) => [person.id, person]));
   return (
     <g className="family-branch-links">
@@ -448,7 +445,12 @@ function FamilyBranchLinks({ branches, people, orthogonal = false, highlightedLi
         );
         return (
           <g key={`family-branch-${index}`}>
-            <path className={`connector family-route ${branchHighlighted ? 'is-highlighted' : ''} ${branchNodeRelated ? 'is-node-related' : ''}`} d={bus} />
+            <path
+              className={`connector family-route ${branchHighlighted ? 'is-highlighted' : ''} ${branchNodeRelated ? 'is-node-related' : ''}`}
+              d={bus}
+              markerStart={endpointDots ? `url(#${branchHighlighted || branchNodeRelated ? 'smooth-link-highlight-dot' : 'smooth-link-dot'})` : undefined}
+              markerEnd={endpointDots ? `url(#${branchHighlighted || branchNodeRelated ? 'smooth-link-highlight-dot' : 'smooth-link-dot'})` : undefined}
+            />
             {branch.childXs.map((x, i) => {
               const child = byId.get(branch.children[i]);
               const label = child?.gender === 'male' ? 'Son' : child?.gender === 'female' ? 'Daughter' : 'Child';
@@ -485,8 +487,8 @@ function FamilyBranchLinks({ branches, people, orthogonal = false, highlightedLi
                   <path
                     className="connector family-route family-drop"
                     d={curve}
-                    markerStart={!orthogonal && curvesLeft ? `url(#${markerId})` : undefined}
-                    markerEnd={!orthogonal && !curvesLeft ? `url(#${markerId})` : undefined}
+                    markerStart={endpointDots ? `url(#${linkHighlighted || nodeRelated ? 'smooth-link-highlight-dot' : 'smooth-link-dot'})` : !orthogonal && curvesLeft ? `url(#${markerId})` : undefined}
+                    markerEnd={endpointDots ? `url(#${linkHighlighted || nodeRelated ? 'smooth-link-highlight-dot' : 'smooth-link-dot'})` : !orthogonal && !curvesLeft ? `url(#${markerId})` : undefined}
                   />
                   <text className="connector-relation family-role" x={labelX} y={labelY} textAnchor="middle" dominantBaseline="central">
                     <title>{label}</title>
@@ -2067,7 +2069,7 @@ export default function App() {
               <select className="link-style-select" value={linkStyle} onChange={(e) => setLinkStyle(e.target.value)}>
                 <option value="direct">Direct links</option>
                 <option value="classic">Classic branches</option>
-                <option value="bundled">Bundled paths</option>
+                <option value="bundled">Smooth branches</option>
               </select>
             </label>
             <label className="tree-style-toolbar-field">
@@ -2235,12 +2237,19 @@ export default function App() {
                     <marker id="partner-link-highlight-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
                       <path d="M0 0 L8 4 L0 8 Z" fill="#f0a928" />
                     </marker>
+                    <marker id="smooth-link-dot" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse">
+                      <circle cx="4" cy="4" r="2.4" />
+                    </marker>
+                    <marker id="smooth-link-highlight-dot" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse">
+                      <circle cx="4" cy="4" r="3" fill="#f0a928" />
+                    </marker>
                   </defs>
-                  {linkStyle === 'classic' && (
+                  {(linkStyle === 'classic' || linkStyle === 'bundled') && (
                     <FamilyBranchLinks
                       branches={layout.familyBranches}
                       people={familyPeople}
-                      orthogonal={treeVisualStyle === 'pedigree'}
+                      orthogonal={treeVisualStyle === 'pedigree' || linkStyle === 'bundled'}
+                      endpointDots={linkStyle === 'bundled'}
                       highlightedLink={highlightedLink}
                       highlightedNodeId={activeLinkNodeId}
                       highlightedAncestorIds={highlightedAncestorIds}
@@ -2248,11 +2257,11 @@ export default function App() {
                     />
                   )}
                   {layout.edges
-                    .filter((edge) => linkStyle !== 'classic' || edge.kind !== 'parent')
+                    .filter((edge) => !['classic', 'bundled'].includes(linkStyle) || edge.kind !== 'parent')
                     .map((edge, i) => {
                       const d =
                         linkStyle === 'bundled'
-                          ? bundledRelationshipPath(edge)
+                          ? smartRelationshipPath(edge)
                           : treeVisualStyle === 'pedigree'
                           ? Math.abs(edge.y2 - edge.y1) < 4
                             ? `M${edge.x1} ${edge.y1} H${edge.x2}`
@@ -2320,8 +2329,8 @@ export default function App() {
                           <path
                             className={`connector ${edge.kind}`}
                             d={d}
-                            markerStart={linkStyle === 'bundled' || treeVisualStyle === 'pedigree' || (treeVisualStyle === 'dashboard' && edge.kind === 'parent') ? undefined : `url(#${markerPrefix})`}
-                            markerEnd={linkStyle === 'bundled' || treeVisualStyle === 'pedigree' ? undefined : `url(#${markerPrefix})`}
+                            markerStart={linkStyle === 'bundled' ? `url(#${linkHighlighted || nodeRelated ? 'smooth-link-highlight-dot' : 'smooth-link-dot'})` : treeVisualStyle === 'pedigree' || (treeVisualStyle === 'dashboard' && edge.kind === 'parent') ? undefined : `url(#${markerPrefix})`}
+                            markerEnd={linkStyle === 'bundled' ? `url(#${linkHighlighted || nodeRelated ? 'smooth-link-highlight-dot' : 'smooth-link-dot'})` : treeVisualStyle === 'pedigree' ? undefined : `url(#${markerPrefix})`}
                           />
                           <text className="connector-relation" x={relationLabelPoint.x} y={relationLabelPoint.y} textAnchor="middle" dominantBaseline="central">
                             <title>
@@ -2578,7 +2587,7 @@ export default function App() {
                 {[
                   ['direct', 'Direct links'],
                   ['classic', 'Classic branches'],
-                  ['bundled', 'Bundled paths'],
+                  ['bundled', 'Smooth branches'],
                 ].map(([value, label]) => (
                   <button
                     key={value}
