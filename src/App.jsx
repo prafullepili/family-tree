@@ -29,6 +29,9 @@ import {
   Palette,
   Network,
   Share2,
+  Bookmark,
+  Save,
+  FolderOpen,
 } from 'lucide-react';
 import { initialPeople } from './demoFamily.js';
 import { layoutTree, resolveNodeOverlaps } from './layoutTree.js';
@@ -396,7 +399,7 @@ function readMongoPeopleCache() {
 function PersonAvatar({ person, size = 'small' }) {
   return <div className={`person-avatar ${size} ${person?.color || 'sage'}`}>{person?.photoUrl ? <img src={person.photoUrl} alt="" /> : <span>{initials(person)}</span>}</div>;
 }
-function FamilyBranchLinks({ branches, people, orthogonal = false, highlightedLink, onHighlight }) {
+function FamilyBranchLinks({ branches, people, orthogonal = false, highlightedLink, highlightedNodeId, onHighlight }) {
   const byId = new Map(people.map((person) => [person.id, person]));
   return (
     <g className="family-branch-links">
@@ -404,9 +407,10 @@ function FamilyBranchLinks({ branches, people, orthogonal = false, highlightedLi
         const bus = `M${branch.sourceX} ${branch.sourceY} V${branch.branchY}`;
         const branchKey = `family-${index}`;
         const branchHighlighted = highlightedLink?.key?.startsWith(`${branchKey}-`);
+        const branchNodeRelated = branch.parentIds.includes(highlightedNodeId) || branch.children.includes(highlightedNodeId);
         return (
           <g key={`family-branch-${index}`}>
-            <path className={`connector family-route ${branchHighlighted ? 'is-highlighted' : ''}`} d={bus} />
+            <path className={`connector family-route ${branchHighlighted ? 'is-highlighted' : ''} ${branchNodeRelated ? 'is-node-related' : ''}`} d={bus} />
             {branch.childXs.map((x, i) => {
               const child = byId.get(branch.children[i]);
               const label = child?.gender === 'male' ? 'Son' : child?.gender === 'female' ? 'Daughter' : 'Child';
@@ -421,10 +425,11 @@ function FamilyBranchLinks({ branches, people, orthogonal = false, highlightedLi
               const labelY = (childTop + branch.branchY) / 2 - 7;
               const linkKey = `${branchKey}-${branch.children[i]}`;
               const linkHighlighted = highlightedLink?.key === linkKey;
+              const nodeRelated = branch.parentIds.includes(highlightedNodeId) || branch.children[i] === highlightedNodeId;
               const linkedIds = [...branch.parentIds, branch.children[i]];
               const parentNames = branch.parentIds.map((id) => fullName(byId.get(id))).join(' and ');
               return (
-                <g key={branch.children[i]} className={`relationship-link ${linkHighlighted ? 'is-highlighted' : ''}`}>
+                <g key={branch.children[i]} className={`relationship-link ${linkHighlighted ? 'is-highlighted' : ''} ${nodeRelated ? 'is-node-related' : ''}`}>
                   <path
                     className="connector-hit"
                     d={curve}
@@ -471,6 +476,7 @@ export default function App() {
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [aboutTooltipId, setAboutTooltipId] = useState('');
   const [highlightedLink, setHighlightedLink] = useState(null);
+  const [highlightedNodeId, setHighlightedNodeId] = useState('');
   const [dismissedAboutTooltipId, setDismissedAboutTooltipId] = useState('');
   const [movementLocked, setMovementLocked] = useState(() => storageGet('kinfolk-canvas-movement-locked-v2') === 'true');
   const [marqueeRect, setMarqueeRect] = useState(null);
@@ -507,6 +513,13 @@ export default function App() {
   const [refreshFailed, setRefreshFailed] = useState(false);
   const [confirmArrange, setConfirmArrange] = useState(false);
   const [isArranging, setIsArranging] = useState(false);
+  const [savedLayouts, setSavedLayouts] = useState([]);
+  const [savedLayoutsOpen, setSavedLayoutsOpen] = useState(false);
+  const [layoutName, setLayoutName] = useState('');
+  const [isSavingLayout, setIsSavingLayout] = useState(false);
+  const [applyingLayoutId, setApplyingLayoutId] = useState('');
+  const [confirmLayoutDeleteId, setConfirmLayoutDeleteId] = useState('');
+  const [deletingLayoutId, setDeletingLayoutId] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteDescendants, setDeleteDescendants] = useState(() => storageGet('kinfolk-delete-descendants') === 'true');
   const drag = useRef(null);
@@ -522,6 +535,7 @@ export default function App() {
   const families = useMemo(() => getFamilyGroups(people), [people]);
   const selectedFamily = selectedFamilyId === '__all__' ? null : families.find((group) => group.id === selectedFamilyId) || [...families].sort((a, b) => b.people.length - a.people.length)[0];
   const familyPeople = selectedFamilyId === '__all__' ? people : selectedFamily?.people || people;
+  const layoutScopeId = selectedFamilyId === '__all__' ? '__all__' : selectedFamily?.id || familyPeople[0]?.id || '__all__';
   const familyColorFocusId = familyPeople.some((person) => person.id === selectedId) ? selectedId : familyPeople[0]?.id;
   const familyColors = useMemo(() => familyColorMap(familyPeople, familyColorFocusId), [familyPeople, familyColorFocusId]);
   const selected = people.find((p) => p.id === selectedId) || null;
@@ -792,6 +806,36 @@ export default function App() {
     const timer = setTimeout(() => storageSet('kinfolk-demo-people', JSON.stringify(people)), 250);
     return () => clearTimeout(timer);
   }, [people, apiState]);
+  useEffect(() => {
+    let active = true;
+    if (!familyPeople.length || !['connected', 'demo'].includes(apiState)) {
+      setSavedLayouts([]);
+      return undefined;
+    }
+    if (apiState === 'demo') {
+      try {
+        const layouts = JSON.parse(storageGet('kinfolk-saved-layouts-v1') || '[]');
+        setSavedLayouts(Array.isArray(layouts) ? layouts.filter((item) => item.familyId === layoutScopeId) : []);
+      } catch {
+        setSavedLayouts([]);
+      }
+      return undefined;
+    }
+    fetch(`/api/layouts?familyId=${encodeURIComponent(layoutScopeId)}`, { cache: 'no-store' })
+      .then((response) => {
+        if (!response.ok) throw Error();
+        return response.json();
+      })
+      .then((layouts) => {
+        if (active) setSavedLayouts(layouts);
+      })
+      .catch(() => {
+        if (active) setSavedLayouts([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [apiState, familyPeople.length, layoutScopeId]);
   useEffect(() => {
     if (apiState !== 'connected' || !hasMongoSnapshot) return;
     try {
@@ -1294,6 +1338,125 @@ export default function App() {
       setIsArranging(false);
     }
   }
+  async function saveNamedLayout(event) {
+    event.preventDefault();
+    const name = layoutName.trim();
+    if (!name || !familyPeople.length || isSavingLayout) return;
+    setIsSavingLayout(true);
+    try {
+      const positions = familyPeople
+        .map((person) => {
+          const position = layout.positions.get(person.id);
+          if (!position) return null;
+          return { personId: apiState === 'connected' ? person._id : person.id, treeX: position.rawX, treeY: position.rawY };
+        })
+        .filter((position) => position?.personId);
+      let saved;
+      if (apiState === 'connected') {
+        const response = await fetch('/api/layouts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, familyId: layoutScopeId, familyName: selectedFamily?.name || 'All families', positions }),
+        });
+        if (!response.ok) throw Error((await response.json().catch(() => null))?.error || 'Could not save this tree view');
+        saved = await response.json();
+      } else {
+        const allLayouts = (() => {
+          try {
+            const parsed = JSON.parse(storageGet('kinfolk-saved-layouts-v1') || '[]');
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        })();
+        const normalizedName = name.toLocaleLowerCase();
+        saved = {
+          _id: allLayouts.find((item) => item.familyId === layoutScopeId && item.normalizedName === normalizedName)?._id || `local-${Date.now()}`,
+          name,
+          normalizedName,
+          familyId: layoutScopeId,
+          positions,
+          updatedAt: new Date().toISOString(),
+        };
+        const next = [saved, ...allLayouts.filter((item) => !(item.familyId === layoutScopeId && item.normalizedName === normalizedName))];
+        storageSet('kinfolk-saved-layouts-v1', JSON.stringify(next));
+      }
+      setSavedLayouts((current) => [saved, ...current.filter((item) => item._id !== saved._id && item.normalizedName !== saved.normalizedName)]);
+      setLayoutName('');
+      notify(`Saved “${name}”`);
+    } catch (error) {
+      notify(error.message || 'Could not save this tree view');
+    } finally {
+      setIsSavingLayout(false);
+    }
+  }
+  async function applyNamedLayout(savedLayout) {
+    if (applyingLayoutId) return;
+    setApplyingLayoutId(savedLayout._id);
+    try {
+      const positions = (savedLayout.positions || [])
+        .map((position) => ({
+          id: String(position.personId),
+          treeX: Number(position.treeX),
+          treeY: Number(position.treeY),
+        }))
+        .filter((position) => Number.isFinite(position.treeX) && Number.isFinite(position.treeY));
+      const currentIds = new Set(people.map((person) => String(person._id || person.id)));
+      const availablePositions = positions.filter((position) => currentIds.has(position.id));
+      if (!availablePositions.length) throw Error('No matching people remain in this saved view');
+      if (apiState === 'connected') {
+        const response = await fetch('/api/people/layout/positions', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ positions: availablePositions }),
+        });
+        if (!response.ok) throw Error('Could not restore this tree view');
+      }
+      const byPersonId = new Map(availablePositions.map((position) => [position.id, position]));
+      setPeople((current) =>
+        current.map((person) => {
+          const position = byPersonId.get(String(person._id || person.id));
+          return position ? { ...person, treeX: position.treeX, treeY: position.treeY } : person;
+        }),
+      );
+      setPhoneLayoutPreview({});
+      setSelectedNodeIds([]);
+      setSavedLayoutsOpen(false);
+      manualZoomTouched.current = false;
+      autoFitSignature.current = '';
+      notify(`Restored “${savedLayout.name}”`);
+    } catch (error) {
+      notify(error.message || 'Could not restore this tree view');
+    } finally {
+      setApplyingLayoutId('');
+    }
+  }
+  async function removeNamedLayout(savedLayout) {
+    if (deletingLayoutId) return;
+    setDeletingLayoutId(savedLayout._id);
+    try {
+      if (apiState === 'connected') {
+        const response = await fetch(`/api/layouts/${savedLayout._id}`, { method: 'DELETE' });
+        if (!response.ok) throw Error((await response.json().catch(() => null))?.error || 'Could not remove this saved view');
+      } else {
+        let allLayouts = [];
+        try {
+          const parsed = JSON.parse(storageGet('kinfolk-saved-layouts-v1') || '[]');
+          if (Array.isArray(parsed)) allLayouts = parsed;
+        } catch {
+          // Replace unreadable local layout data with the remaining valid views.
+        }
+        storageSet('kinfolk-saved-layouts-v1', JSON.stringify(allLayouts.filter((item) => item._id !== savedLayout._id)));
+      }
+      setSavedLayouts((current) => current.filter((item) => item._id !== savedLayout._id));
+      setConfirmLayoutDeleteId('');
+      notify(`Removed “${savedLayout.name}”`);
+    } catch (error) {
+      notify(error.message || 'Could not remove this saved view');
+    } finally {
+      setDeletingLayoutId('');
+    }
+  }
   function handleTouchStart(e) {
     if (e.touches.length !== 2) return;
     e.preventDefault();
@@ -1346,6 +1509,7 @@ export default function App() {
   function clearSelection() {
     setSelectedId('');
     setSelectedNodeIds([]);
+    setHighlightedNodeId('');
     setDetailsOpen(false);
     setMobileDetailsOpen(false);
   }
@@ -1870,6 +2034,16 @@ export default function App() {
           </div>
           <div className="tree-toolbar-actions">
             <button
+              className="arrange-family-button saved-layouts-button"
+              onClick={() => setSavedLayoutsOpen(true)}
+              disabled={!familyPeople.length}
+              aria-label="Save or restore a favorite tree view"
+              title="Save or restore a favorite tree view"
+            >
+              <Bookmark size={14} />
+              <span>Saved views</span>
+            </button>
+            <button
               className="arrange-family-button"
               onClick={() => setConfirmArrange(true)}
               disabled={!familyPeople.length || isArranging}
@@ -1986,6 +2160,7 @@ export default function App() {
                       people={familyPeople}
                       orthogonal={treeVisualStyle === 'pedigree'}
                       highlightedLink={highlightedLink}
+                      highlightedNodeId={treeVisualStyle === 'dashboard' ? highlightedNodeId : ''}
                       onHighlight={setHighlightedLink}
                     />
                   )}
@@ -2021,6 +2196,7 @@ export default function App() {
                               : relationshipLabel('Partner', to, from) || 'Partner';
                       const description = `${fullName(from)} · ${relation} · ${fullName(to)}`;
                       const linkId = `${edge.kind}-${edge.fromId}-${edge.toId}`;
+                      const nodeRelated = highlightedNodeId === edge.fromId || highlightedNodeId === edge.toId;
                       const storedPartnerRelation = edge.kind === 'partner' ? partnerRelationship(from, to?.id) || partnerRelationship(to, from?.id) : '';
                       const genderedPartnerPair = (from?.gender === 'male' && to?.gender === 'female') || (from?.gender === 'female' && to?.gender === 'male');
                       const usesDefaultPartnerRole = ['', 'Husband', 'Wife', 'Spouse'].includes(storedPartnerRelation);
@@ -2040,7 +2216,7 @@ export default function App() {
                         linkStyle === 'classic' && (edge.kind === 'partner' || edge.kind === 'sibling'),
                       );
                       return (
-                        <g key={`${linkId}-${i}`} className={`relationship-link ${highlightedLink?.key === linkId ? 'is-highlighted' : ''}`}>
+                        <g key={`${linkId}-${i}`} className={`relationship-link ${highlightedLink?.key === linkId ? 'is-highlighted' : ''} ${treeVisualStyle === 'dashboard' && nodeRelated ? 'is-node-related' : ''}`}>
                           <path
                             className="connector-hit"
                             d={d}
@@ -2076,8 +2252,21 @@ export default function App() {
                       data-person-id={person.id}
                       className={`tree-person gender-${person.gender || 'unspecified'} ${highlightedLink?.ids?.includes(person.id) ? 'link-highlighted' : ''} ${selectedId === person.id || selectedNodeIds.includes(person.id) ? 'selected' : ''} ${familyColorsEnabled && familyColors.has(person.id) ? `family-colored family-color-${familyColors.get(person.id)}` : ''}`}
                       style={{ left: pos.x, top: pos.y }}
+                      onPointerEnter={(e) => {
+                        if (treeVisualStyle === 'dashboard' && e.pointerType !== 'touch') setHighlightedNodeId(person.id);
+                      }}
+                      onPointerLeave={(e) => {
+                        if (treeVisualStyle === 'dashboard' && e.pointerType !== 'touch') {
+                          setHighlightedNodeId((current) => (current === person.id ? '' : current));
+                        }
+                      }}
                       onPointerDown={(e) => {
                         if (e.pointerType === 'touch') startDrag(e, person, pos);
+                      }}
+                      onPointerUp={(e) => {
+                        if (treeVisualStyle === 'dashboard' && e.pointerType === 'touch' && drag.current?.id === person.id && !drag.current.moved) {
+                          setHighlightedNodeId((current) => (current === person.id ? '' : person.id));
+                        }
                       }}
                       onMouseDown={(e) => startDrag(e, person, pos)}
                     >
@@ -2521,6 +2710,90 @@ export default function App() {
               <button className="arrange-action" onClick={arrangeFamily} disabled={isArranging}>
                 {isArranging ? 'Arranging…' : 'Arrange family'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {savedLayoutsOpen && (
+        <div
+          className="simple-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isSavingLayout && !applyingLayoutId) setSavedLayoutsOpen(false);
+          }}
+        >
+          <div className="delete-dialog saved-layouts-dialog" role="dialog" aria-modal="true" aria-labelledby="saved-layouts-title">
+            <button className="saved-layouts-close" onClick={() => setSavedLayoutsOpen(false)} aria-label="Close saved tree views">
+              <X size={17} />
+            </button>
+            <div className="arrange-dialog-icon" aria-hidden="true">
+              <Bookmark size={20} />
+            </div>
+            <h2 id="saved-layouts-title">Favorite tree views</h2>
+            <p>Save this family’s current node positions with a name. Restoring a view also saves it as the active layout on every device.</p>
+            <form className="save-layout-form" onSubmit={saveNamedLayout}>
+              <label htmlFor="saved-layout-name">View name</label>
+              <div>
+                <input
+                  id="saved-layout-name"
+                  value={layoutName}
+                  onChange={(event) => setLayoutName(event.target.value)}
+                  maxLength={60}
+                  placeholder="Example: My favorite layout"
+                  autoFocus
+                />
+                <button type="submit" className="arrange-action" disabled={!layoutName.trim() || isSavingLayout}>
+                  <Save size={14} />
+                  {isSavingLayout ? 'Saving…' : 'Save current'}
+                </button>
+              </div>
+            </form>
+            <div className="saved-layout-list" aria-label="Saved tree views">
+              <div className="saved-layout-list-heading">
+                <span>Saved views</span>
+                <small>{savedLayouts.length}</small>
+              </div>
+              {savedLayouts.length ? (
+                savedLayouts.map((savedLayout) => (
+                  <div className="saved-layout-row" key={savedLayout._id}>
+                    <div>
+                      <strong>{savedLayout.name}</strong>
+                      <small>{savedLayout.positions?.length || 0} people · {new Date(savedLayout.updatedAt).toLocaleDateString()}</small>
+                    </div>
+                    <div className="saved-layout-actions">
+                      {confirmLayoutDeleteId === savedLayout._id ? (
+                        <>
+                          <button type="button" onClick={() => setConfirmLayoutDeleteId('')} disabled={deletingLayoutId === savedLayout._id}>Cancel</button>
+                          <button className="remove-saved-layout-confirm" type="button" onClick={() => removeNamedLayout(savedLayout)} disabled={deletingLayoutId === savedLayout._id}>
+                            {deletingLayoutId === savedLayout._id ? 'Removing…' : 'Remove'}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button type="button" onClick={() => applyNamedLayout(savedLayout)} disabled={Boolean(applyingLayoutId || deletingLayoutId)}>
+                            <FolderOpen size={14} />
+                            {applyingLayoutId === savedLayout._id ? 'Restoring…' : 'Restore'}
+                          </button>
+                          <button
+                            className="remove-saved-layout"
+                            type="button"
+                            onClick={() => setConfirmLayoutDeleteId(savedLayout._id)}
+                            disabled={Boolean(applyingLayoutId || deletingLayoutId)}
+                            aria-label={`Remove saved view ${savedLayout.name}`}
+                            title="Remove saved view"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="saved-layout-empty">
+                  <Bookmark size={18} />
+                  <span>No favorite views saved for this family yet.</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

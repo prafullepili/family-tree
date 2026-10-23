@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import Person from './models/Person.js';
+import TreeLayout from './models/TreeLayout.js';
 
 const app = express();
 app.use(cors());
@@ -18,9 +19,47 @@ app.get('/api/health', (_req, res) =>
     databaseName: mongoose.connection.readyState === 1 ? mongoose.connection.name : null,
   }),
 );
-app.use('/api/people', (req, res, next) => {
+app.use(['/api/people', '/api/layouts'], (req, res, next) => {
   if (mongoose.connection.readyState !== 1) return res.status(503).json({ error: 'MongoDB is not connected. Set MONGODB_URI and restart the API.' });
   next();
+});
+app.get('/api/layouts', async (req, res, next) => {
+  try {
+    const familyId = String(req.query.familyId || '').trim();
+    if (!familyId) return res.status(400).json({ error: 'A family id is required.' });
+    res.json(await TreeLayout.find({ familyId }).sort({ updatedAt: -1 }));
+  } catch (e) {
+    next(e);
+  }
+});
+app.post('/api/layouts', async (req, res, next) => {
+  try {
+    const name = String(req.body?.name || '').trim().slice(0, 60);
+    const familyId = String(req.body?.familyId || '').trim();
+    const positions = (Array.isArray(req.body?.positions) ? req.body.positions : [])
+      .filter((position) => position.personId && Number.isFinite(position.treeX) && Number.isFinite(position.treeY))
+      .map((position) => ({ personId: position.personId, treeX: position.treeX, treeY: position.treeY }));
+    if (!name) return res.status(400).json({ error: 'A layout name is required.' });
+    if (!familyId) return res.status(400).json({ error: 'A family id is required.' });
+    if (!positions.length) return res.status(400).json({ error: 'At least one person position is required.' });
+    const layout = await TreeLayout.findOneAndUpdate(
+      { familyId, normalizedName: name.toLocaleLowerCase() },
+      { $set: { name, normalizedName: name.toLocaleLowerCase(), familyId, familyName: String(req.body?.familyName || '').trim(), positions } },
+      { new: true, upsert: true, runValidators: true },
+    );
+    res.status(201).json(layout);
+  } catch (e) {
+    next(e);
+  }
+});
+app.delete('/api/layouts/:id', async (req, res, next) => {
+  try {
+    const layout = await TreeLayout.findByIdAndDelete(req.params.id);
+    if (!layout) return res.status(404).json({ error: 'Saved tree view not found.' });
+    res.status(204).end();
+  } catch (e) {
+    next(e);
+  }
 });
 app.get('/api/people', async (_req, res, next) => {
   try {
