@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { curveBundle, line as d3Line } from 'd3-shape';
 import {
   Plus,
   Search,
@@ -60,6 +61,16 @@ function storageRemove(key) {
   }
 }
 const initials = (p) => `${p?.firstName?.[0] || ''}${p?.lastName?.[0] || ''}`.toUpperCase() || '?';
+const bundledLine = d3Line().curve(curveBundle.beta(0.86));
+function bundledRelationshipPath(edge) {
+  const middleX = (edge.x1 + edge.x2) / 2;
+  const middleY = (edge.y1 + edge.y2) / 2;
+  const horizontal = Math.abs(edge.x2 - edge.x1) > Math.abs(edge.y2 - edge.y1);
+  const points = horizontal
+    ? [[edge.x1, edge.y1], [middleX, edge.y1], [middleX, middleY], [middleX, edge.y2], [edge.x2, edge.y2]]
+    : [[edge.x1, edge.y1], [edge.x1, middleY], [middleX, middleY], [edge.x2, middleY], [edge.x2, edge.y2]];
+  return bundledLine(points);
+}
 const year = (date) => (date ? new Date(date).getUTCFullYear() : '—');
 function formatLongDate(value) {
   if (!value) return 'Not added';
@@ -421,7 +432,7 @@ function readMongoPeopleCache() {
 function PersonAvatar({ person, size = 'small' }) {
   return <div className={`person-avatar ${size} ${person?.color || 'sage'}`}>{person?.photoUrl ? <img src={person.photoUrl} alt="" /> : <span>{initials(person)}</span>}</div>;
 }
-function FamilyBranchLinks({ branches, people, orthogonal = false, highlightedLink, highlightedNodeId, onHighlight }) {
+function FamilyBranchLinks({ branches, people, orthogonal = false, highlightedLink, highlightedNodeId, highlightedAncestorIds, onHighlight }) {
   const byId = new Map(people.map((person) => [person.id, person]));
   return (
     <g className="family-branch-links">
@@ -429,7 +440,12 @@ function FamilyBranchLinks({ branches, people, orthogonal = false, highlightedLi
         const bus = `M${branch.sourceX} ${branch.sourceY} V${branch.branchY}`;
         const branchKey = `family-${index}`;
         const branchHighlighted = highlightedLink?.key?.startsWith(`${branchKey}-`);
-        const branchNodeRelated = branch.parentIds.includes(highlightedNodeId) || branch.children.includes(highlightedNodeId);
+        const branchNodeRelated = branch.children.some(
+          (childId) =>
+            branch.parentIds.includes(highlightedNodeId) ||
+            childId === highlightedNodeId ||
+            (highlightedAncestorIds.has(childId) && branch.parentIds.some((parentId) => highlightedAncestorIds.has(parentId))),
+        );
         return (
           <g key={`family-branch-${index}`}>
             <path className={`connector family-route ${branchHighlighted ? 'is-highlighted' : ''} ${branchNodeRelated ? 'is-node-related' : ''}`} d={bus} />
@@ -447,7 +463,11 @@ function FamilyBranchLinks({ branches, people, orthogonal = false, highlightedLi
               const labelY = (childTop + branch.branchY) / 2 - 7;
               const linkKey = `${branchKey}-${branch.children[i]}`;
               const linkHighlighted = highlightedLink?.key === linkKey;
-              const nodeRelated = branch.parentIds.includes(highlightedNodeId) || branch.children[i] === highlightedNodeId;
+              const nodeRelated =
+                branch.parentIds.includes(highlightedNodeId) ||
+                branch.children[i] === highlightedNodeId ||
+                (highlightedAncestorIds.has(branch.children[i]) && branch.parentIds.some((parentId) => highlightedAncestorIds.has(parentId)));
+              const markerId = linkHighlighted || nodeRelated ? 'family-link-highlight-arrow' : 'family-link-arrow';
               const linkedIds = [...branch.parentIds, branch.children[i]];
               const parentNames = branch.parentIds.map((id) => fullName(byId.get(id))).join(' and ');
               return (
@@ -465,8 +485,8 @@ function FamilyBranchLinks({ branches, people, orthogonal = false, highlightedLi
                   <path
                     className="connector family-route family-drop"
                     d={curve}
-                    markerStart={!orthogonal && curvesLeft ? 'url(#family-link-arrow)' : undefined}
-                    markerEnd={!orthogonal && !curvesLeft ? 'url(#family-link-arrow)' : undefined}
+                    markerStart={!orthogonal && curvesLeft ? `url(#${markerId})` : undefined}
+                    markerEnd={!orthogonal && !curvesLeft ? `url(#${markerId})` : undefined}
                   />
                   <text className="connector-relation family-role" x={labelX} y={labelY} textAnchor="middle" dominantBaseline="central">
                     <title>{label}</title>
@@ -491,7 +511,7 @@ export default function App() {
   const [selectedFamilyId, setSelectedFamilyId] = useState('');
   const [familyPickerOpen, setFamilyPickerOpen] = useState(false);
   const [familyQuery, setFamilyQuery] = useState('');
-  const [linkStyle, setLinkStyle] = useState(() => (['direct', 'classic'].includes(storageGet('kinfolk-link-style')) ? storageGet('kinfolk-link-style') : 'classic'));
+  const [linkStyle, setLinkStyle] = useState(() => (['direct', 'classic', 'bundled'].includes(storageGet('kinfolk-link-style')) ? storageGet('kinfolk-link-style') : 'classic'));
   const [treeVisualStyle, setTreeVisualStyle] = useState(() => storageGet('kinfolk-tree-visual-style-v2') || 'pedigree');
   const [familyColorsEnabled, setFamilyColorsEnabled] = useState(() => storageGet('kinfolk-family-colors-v1') === 'true');
   const [selectedId, setSelectedId] = useState('');
@@ -558,6 +578,29 @@ export default function App() {
   const selectedFamily = selectedFamilyId === '__all__' ? null : families.find((group) => group.id === selectedFamilyId) || [...families].sort((a, b) => b.people.length - a.people.length)[0];
   const familyPeople = selectedFamilyId === '__all__' ? people : selectedFamily?.people || people;
   const layoutScopeId = selectedFamilyId === '__all__' ? '__all__' : selectedFamily?.id || familyPeople[0]?.id || '__all__';
+  const activeLinkNodeId = highlightedNodeId || selectedId;
+  const highlightedAncestorIds = useMemo(() => {
+    const byId = new Map(familyPeople.map((person) => [person.id, person]));
+    const ids = new Set();
+    const visit = (id) => {
+      if (!id || ids.has(id) || !byId.has(id)) return;
+      ids.add(id);
+      (byId.get(id).parentIds || []).forEach(visit);
+    };
+    visit(activeLinkNodeId);
+    return ids;
+  }, [activeLinkNodeId, familyPeople]);
+  const highlightedNetworkIds = useMemo(() => {
+    const ids = new Set(highlightedAncestorIds);
+    if (!activeLinkNodeId) return ids;
+    familyPeople.forEach((person) => {
+      const references = [...(person.parentIds || []), ...(person.partnerIds || []), ...(person.siblingIds || []), ...(person.relationshipLinks || []).map((link) => link.personId)];
+      if (person.id === activeLinkNodeId) references.forEach((id) => ids.add(id));
+      if (references.includes(activeLinkNodeId)) ids.add(person.id);
+    });
+    ids.add(activeLinkNodeId);
+    return ids;
+  }, [activeLinkNodeId, familyPeople, highlightedAncestorIds]);
   const familyColorFocusId = familyPeople.some((person) => person.id === selectedId) ? selectedId : familyPeople[0]?.id;
   const familyColors = useMemo(() => familyColorMap(familyPeople, familyColorFocusId), [familyPeople, familyColorFocusId]);
   const selected = people.find((p) => p.id === selectedId) || null;
@@ -1323,7 +1366,7 @@ export default function App() {
     try {
       const arrangedPositions = treeVisualStyle === 'pedigree'
         ? compactGenerationPositions(familyPeople)
-        : treeVisualStyle === 'dashboard'
+        : treeVisualStyle === 'dashboard' || treeVisualStyle === 'atlas'
           ? compactDashboardPositions(familyPeople)
           : (() => {
             const automaticLayout = layoutTree(familyPeople.map((person) => ({ ...person, treeX: null, treeY: null })));
@@ -1801,7 +1844,7 @@ export default function App() {
   const treeName = selectedFamilyId === '__all__' ? 'All families' : selectedFamily?.name || 'Your family';
   return (
     <div
-      className={`family-app theme-${theme} tree-style-${treeVisualStyle} ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'} ${detailsOpen ? 'details-open' : 'details-closed'} ${modal?.inline ? 'editing-person' : ''}`}
+      className={`family-app theme-${theme} tree-style-${treeVisualStyle} link-style-${linkStyle} ${activeLinkNodeId ? 'has-link-focus' : ''} ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'} ${detailsOpen ? 'details-open' : 'details-closed'} ${modal?.inline ? 'editing-person' : ''}`}
       style={{ '--details-width': `${detailsWidth}px` }}
     >
       {sidebarOpen && (
@@ -2024,14 +2067,23 @@ export default function App() {
               <select className="link-style-select" value={linkStyle} onChange={(e) => setLinkStyle(e.target.value)}>
                 <option value="direct">Direct links</option>
                 <option value="classic">Classic branches</option>
+                <option value="bundled">Bundled paths</option>
               </select>
             </label>
             <label className="tree-style-toolbar-field">
               <span>TREE STYLE</span>
-              <select className="link-style-select" value={treeVisualStyle} onChange={(event) => setTreeVisualStyle(event.target.value)}>
+              <select
+                className="link-style-select"
+                value={treeVisualStyle}
+                onChange={(event) => {
+                  setTreeVisualStyle(event.target.value);
+                  if (event.target.value === 'atlas') setLinkStyle('bundled');
+                }}
+              >
                 <option value="dashboard">Dashboard cards</option>
                 <option value="pedigree">Portrait pedigree</option>
                 <option value="classic">Classic cards</option>
+                <option value="atlas">Family atlas</option>
               </select>
             </label>
             <button
@@ -2177,22 +2229,31 @@ export default function App() {
                     <marker id="partner-link-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
                       <path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" />
                     </marker>
+                    <marker id="family-link-highlight-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+                      <path d="M0 0 L8 4 L0 8 Z" fill="#f0a928" />
+                    </marker>
+                    <marker id="partner-link-highlight-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+                      <path d="M0 0 L8 4 L0 8 Z" fill="#f0a928" />
+                    </marker>
                   </defs>
-                  {linkStyle !== 'direct' && (
+                  {linkStyle === 'classic' && (
                     <FamilyBranchLinks
                       branches={layout.familyBranches}
                       people={familyPeople}
                       orthogonal={treeVisualStyle === 'pedigree'}
                       highlightedLink={highlightedLink}
-                      highlightedNodeId={treeVisualStyle === 'dashboard' ? highlightedNodeId : ''}
+                      highlightedNodeId={activeLinkNodeId}
+                      highlightedAncestorIds={highlightedAncestorIds}
                       onHighlight={setHighlightedLink}
                     />
                   )}
                   {layout.edges
-                    .filter((edge) => linkStyle === 'direct' || edge.kind !== 'parent')
+                    .filter((edge) => linkStyle !== 'classic' || edge.kind !== 'parent')
                     .map((edge, i) => {
                       const d =
-                        treeVisualStyle === 'pedigree'
+                        linkStyle === 'bundled'
+                          ? bundledRelationshipPath(edge)
+                          : treeVisualStyle === 'pedigree'
                           ? Math.abs(edge.y2 - edge.y1) < 4
                             ? `M${edge.x1} ${edge.y1} H${edge.x2}`
                             : `M${edge.x1} ${edge.y1} V${(edge.y1 + edge.y2) / 2} H${edge.x2} V${edge.y2}`
@@ -2220,7 +2281,12 @@ export default function App() {
                               : relationshipLabel('Partner', to, from) || 'Partner';
                       const description = `${fullName(from)} · ${relation} · ${fullName(to)}`;
                       const linkId = `${edge.kind}-${edge.fromId}-${edge.toId}`;
-                      const nodeRelated = highlightedNodeId === edge.fromId || highlightedNodeId === edge.toId;
+                      const nodeRelated =
+                        activeLinkNodeId === edge.fromId ||
+                        activeLinkNodeId === edge.toId ||
+                        ((edge.kind === 'parent' || edge.kind === 'partner') && highlightedAncestorIds.has(edge.fromId) && highlightedAncestorIds.has(edge.toId));
+                      const linkHighlighted = highlightedLink?.key === linkId;
+                      const markerPrefix = linkHighlighted || nodeRelated ? `${edge.kind === 'partner' ? 'partner' : 'family'}-link-highlight-arrow` : `${edge.kind === 'partner' ? 'partner' : 'family'}-link-arrow`;
                       const storedPartnerRelation = edge.kind === 'partner' ? partnerRelationship(from, to?.id) || partnerRelationship(to, from?.id) : '';
                       const genderedPartnerPair = (from?.gender === 'male' && to?.gender === 'female') || (from?.gender === 'female' && to?.gender === 'male');
                       const usesDefaultPartnerRole = ['', 'Husband', 'Wife', 'Spouse'].includes(storedPartnerRelation);
@@ -2240,7 +2306,7 @@ export default function App() {
                         linkStyle === 'classic' && (edge.kind === 'partner' || edge.kind === 'sibling'),
                       );
                       return (
-                        <g key={`${linkId}-${i}`} className={`relationship-link ${highlightedLink?.key === linkId ? 'is-highlighted' : ''} ${treeVisualStyle === 'dashboard' && nodeRelated ? 'is-node-related' : ''}`}>
+                        <g key={`${linkId}-${i}`} className={`relationship-link ${linkHighlighted ? 'is-highlighted' : ''} ${nodeRelated ? 'is-node-related' : ''}`}>
                           <path
                             className="connector-hit"
                             d={d}
@@ -2254,8 +2320,8 @@ export default function App() {
                           <path
                             className={`connector ${edge.kind}`}
                             d={d}
-                            markerStart={treeVisualStyle === 'pedigree' || (treeVisualStyle === 'dashboard' && edge.kind === 'parent') ? undefined : `url(#${edge.kind === 'partner' ? 'partner-link-arrow' : 'family-link-arrow'})`}
-                            markerEnd={treeVisualStyle === 'pedigree' ? undefined : `url(#${edge.kind === 'partner' ? 'partner-link-arrow' : 'family-link-arrow'})`}
+                            markerStart={linkStyle === 'bundled' || treeVisualStyle === 'pedigree' || (treeVisualStyle === 'dashboard' && edge.kind === 'parent') ? undefined : `url(#${markerPrefix})`}
+                            markerEnd={linkStyle === 'bundled' || treeVisualStyle === 'pedigree' ? undefined : `url(#${markerPrefix})`}
                           />
                           <text className="connector-relation" x={relationLabelPoint.x} y={relationLabelPoint.y} textAnchor="middle" dominantBaseline="central">
                             <title>
@@ -2274,13 +2340,13 @@ export default function App() {
                     <div
                       key={person.id}
                       data-person-id={person.id}
-                      className={`tree-person gender-${person.gender || 'unspecified'} ${highlightedLink?.ids?.includes(person.id) ? 'link-highlighted' : ''} ${selectedId === person.id || selectedNodeIds.includes(person.id) ? 'selected' : ''} ${familyColorsEnabled && familyColors.has(person.id) ? `family-colored family-color-${familyColors.get(person.id)}` : ''}`}
+                      className={`tree-person gender-${person.gender || 'unspecified'} ${highlightedLink?.ids?.includes(person.id) ? 'link-highlighted' : ''} ${highlightedNetworkIds.has(person.id) ? 'link-path-node' : ''} ${selectedId === person.id || selectedNodeIds.includes(person.id) ? 'selected' : ''} ${familyColorsEnabled && familyColors.has(person.id) ? `family-colored family-color-${familyColors.get(person.id)}` : ''}`}
                       style={{ left: pos.x, top: pos.y }}
                       onPointerEnter={(e) => {
-                        if (treeVisualStyle === 'dashboard' && e.pointerType !== 'touch') setHighlightedNodeId(person.id);
+                        if (e.pointerType !== 'touch') setHighlightedNodeId(person.id);
                       }}
                       onPointerLeave={(e) => {
-                        if (treeVisualStyle === 'dashboard' && e.pointerType !== 'touch') {
+                        if (e.pointerType !== 'touch') {
                           setHighlightedNodeId((current) => (current === person.id ? '' : current));
                         }
                       }}
@@ -2288,7 +2354,7 @@ export default function App() {
                         if (e.pointerType === 'touch') startDrag(e, person, pos);
                       }}
                       onPointerUp={(e) => {
-                        if (treeVisualStyle === 'dashboard' && e.pointerType === 'touch' && drag.current?.id === person.id && !drag.current.moved) {
+                        if (e.pointerType === 'touch' && drag.current?.id === person.id && !drag.current.moved) {
                           setHighlightedNodeId((current) => (current === person.id ? '' : person.id));
                         }
                       }}
@@ -2474,6 +2540,7 @@ export default function App() {
                   ['dashboard', 'Dashboard cards'],
                   ['pedigree', 'Portrait pedigree'],
                   ['classic', 'Classic cards'],
+                  ['atlas', 'Family atlas'],
                 ].map(([value, label]) => (
                   <button
                     key={value}
@@ -2484,6 +2551,7 @@ export default function App() {
                     onClick={() => {
                       setTreeVisualStyle(value);
                       if (value === 'pedigree') setLinkStyle('classic');
+                      if (value === 'atlas') setLinkStyle('bundled');
                       setTreeStyleMenuOpen(false);
                     }}
                   >
@@ -2510,6 +2578,7 @@ export default function App() {
                 {[
                   ['direct', 'Direct links'],
                   ['classic', 'Classic branches'],
+                  ['bundled', 'Bundled paths'],
                 ].map(([value, label]) => (
                   <button
                     key={value}

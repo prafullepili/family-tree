@@ -4206,13 +4206,16 @@ button {
   outline: none;
 }
 .relationship-link.is-highlighted .connector,
-.connector.family-route.is-highlighted {
+.relationship-link.is-node-related .connector,
+.connector.family-route.is-highlighted,
+.connector.family-route.is-node-related {
   stroke: #f0a928 !important;
   stroke-width: 4 !important;
   opacity: 1 !important;
   filter: drop-shadow(0 0 4px color-mix(in srgb, #f0a928 60%, transparent));
 }
-.relationship-link.is-highlighted .connector-relation {
+.relationship-link.is-highlighted .connector-relation,
+.relationship-link.is-node-related .connector-relation {
   fill: #d88900;
   font-size: 18px;
   font-weight: 800;
@@ -5353,6 +5356,9 @@ button {
 .tree-style-dashboard .relationship-link.is-node-related .connector,
 .tree-style-dashboard .connector.family-route.is-node-related {
   opacity: 0.9 !important;
+  stroke: #f0a928 !important;
+  stroke-width: 3.2 !important;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, #f0a928 45%, transparent));
 }
 .tree-style-dashboard .connector-hit {
   pointer-events: none;
@@ -5367,12 +5373,137 @@ button {
 }
 .tree-style-dashboard .relationship-link.is-node-related .connector-relation {
   opacity: 1;
+  fill: #d88900;
+  font-size: 14px;
+  font-weight: 800;
+  stroke-width: 5px;
 }
 .tree-style-dashboard #family-link-arrow path {
-  fill: var(--dashboard-line);
+  fill: #f0a928;
 }
 .tree-style-dashboard #partner-link-arrow path {
-  fill: #2563eb;
+  fill: #f0a928;
+}
+
+/* Large-tree focus mode with D3-routed bundled paths. */
+.link-style-bundled .connector {
+  stroke: color-mix(in srgb, var(--accent) 66%, var(--line));
+  stroke-width: 1.6;
+  opacity: 0.42;
+  transition: opacity 0.16s ease, stroke 0.16s ease, stroke-width 0.16s ease;
+}
+.link-style-bundled .connector.partner {
+  stroke: color-mix(in srgb, #8b7cf6 72%, var(--line));
+}
+.link-style-bundled.has-link-focus .relationship-link:not(.is-node-related) .connector {
+  opacity: 0.055;
+}
+.link-style-bundled .connector-relation {
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+.link-style-bundled .relationship-link.is-highlighted .connector-relation,
+.link-style-bundled .relationship-link.is-node-related .connector-relation {
+  opacity: 1;
+}
+.tree-style-atlas {
+  --atlas-canvas: #eef3f6;
+  --atlas-grid: #547287;
+  --atlas-card: #ffffffd9;
+  --atlas-card-border: #b8c8d2;
+  --atlas-text: #172632;
+  --atlas-muted: #667b89;
+  --atlas-male: #168bb5;
+  --atlas-female: #d26187;
+  --atlas-neutral: #6c7d89;
+}
+.tree-style-atlas.theme-dark {
+  --atlas-canvas: #0b1218;
+  --atlas-grid: #6b8798;
+  --atlas-card: #15212ad9;
+  --atlas-card-border: #324653;
+  --atlas-text: #edf6fa;
+  --atlas-muted: #8fa5b2;
+  --atlas-male: #45c7ef;
+  --atlas-female: #ff86ad;
+  --atlas-neutral: #9eb0ba;
+}
+.tree-style-atlas .simple-canvas {
+  background-color: var(--atlas-canvas);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--atlas-grid) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--atlas-grid) 8%, transparent) 1px, transparent 1px),
+    radial-gradient(color-mix(in srgb, var(--atlas-grid) 22%, transparent) 0.7px, transparent 0.7px);
+  background-size: 80px 80px, 80px 80px, 16px 16px;
+}
+.tree-style-atlas .tree-person {
+  transition: opacity 0.18s ease, filter 0.18s ease;
+}
+.tree-style-atlas .tree-person-card {
+  position: relative;
+  overflow: hidden;
+  border-color: var(--atlas-card-border);
+  border-radius: 12px;
+  background: var(--atlas-card);
+  color: var(--atlas-text);
+  box-shadow: 0 6px 18px #07131b14;
+  backdrop-filter: blur(8px);
+}
+.tree-style-atlas .tree-person-card::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  content: '';
+  background: var(--atlas-neutral);
+}
+.tree-style-atlas .tree-person.gender-male .tree-person-card::before {
+  background: var(--atlas-male);
+}
+.tree-style-atlas .tree-person.gender-female .tree-person-card::before {
+  background: var(--atlas-female);
+}
+.tree-style-atlas .tree-person-copy {
+  gap: 3px;
+}
+.tree-style-atlas .tree-person-copy strong {
+  color: var(--atlas-text);
+  font-size: 12px;
+}
+.tree-style-atlas .tree-person-copy small,
+.tree-style-atlas .drag-grip {
+  color: var(--atlas-muted);
+  font-size: 10px;
+}
+.tree-style-atlas .person-avatar.large {
+  width: 38px;
+  height: 38px;
+  border: 1px solid color-mix(in srgb, var(--atlas-card-border) 74%, transparent);
+  background: color-mix(in srgb, var(--atlas-neutral) 13%, var(--atlas-card));
+  color: var(--atlas-text);
+}
+.tree-style-atlas .tree-person.gender-male .person-avatar.large {
+  color: var(--atlas-male);
+}
+.tree-style-atlas .tree-person.gender-female .person-avatar.large {
+  color: var(--atlas-female);
+}
+.tree-style-atlas.has-link-focus .tree-person:not(.link-path-node) {
+  opacity: 0.26;
+  filter: saturate(0.3);
+}
+.tree-style-atlas .tree-person.link-path-node,
+.tree-style-atlas .tree-person.selected {
+  z-index: 6;
+  opacity: 1;
+  filter: none;
+}
+.tree-style-atlas .tree-person.link-path-node .tree-person-card,
+.tree-style-atlas .tree-person.selected .tree-person-card {
+  border-color: #f0a928;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #f0a928 24%, transparent), 0 9px 24px #07131b2b;
+}
+.tree-style-atlas .connector-relation {
+  stroke: var(--atlas-canvas);
 }
 
 /* Portrait pedigree: compact genealogy cards based on the supplied reference. */
@@ -5486,7 +5617,8 @@ button {
 .tree-style-pedigree .connector-relation {
   display: none;
 }
-.tree-style-pedigree .relationship-link.is-highlighted .connector-relation {
+.tree-style-pedigree .relationship-link.is-highlighted .connector-relation,
+.tree-style-pedigree .relationship-link.is-node-related .connector-relation {
   display: block;
   fill: #f5ad2d;
   font-size: 24px;
