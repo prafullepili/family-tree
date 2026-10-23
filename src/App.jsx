@@ -192,7 +192,10 @@ function applyDragPositions(people, drag) {
     return start ? { ...person, treeX: start.x + dx, treeY: start.y + dy } : person;
   });
 }
-function compactGenerationPositions(people) {
+function compactGenerationPositions(
+  people,
+  { nodeWidth = 196, coupleGap = 14, familyGap = 42, generationGap = 170 } = {},
+) {
   const byId = new Map(people.map((person) => [person.id, person]));
   const levels = new Map();
   function levelFor(id, path = new Set()) {
@@ -231,10 +234,6 @@ function compactGenerationPositions(people) {
     if (!rows.has(level)) rows.set(level, []);
     rows.get(level).push(person);
   });
-  const nodeWidth = 196;
-  const coupleGap = 14;
-  const familyGap = 42;
-  const generationGap = 170;
   const positions = [];
   const positionById = new Map();
   [...rows.entries()]
@@ -323,6 +322,29 @@ function compactGenerationPositions(people) {
       });
     });
   return positions;
+}
+function compactDashboardPositions(people) {
+  const nodeWidth = 196;
+  const groupGap = 132;
+  const groups = getFamilyGroups(people);
+  const positionedGroups = groups.map((group) =>
+    compactGenerationPositions(group.people, {
+      nodeWidth,
+      coupleGap: 18,
+      familyGap: 28,
+      generationGap: 126,
+    }),
+  );
+  let cursor = 0;
+  const positions = positionedGroups.flatMap((groupPositions) => {
+    const minX = Math.min(...groupPositions.map((position) => position.treeX));
+    const maxX = Math.max(...groupPositions.map((position) => position.treeX + nodeWidth));
+    const offsetX = cursor - minX;
+    cursor += maxX - minX + groupGap;
+    return groupPositions.map((position) => ({ ...position, treeX: position.treeX + offsetX }));
+  });
+  const totalWidth = Math.max(0, cursor - groupGap);
+  return positions.map((position) => ({ ...position, treeX: position.treeX - totalWidth / 2 }));
 }
 function getFamilyGroups(people) {
   const byId = new Map(people.map((person) => [person.id, person]));
@@ -1301,13 +1323,15 @@ export default function App() {
     try {
       const arrangedPositions = treeVisualStyle === 'pedigree'
         ? compactGenerationPositions(familyPeople)
-        : (() => {
+        : treeVisualStyle === 'dashboard'
+          ? compactDashboardPositions(familyPeople)
+          : (() => {
             const automaticLayout = layoutTree(familyPeople.map((person) => ({ ...person, treeX: null, treeY: null })));
             return familyPeople.map((person) => {
               const position = automaticLayout.positions.get(person.id);
               return { id: person.id, treeX: position.rawX, treeY: position.rawY };
             });
-          })();
+            })();
       if (apiState === 'connected') {
         const databasePositions = arrangedPositions
           .map((position) => ({ ...position, id: people.find((person) => person.id === position.id)?._id }))
