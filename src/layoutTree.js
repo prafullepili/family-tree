@@ -34,26 +34,7 @@ function connectRectangles(from, to) {
 }
 
 function connectParentChild(parent, child) {
-  const parentCenter = parent.x + parent.w / 2;
-  const childCenter = child.x + child.w / 2;
-  const childBelow = child.y >= parent.y + parent.h;
-  const childAbove = child.y + child.h <= parent.y;
-  if (!childBelow && !childAbove) return connectRectangles(parent, child);
-
-  const direction = childBelow ? 1 : -1;
-  const x1 = Math.max(parent.x + 18, Math.min(parent.x + parent.w - 18, childCenter));
-  const y1 = childBelow ? parent.y + parent.h : parent.y;
-  const x2 = Math.max(child.x + 18, Math.min(child.x + child.w - 18, parentCenter));
-  const y2 = childBelow ? child.y : child.y + child.h;
-  const verticalGap = Math.abs(y2 - y1);
-  const reach = Math.min(72, Math.max(20, verticalGap * 0.42));
-  const c1x = x1;
-  const c1y = y1 + direction * reach;
-  const c2x = x2;
-  const c2y = y2 - direction * reach;
-  const labelX = (x1 + 3 * c1x + 3 * c2x + x2) / 8;
-  const labelY = (y1 + 3 * c1y + 3 * c2y + y2) / 8 - 9;
-  return { x1, y1, x2, y2, c1x, c1y, c2x, c2y, fromSide: childBelow ? 'bottom' : 'top', toSide: childBelow ? 'top' : 'bottom', labelX, labelY };
+  return connectRectangles(parent, child);
 }
 
 const NODE_COLLISION_GAP = 18;
@@ -468,6 +449,7 @@ export function layoutTree(people) {
     const sourceX = partnerEdge ? (partnerEdge.x1 + partnerEdge.x2) / 2 : parents.reduce((sum, parent) => sum + parent.x + parent.w / 2, 0) / parents.length;
     const sourceY = partnerEdge ? (partnerEdge.y1 + partnerEdge.y2) / 2 : parents.length > 1 ? parents.reduce((sum, parent) => sum + parent.y + parent.h / 2, 0) / parents.length : parents[0].y + 76;
     const childTop = Math.min(...orderedChildren.map((child) => child.y));
+    const childrenAreAbove = orderedChildren.every((child) => child.y + child.h <= sourceY);
     return {
       parentIds,
       children: children
@@ -476,10 +458,13 @@ export function layoutTree(people) {
         .map((person) => person.id),
       sourceX,
       sourceY,
+      sourceTopY: Math.min(...parents.map((parent) => parent.y)),
+      sourceBottomY: Math.max(...parents.map((parent) => parent.y + parent.h)),
       // Keep the child bus comfortably clear of the partner connector and its label.
-      branchY: Math.min(childTop - 24, sourceY + 60),
+      branchY: childrenAreAbove ? Math.max(...orderedChildren.map((child) => child.y + child.h)) + 24 : Math.min(childTop - 24, sourceY + 60),
       childXs: orderedChildren.map((child) => child.x + child.w / 2),
       childTops: orderedChildren.map((child) => child.y),
+      childBottoms: orderedChildren.map((child) => child.y + child.h),
     };
   });
 
