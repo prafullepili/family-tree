@@ -2206,16 +2206,16 @@ button {
 
 /* Simplified family tree workspace */
 .family-app {
-  --bg: #eeece3;
-  --surface: #fffefa;
-  --surface-soft: #f7f4eb;
-  --text: #29372e;
-  --text-soft: #647267;
-  --muted: #788579;
-  --border: #dedbce;
-  --accent: #456f4e;
-  --accent-bg: #e7efe4;
-  --line: #b9cbb9;
+  --bg: #d9d4ce;
+  --surface: #e7e3de;
+  --surface-soft: #d3cec8;
+  --text: #2b2927;
+  --text-soft: #55514d;
+  --muted: #77716b;
+  --border: #b9b2aa;
+  --accent: #302e2b;
+  --accent-bg: #c8c2bb;
+  --line: #8e8983;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
@@ -2351,6 +2351,20 @@ button {
   border-radius: 7px;
   color: var(--muted);
 }
+.sidebar-search select {
+  width: 79px;
+  min-width: 79px;
+  height: 25px;
+  padding: 0 17px 0 3px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 9px !important;
+  text-overflow: ellipsis;
+}
 .sidebar-search input {
   width: 100%;
   min-width: 0;
@@ -2373,9 +2387,53 @@ button {
 }
 .member-list {
   display: grid;
-  gap: 3px;
+  align-content: start;
+  gap: 12px;
   margin-top: 9px;
   overflow: auto;
+}
+.member-family-group {
+  display: grid;
+  gap: 3px;
+}
+.member-family-heading {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  min-height: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 7px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+.member-family-heading strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.75px;
+  text-transform: uppercase;
+}
+.member-family-heading span {
+  min-width: 19px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text-soft);
+  font-size: 9px;
+  font-weight: 700;
+}
+.member-family-people {
+  display: grid;
+  gap: 3px;
 }
 .member-list-item {
   width: 100%;
@@ -2522,6 +2580,61 @@ button {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+.header-member-search {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+.header-member-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.header-member-search select {
+  width: 94px;
+  height: 24px;
+  padding: 0 18px 0 3px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 10px !important;
+  text-overflow: ellipsis;
+}
+.header-member-search input {
+  width: 118px;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px !important;
+}
+.header-member-search input::placeholder {
+  color: var(--muted);
+}
+.header-member-search button {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+}
+.header-member-search button:hover {
+  background: var(--accent-bg);
+  color: var(--text);
 }
 .open-sidebar {
   margin-left: -6px;
@@ -3646,6 +3759,12 @@ button {
   .simple-canvas {
     min-height: calc(100vh - 117px);
   }
+  .header-member-search select {
+    width: 76px;
+  }
+  .header-member-search input {
+    width: 92px;
+  }
 }
 @media (max-width: 800px) {
   .family-app {
@@ -3676,6 +3795,9 @@ button {
   .simple-topbar {
     height: 63px;
     padding: 0 13px;
+  }
+  .header-member-search {
+    display: none;
   }
   .tree-toolbar-simple {
     padding: 0 13px;
@@ -4228,6 +4350,27 @@ button {
   border-color: #f0a928 !important;
   box-shadow: 0 0 0 3px color-mix(in srgb, #f0a928 30%, transparent), 0 8px 20px #17203326 !important;
 }
+.family-app:not(.theme-dark) .relationship-link.is-highlighted .connector,
+.family-app:not(.theme-dark) .relationship-link.is-node-related .connector,
+.family-app:not(.theme-dark) .connector.family-route.is-highlighted,
+.family-app:not(.theme-dark) .connector.family-route.is-node-related {
+  stroke: #e0443e !important;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, #e0443e 42%, transparent));
+}
+.family-app:not(.theme-dark) .relationship-link.is-highlighted .connector-relation,
+.family-app:not(.theme-dark) .relationship-link.is-node-related .connector-relation {
+  fill: #c93631;
+}
+.family-app:not(.theme-dark) .tree-person.link-highlighted .tree-person-card,
+.family-app:not(.theme-dark) .tree-person.selected .tree-person-card {
+  border-color: #e0443e !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #e0443e 22%, transparent), 0 8px 20px #332f2b20 !important;
+}
+.family-app:not(.theme-dark) #family-link-highlight-arrow path,
+.family-app:not(.theme-dark) #partner-link-highlight-arrow path,
+.family-app:not(.theme-dark) #smooth-link-highlight-dot circle {
+  fill: #e0443e;
+}
 
 .tree-node-about-wrap {
   position: absolute;
@@ -4403,7 +4546,7 @@ button {
 }
 
 .family-app {
-  --line: #879589;
+  --line: #8e8983;
 }
 .family-app.theme-dark {
   --line: #536257;
@@ -5305,11 +5448,11 @@ button {
 
 /* Experimental Style 4: modern dashboard flow cards. */
 .tree-style-dashboard {
-  --dashboard-line: #0f9f76;
-  --dashboard-card: #ffffff;
-  --dashboard-card-text: #172033;
-  --dashboard-card-muted: #64748b;
-  --dashboard-canvas: #f5f7fa;
+  --dashboard-line: #77726c;
+  --dashboard-card: #e8e4df;
+  --dashboard-card-text: #2b2927;
+  --dashboard-card-muted: #6c6761;
+  --dashboard-canvas: #d9d4ce;
 }
 .tree-style-dashboard.theme-dark {
   --dashboard-line: #58d7ad;
@@ -5385,6 +5528,31 @@ button {
   fill: #f0a928;
 }
 
+/* Traditional D3 family branches use a shared sibling bar and vertical drops. */
+.link-style-classic .connector {
+  stroke: color-mix(in srgb, var(--line) 84%, var(--accent));
+  stroke-width: 1.45;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.62;
+  transition: opacity 0.16s ease, stroke 0.16s ease, stroke-width 0.16s ease;
+}
+.theme-dark.link-style-classic .connector {
+  stroke: #8299a6;
+  opacity: 0.7;
+}
+.link-style-classic .connector-relation {
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+.link-style-classic .relationship-link.is-highlighted .connector-relation,
+.link-style-classic .relationship-link.is-node-related .connector-relation {
+  opacity: 1;
+}
+.link-style-classic.has-link-focus .relationship-link:not(.is-node-related) .connector {
+  opacity: 0.1;
+}
+
 /* Direction-aware D3 curves keep large trees calm and easy to trace. */
 .link-style-bundled .connector {
   stroke: color-mix(in srgb, var(--line) 78%, var(--accent));
@@ -5429,15 +5597,15 @@ button {
   opacity: 1;
 }
 .tree-style-atlas {
-  --atlas-canvas: #eef3f6;
-  --atlas-grid: #547287;
-  --atlas-card: #ffffffd9;
-  --atlas-card-border: #b8c8d2;
-  --atlas-text: #172632;
-  --atlas-muted: #667b89;
-  --atlas-male: #168bb5;
-  --atlas-female: #d26187;
-  --atlas-neutral: #6c7d89;
+  --atlas-canvas: #d9d4ce;
+  --atlas-grid: #77726c;
+  --atlas-card: #e8e4dfdc;
+  --atlas-card-border: #aaa39b;
+  --atlas-text: #2b2927;
+  --atlas-muted: #6c6761;
+  --atlas-male: #4b4844;
+  --atlas-female: #77716b;
+  --atlas-neutral: #5f5a55;
 }
 .tree-style-atlas.theme-dark {
   --atlas-canvas: #0b1218;
@@ -5530,15 +5698,15 @@ button {
 
 /* Portrait pedigree: compact genealogy cards based on the supplied reference. */
 .tree-style-pedigree {
-  --pedigree-blue: #00afd1;
-  --pedigree-pink: #ff7479;
-  --pedigree-line: #9ca0a3;
-  --pedigree-canvas: #f4f4f4;
-  --pedigree-card: #ffffff;
-  --pedigree-text: #101213;
-  --pedigree-muted: #62676a;
-  --pedigree-avatar: #f8f8f8;
-  --pedigree-control: #ffffff;
+  --pedigree-blue: #55514d;
+  --pedigree-pink: #817b75;
+  --pedigree-line: #8e8983;
+  --pedigree-canvas: #d9d4ce;
+  --pedigree-card: #e8e4df;
+  --pedigree-text: #2b2927;
+  --pedigree-muted: #6c6761;
+  --pedigree-avatar: #d4cfc9;
+  --pedigree-control: #e8e4df;
 }
 .tree-style-pedigree.theme-dark {
   --pedigree-blue: #37cbe5;
@@ -5719,4 +5887,15 @@ button {
   .tree-count span:first-of-type {
     display: none;
   }
+}
+
+/* Keep every canvas clean in both color modes. Atlas retains its line grid. */
+.family-app .simple-canvas {
+  background-image: none;
+}
+.family-app.tree-style-atlas .simple-canvas {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--atlas-grid) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--atlas-grid) 8%, transparent) 1px, transparent 1px);
+  background-size: 80px 80px;
 }
