@@ -29,10 +29,11 @@ import {
   Info,
   Palette,
   Network,
-  Share2,
   Bookmark,
   Save,
   FolderOpen,
+  Settings2,
+  Check,
 } from 'lucide-react';
 import { initialPeople } from './demoFamily.js';
 import { layoutTree, resolveNodeOverlaps } from './layoutTree.js';
@@ -64,11 +65,9 @@ const initials = (p) => `${p?.firstName?.[0] || ''}${p?.lastName?.[0] || ''}`.to
 const straightRelationshipLine = d3Line().curve(curveLinear);
 const horizontalRelationshipLine = d3Line().curve(curveBumpX);
 const verticalRelationshipLine = d3Line().curve(curveBumpY);
-function relationshipPath(edge, linkStyle) {
+function relationshipPath(edge) {
   const points = [[edge.x1, edge.y1], [edge.x2, edge.y2]];
-  if (linkStyle === 'direct') return straightRelationshipLine(points);
   const horizontalRelationship = ['left', 'right'].includes(edge.fromSide) || ['left', 'right'].includes(edge.toSide);
-  if (linkStyle === 'classic') return (horizontalRelationship ? horizontalRelationshipLine : verticalRelationshipLine)(points);
   return (horizontalRelationship ? horizontalRelationshipLine : verticalRelationshipLine)(points);
 }
 const year = (date) => (date ? new Date(date).getUTCFullYear() : '—');
@@ -457,7 +456,13 @@ function FamilyBranchLinks({ branches, people, orthogonal = false, curved = fals
               .map(({ childIndex }) => childIndex);
             if (!indices.length) return null;
             const direction = side === 'below' ? 1 : -1;
-            const sourceY = side === 'below' ? branch.sourceBottomY : branch.sourceTopY;
+            // A two-parent family branches from the connector joining the parents.
+            // A single-parent family starts at that parent's nearest card edge.
+            const sourceY = branch.parentIds.length > 1
+              ? branch.sourceY
+              : side === 'below'
+                ? branch.sourceBottomY
+                : branch.sourceTopY;
             const railY = sourceY + direction * 22;
             const railWidth = Math.min(96, Math.max(26, (indices.length - 1) * 20));
             const railStartX = branch.sourceX - railWidth / 2;
@@ -491,10 +496,12 @@ function FamilyBranchLinks({ branches, people, orthogonal = false, curved = fals
                   className={`connector family-route family-trunk ${branchHighlighted ? 'is-highlighted' : ''} ${branchNodeRelated ? 'is-node-related' : ''}`}
                   d={straightRelationshipLine([[branch.sourceX, guide.sourceY], [branch.sourceX, guide.railY]])}
                 />
-                <path
-                  className={`connector family-route family-rail ${branchHighlighted ? 'is-highlighted' : ''} ${branchNodeRelated ? 'is-node-related' : ''}`}
-                  d={straightRelationshipLine([[guide.railStartX, guide.railY], [guide.railStartX + guide.railWidth, guide.railY]])}
-                />
+                {guide.indices.length > 1 && (
+                  <path
+                    className={`connector family-route family-rail ${branchHighlighted ? 'is-highlighted' : ''} ${branchNodeRelated ? 'is-node-related' : ''}`}
+                    d={straightRelationshipLine([[guide.railStartX, guide.railY], [guide.railStartX + guide.railWidth, guide.railY]])}
+                  />
+                )}
                 <circle className="family-junction" cx={branch.sourceX} cy={guide.railY} r="3.2" />
               </g>
             ))}
@@ -566,7 +573,13 @@ export default function App() {
   const [selectedFamilyId, setSelectedFamilyId] = useState('');
   const [familyPickerOpen, setFamilyPickerOpen] = useState(false);
   const [familyQuery, setFamilyQuery] = useState('');
-  const [linkStyle, setLinkStyle] = useState(() => (['direct', 'classic', 'bundled'].includes(storageGet('kinfolk-link-style')) ? storageGet('kinfolk-link-style') : 'classic'));
+  const [visibleLinkTypes, setVisibleLinkTypes] = useState(() => {
+    try {
+      return { parent: true, partner: true, sibling: true, custom: true, ...JSON.parse(storageGet('kinfolk-visible-link-types-v1') || '{}') };
+    } catch {
+      return { parent: true, partner: true, sibling: true, custom: true };
+    }
+  });
   const [treeVisualStyle, setTreeVisualStyle] = useState(() => {
     const savedStyle = storageGet('kinfolk-tree-visual-style-v2');
     return ['dashboard', 'classic', 'atlas'].includes(savedStyle) ? savedStyle : 'dashboard';
@@ -587,8 +600,8 @@ export default function App() {
   const canvasHelpRef = useRef(null);
   const [treeStyleMenuOpen, setTreeStyleMenuOpen] = useState(false);
   const treeStyleControlRef = useRef(null);
-  const [linkStyleMenuOpen, setLinkStyleMenuOpen] = useState(false);
-  const linkStyleControlRef = useRef(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsControlRef = useRef(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [detailsWidth, setDetailsWidth] = useState(() => {
@@ -763,14 +776,14 @@ export default function App() {
     storageSet('kinfolk-tree-visual-style-v2', treeVisualStyle);
   }, [treeVisualStyle]);
   useEffect(() => {
-    if (!treeStyleMenuOpen && !linkStyleMenuOpen) return;
+    if (!treeStyleMenuOpen && !settingsOpen) return;
     const closeMenu = (event) => {
       if (!treeStyleControlRef.current?.contains(event.target)) setTreeStyleMenuOpen(false);
-      if (!linkStyleControlRef.current?.contains(event.target)) setLinkStyleMenuOpen(false);
+      if (!settingsControlRef.current?.contains(event.target)) setSettingsOpen(false);
     };
     window.addEventListener('pointerdown', closeMenu);
     return () => window.removeEventListener('pointerdown', closeMenu);
-  }, [treeStyleMenuOpen, linkStyleMenuOpen]);
+  }, [treeStyleMenuOpen, settingsOpen]);
   useEffect(() => {
     const updateViewportMode = () => setIsCompactViewport(window.innerWidth <= 1050);
     window.addEventListener('resize', updateViewportMode);
@@ -818,8 +831,9 @@ export default function App() {
     }
   }
   useEffect(() => {
-    storageSet('kinfolk-link-style', linkStyle);
-  }, [linkStyle]);
+    storageSet('kinfolk-visible-link-types-v1', JSON.stringify(visibleLinkTypes));
+    storageRemove('kinfolk-link-style');
+  }, [visibleLinkTypes]);
   useEffect(() => {
     storageSet('kinfolk-family-colors-v1', String(familyColorsEnabled));
   }, [familyColorsEnabled]);
@@ -1945,7 +1959,7 @@ export default function App() {
   const treeName = selectedFamilyId === '__all__' ? 'All families' : selectedFamily?.name || 'Your family';
   return (
     <div
-      className={`family-app theme-${theme} tree-style-${treeVisualStyle} link-style-${linkStyle} ${activeLinkNodeId ? 'has-link-focus' : ''} ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'} ${detailsOpen ? 'details-open' : 'details-closed'} ${modal?.inline ? 'editing-person' : ''}`}
+      className={`family-app theme-${theme} tree-style-${treeVisualStyle} link-style-smooth ${activeLinkNodeId ? 'has-link-focus' : ''} ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'} ${detailsOpen ? 'details-open' : 'details-closed'} ${modal?.inline ? 'editing-person' : ''}`}
       style={{ '--details-width': `${detailsWidth}px` }}
     >
       {sidebarOpen && (
@@ -2178,6 +2192,44 @@ export default function App() {
                 </button>
               )}
             </label>
+            <div className={`top-settings ${settingsOpen ? 'is-open' : ''}`} ref={settingsControlRef}>
+              <button
+                type="button"
+                className="top-theme-toggle"
+                aria-label="Tree settings"
+                aria-expanded={settingsOpen}
+                title="Tree settings"
+                onClick={() => setSettingsOpen((open) => !open)}
+              >
+                <Settings2 size={17} />
+              </button>
+              {settingsOpen && (
+                <div className="tree-settings-menu" role="dialog" aria-label="Tree settings">
+                  <div className="tree-settings-heading">
+                    <strong>Link visibility</strong>
+                    <small>Choose relationships to show</small>
+                  </div>
+                  {[
+                    ['parent', 'Parents and children'],
+                    ['partner', 'Partners and spouses'],
+                    ['sibling', 'Siblings'],
+                    ['custom', 'Other relationships'],
+                  ].map(([type, label]) => (
+                    <label className="link-visibility-option" key={type}>
+                      <input
+                        type="checkbox"
+                        checked={visibleLinkTypes[type]}
+                        onChange={(event) => setVisibleLinkTypes((current) => ({ ...current, [type]: event.target.checked }))}
+                      />
+                      <span className="link-visibility-check" aria-hidden="true">
+                        {visibleLinkTypes[type] && <Check size={12} />}
+                      </span>
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
             <button className="top-theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label="Toggle color mode">
               {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
             </button>
@@ -2211,23 +2263,12 @@ export default function App() {
         </header>
         <div className="tree-toolbar-simple">
           <div className="tree-toolbar-settings">
-            <label className="link-style-toolbar-field">
-              <span>LINK STYLE</span>
-              <select className="link-style-select" value={linkStyle} onChange={(e) => setLinkStyle(e.target.value)}>
-                <option value="direct">Direct links</option>
-                <option value="classic">Classic branches</option>
-                <option value="bundled">Smooth branches</option>
-              </select>
-            </label>
             <label className="tree-style-toolbar-field">
               <span>TREE STYLE</span>
               <select
                 className="link-style-select"
                 value={treeVisualStyle}
-                onChange={(event) => {
-                  setTreeVisualStyle(event.target.value);
-                  if (event.target.value === 'atlas') setLinkStyle('bundled');
-                }}
+                onChange={(event) => setTreeVisualStyle(event.target.value)}
               >
                 <option value="dashboard">Dashboard cards</option>
                 <option value="classic">Classic cards</option>
@@ -2390,8 +2431,20 @@ export default function App() {
                       <circle cx="4" cy="4" r="3" fill="#f0a928" />
                     </marker>
                   </defs>
-                  {layout.edges.map((edge, i) => {
-                      const d = relationshipPath(edge, linkStyle);
+                  {visibleLinkTypes.parent && (
+                    <FamilyBranchLinks
+                      branches={layout.familyBranches}
+                      people={treePeople}
+                      curved
+                      endpointDots
+                      highlightedLink={highlightedLink}
+                      highlightedNodeId={activeLinkNodeId}
+                      highlightedAncestorIds={highlightedAncestorIds}
+                      onHighlight={setHighlightedLink}
+                    />
+                  )}
+                  {layout.edges.filter((edge) => edge.kind !== 'parent' && visibleLinkTypes[edge.kind] !== false).map((edge, i) => {
+                      const d = relationshipPath(edge);
                       const from = byId(edge.fromId),
                         to = byId(edge.toId);
                       const relation =
@@ -2417,7 +2470,6 @@ export default function App() {
                         activeLinkNodeId === edge.toId ||
                         ((edge.kind === 'parent' || edge.kind === 'partner') && highlightedAncestorIds.has(edge.fromId) && highlightedAncestorIds.has(edge.toId));
                       const linkHighlighted = highlightedLink?.key === linkId;
-                      const markerPrefix = linkHighlighted || nodeRelated ? `${edge.kind === 'partner' ? 'partner' : 'family'}-link-highlight-arrow` : `${edge.kind === 'partner' ? 'partner' : 'family'}-link-arrow`;
                       const storedPartnerRelation = edge.kind === 'partner' ? partnerRelationship(from, to?.id) || partnerRelationship(to, from?.id) : '';
                       const genderedPartnerPair = (from?.gender === 'male' && to?.gender === 'female') || (from?.gender === 'female' && to?.gender === 'male');
                       const usesDefaultPartnerRole = ['', 'Husband', 'Wife', 'Spouse'].includes(storedPartnerRelation);
@@ -2434,7 +2486,7 @@ export default function App() {
                         visibleRelation,
                         connectorNodePositions,
                         connectorLabelPositions,
-                        linkStyle === 'classic' && (edge.kind === 'partner' || edge.kind === 'sibling'),
+                        false,
                       );
                       return (
                         <g key={`${linkId}-${i}`} className={`relationship-link ${linkHighlighted ? 'is-highlighted' : ''} ${nodeRelated ? 'is-node-related' : ''}`}>
@@ -2451,8 +2503,8 @@ export default function App() {
                           <path
                             className={`connector ${edge.kind}`}
                             d={d}
-                            markerStart={linkStyle === 'bundled' ? `url(#${linkHighlighted || nodeRelated ? 'smooth-link-highlight-dot' : 'smooth-link-dot'})` : treeVisualStyle === 'dashboard' && edge.kind === 'parent' ? undefined : `url(#${markerPrefix})`}
-                            markerEnd={linkStyle === 'bundled' ? `url(#${linkHighlighted || nodeRelated ? 'smooth-link-highlight-dot' : 'smooth-link-dot'})` : `url(#${markerPrefix})`}
+                            markerStart={`url(#${linkHighlighted || nodeRelated ? 'smooth-link-highlight-dot' : 'smooth-link-dot'})`}
+                            markerEnd={`url(#${linkHighlighted || nodeRelated ? 'smooth-link-highlight-dot' : 'smooth-link-dot'})`}
                           />
                           <text className="connector-relation" x={relationLabelPoint.x} y={relationLabelPoint.y} textAnchor="middle" dominantBaseline="central">
                             <title>
@@ -2675,7 +2727,6 @@ export default function App() {
                     className={treeVisualStyle === value ? 'active' : ''}
                     onClick={() => {
                       setTreeVisualStyle(value);
-                      if (value === 'atlas') setLinkStyle('bundled');
                       setTreeStyleMenuOpen(false);
                     }}
                   >
@@ -2694,42 +2745,6 @@ export default function App() {
               onClick={() => setTreeStyleMenuOpen((open) => !open)}
             >
               <Network size={18} />
-            </button>
-          </div>
-          <div className={`mobile-link-style-control ${linkStyleMenuOpen ? 'is-open' : ''}`} ref={linkStyleControlRef}>
-            {linkStyleMenuOpen && (
-              <div className="tree-style-selection" role="menu" aria-label="Select link style">
-                {[
-                  ['direct', 'Direct links'],
-                  ['classic', 'Classic branches'],
-                  ['bundled', 'Smooth branches'],
-                ].map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={linkStyle === value}
-                    className={linkStyle === value ? 'active' : ''}
-                    onClick={() => {
-                      setLinkStyle(value);
-                      setLinkStyleMenuOpen(false);
-                    }}
-                  >
-                    <i aria-hidden="true" />
-                    <span>{label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            <button
-              type="button"
-              className="link-style-fab"
-              aria-label="Choose link style"
-              aria-expanded={linkStyleMenuOpen}
-              title="Link style"
-              onClick={() => setLinkStyleMenuOpen((open) => !open)}
-            >
-              <Share2 size={18} />
             </button>
           </div>
         </section>

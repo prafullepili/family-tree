@@ -2662,6 +2662,84 @@ button {
   background: var(--surface);
   color: var(--text-soft);
 }
+.top-settings {
+  position: relative;
+}
+.top-settings.is-open > .top-theme-toggle {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.tree-settings-menu {
+  position: absolute;
+  top: calc(100% + 9px);
+  right: 0;
+  z-index: 24;
+  width: 248px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 97%, transparent);
+  color: var(--text);
+  box-shadow: 0 14px 38px #101a1438;
+  backdrop-filter: blur(12px);
+}
+.tree-settings-heading {
+  display: grid;
+  gap: 2px;
+  padding: 4px 6px 9px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.tree-settings-heading strong {
+  font-size: 12px;
+}
+.tree-settings-heading small {
+  color: var(--muted);
+  font-size: 9px;
+}
+.link-visibility-option {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 7px;
+  border-radius: 7px;
+  color: var(--text-soft);
+  font-size: 11px;
+  cursor: pointer;
+}
+.link-visibility-option:hover {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+.link-visibility-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.link-visibility-check {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: white;
+}
+.link-visibility-option input:checked + .link-visibility-check {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.theme-dark .link-visibility-option input:checked + .link-visibility-check {
+  color: #17251a;
+}
+.link-visibility-option input:focus-visible + .link-visibility-check {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .data-refresh-toggle.is-refreshing svg {
   animation: familyTreeSpin 0.8s linear infinite;
 }
@@ -2999,14 +3077,7 @@ button {
   bottom: 96px;
   z-index: 6;
 }
-.mobile-link-style-control {
-  position: absolute;
-  right: 14px;
-  bottom: 144px;
-  z-index: 6;
-}
-.tree-style-fab,
-.link-style-fab {
+.tree-style-fab {
   width: 40px;
   height: 40px;
   display: grid;
@@ -3021,9 +3092,7 @@ button {
   cursor: pointer;
 }
 .tree-style-fab:hover,
-.link-style-fab:hover,
-.mobile-tree-style-control.is-open .tree-style-fab,
-.mobile-link-style-control.is-open .link-style-fab {
+.mobile-tree-style-control.is-open .tree-style-fab {
   border-color: var(--accent);
   background: var(--accent-bg);
   color: var(--accent);
@@ -5531,85 +5600,46 @@ button {
   fill: #f0a928;
 }
 
-/* Traditional D3 family branches use a shared sibling bar and vertical drops. */
-.link-style-classic .connector {
-  stroke: color-mix(in srgb, var(--line) 84%, var(--accent));
-  stroke-width: 1.45;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0.62;
-  transition: opacity 0.16s ease, stroke 0.16s ease, stroke-width 0.16s ease;
-}
-.link-style-classic .family-junction {
-  fill: var(--bg);
-  stroke: color-mix(in srgb, var(--line) 84%, var(--accent));
-  stroke-width: 1.8px;
-}
-.link-style-classic.has-link-focus .family-junction {
-  fill: #f0a928;
-  stroke: #f0a928;
-}
-.family-app:not(.theme-dark).link-style-classic.has-link-focus .family-junction {
-  fill: #e0443e;
-  stroke: #e0443e;
-}
-.theme-dark.link-style-classic .connector {
-  stroke: #8299a6;
-  opacity: 0.7;
-}
-.link-style-classic .connector-relation {
-  opacity: 0;
-  transition: opacity 0.14s ease;
-}
-.link-style-classic .relationship-link.is-highlighted .connector-relation,
-.link-style-classic .relationship-link.is-node-related .connector-relation {
-  opacity: 1;
-}
-.link-style-classic.has-link-focus .relationship-link:not(.is-node-related) .connector {
-  opacity: 0.1;
-}
-
 /* Direction-aware D3 curves keep large trees calm and easy to trace. */
-.link-style-bundled .connector {
+.link-style-smooth .connector {
   stroke: color-mix(in srgb, var(--line) 78%, var(--accent));
   stroke-width: 1.35;
   stroke-linecap: round;
   opacity: 0.5;
   transition: opacity 0.16s ease, stroke 0.16s ease, stroke-width 0.16s ease, filter 0.16s ease;
 }
-.link-style-bundled #smooth-link-dot circle {
+.link-style-smooth #smooth-link-dot circle {
   fill: color-mix(in srgb, var(--line) 78%, var(--accent));
 }
-.theme-dark.link-style-bundled .connector {
+.theme-dark.link-style-smooth .connector {
   stroke: #8fa9b8;
   opacity: 0.68;
 }
-.theme-dark.link-style-bundled #smooth-link-dot circle {
+.theme-dark.link-style-smooth #smooth-link-dot circle {
   fill: #a9bfcb;
 }
-.link-style-bundled .connector.partner {
-  stroke: color-mix(in srgb, #8b7cf6 58%, var(--line));
-  stroke-width: 1.75;
-  stroke-dasharray: 5 4;
+.link-style-smooth .connector.partner,
+.link-style-smooth .connector.sibling,
+.link-style-smooth .connector.custom {
+  stroke: color-mix(in srgb, var(--line) 78%, var(--accent));
+  stroke-width: 1.35;
+  stroke-dasharray: none;
 }
-.link-style-bundled .connector.sibling {
-  stroke-dasharray: 2 5;
-}
-.link-style-bundled .family-branch-links > g > .family-route {
+.link-style-smooth .family-branch-links > g > .family-route {
   opacity: 0.34;
 }
-.link-style-bundled .family-drop {
+.link-style-smooth .family-drop {
   stroke-linejoin: round;
 }
-.link-style-bundled.has-link-focus .relationship-link:not(.is-node-related) .connector {
+.link-style-smooth.has-link-focus .relationship-link:not(.is-node-related) .connector {
   opacity: 0.07;
 }
-.link-style-bundled .connector-relation {
+.link-style-smooth .connector-relation {
   opacity: 0;
   transition: opacity 0.14s ease;
 }
-.link-style-bundled .relationship-link.is-highlighted .connector-relation,
-.link-style-bundled .relationship-link.is-node-related .connector-relation {
+.link-style-smooth .relationship-link.is-highlighted .connector-relation,
+.link-style-smooth .relationship-link.is-node-related .connector-relation {
   opacity: 1;
 }
 .tree-style-atlas {
@@ -5757,10 +5787,6 @@ button {
   .mobile-tree-style-control {
     right: 16px;
     bottom: 92px;
-  }
-  .mobile-link-style-control {
-    right: 16px;
-    bottom: 140px;
   }
 }
 @media (max-width: 380px) {
