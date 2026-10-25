@@ -27,7 +27,14 @@ app.get('/api/layouts', async (req, res, next) => {
   try {
     const familyId = String(req.query.familyId || '').trim();
     if (!familyId) return res.status(400).json({ error: 'A family id is required.' });
-    res.json(await TreeLayout.find({ familyId }).sort({ updatedAt: -1 }));
+    const personIds = String(req.query.personIds || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => mongoose.isValidObjectId(id));
+    const filter = personIds.length
+      ? { $or: [{ familyId }, { 'positions.personId': { $in: personIds } }] }
+      : { familyId };
+    res.json(await TreeLayout.find(filter).sort({ updatedAt: -1 }));
   } catch (e) {
     next(e);
   }
@@ -42,11 +49,16 @@ app.post('/api/layouts', async (req, res, next) => {
     if (!name) return res.status(400).json({ error: 'A layout name is required.' });
     if (!familyId) return res.status(400).json({ error: 'A family id is required.' });
     if (!positions.length) return res.status(400).json({ error: 'At least one person position is required.' });
-    const layout = await TreeLayout.findOneAndUpdate(
-      { familyId, normalizedName: name.toLocaleLowerCase() },
-      { $set: { name, normalizedName: name.toLocaleLowerCase(), familyId, familyName: String(req.body?.familyName || '').trim(), positions } },
-      { new: true, upsert: true, runValidators: true },
-    );
+    const normalizedName = name.toLocaleLowerCase();
+    const personIds = positions.map((position) => position.personId);
+    const existing = await TreeLayout.findOne({
+      normalizedName,
+      $or: [{ familyId }, { 'positions.personId': { $in: personIds } }],
+    });
+    const values = { name, normalizedName, familyId, familyName: String(req.body?.familyName || '').trim(), positions };
+    const layout = existing
+      ? await TreeLayout.findByIdAndUpdate(existing._id, { $set: values }, { new: true, runValidators: true })
+      : await TreeLayout.create(values);
     res.status(201).json(layout);
   } catch (e) {
     next(e);
@@ -109,6 +121,66 @@ app.delete('/api/people/batch', async (req, res, next) => {
       { $pull: { parentIds: { $in: ids }, partnerIds: { $in: ids }, siblingIds: { $in: ids }, partnerRelationships: { partnerId: { $in: ids } }, relationshipLinks: { personId: { $in: ids } } } },
     );
     res.json({ deletedCount: result.deletedCount });
+  } catch (e) {
+    next(e);
+  }
+});
+app.post('/api/people/import', async (req, res, next) => {
+  try {
+    const rows = Array.isArray(req.body?.people) ? req.body.people.slice(0, 5000) : [];
+    if (!rows.length) return res.status(400).json({ error: 'The import contains no people.' });
+    const validRows = rows.filter((row) => String(row.firstName || '').trim());
+    if (!validRows.length) return res.status(400).json({ error: 'Every imported person needs a first name.' });
+
+    const referencedIds = new Set();
+    validRows.forEach((row) => {
+      [row.sourceId, ...(row.parentIds || []), ...(row.partnerIds || []), ...(row.siblingIds || []), ...(row.partnerRelationships || []).map((link) => link.partnerId), ...(row.relationshipLinks || []).map((link) => link.personId)]
+        .filter((id) => mongoose.isValidObjectId(id))
+        .forEach((id) => referencedIds.add(String(id)));
+    });
+    const existingIds = new Set((await Person.find({ _id: { $in: [...referencedIds] } }).select('_id').lean()).map((person) => String(person._id)));
+    const idMap = new Map();
+    validRows.forEach((row, index) => {
+      const sourceId = String(row.sourceId || `row-${index + 1}`);
+      if (!idMap.has(sourceId)) idMap.set(sourceId, existingIds.has(sourceId) ? new mongoose.Types.ObjectId(sourceId) : new mongoose.Types.ObjectId());
+    });
+    const remapId = (id) => {
+      const key = String(id || '');
+      if (idMap.has(key)) return idMap.get(key);
+      return existingIds.has(key) ? new mongoose.Types.ObjectId(key) : null;
+    };
+    const cleanDate = (value) => {
+      if (!value) return null;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date;
+    };
+    const operations = validRows.map((row, index) => {
+      const sourceId = String(row.sourceId || `row-${index + 1}`);
+      const targetId = idMap.get(sourceId);
+      const values = {
+        firstName: String(row.firstName || '').trim(),
+        lastName: String(row.lastName || '').trim(),
+        maidenName: String(row.maidenName || '').trim(),
+        gender: ['female', 'male', 'nonbinary', 'unspecified'].includes(row.gender) ? row.gender : 'unspecified',
+        birthDate: cleanDate(row.birthDate),
+        deathDate: cleanDate(row.deathDate),
+        birthPlace: String(row.birthPlace || '').trim(),
+        occupation: String(row.occupation || '').trim(),
+        bio: String(row.bio || '').trim(),
+        notes: String(row.notes || '').trim(),
+        photoUrl: String(row.photoUrl || '').trim(),
+        parentIds: [...new Set((row.parentIds || []).map(remapId).filter(Boolean).map(String))].slice(0, 2),
+        partnerIds: [...new Set((row.partnerIds || []).map(remapId).filter(Boolean).map(String))],
+        siblingIds: [...new Set((row.siblingIds || []).map(remapId).filter(Boolean).map(String))],
+        partnerRelationships: (row.partnerRelationships || []).map((link) => ({ partnerId: remapId(link.partnerId), label: String(link.label || '').trim() })).filter((link) => link.partnerId),
+        relationshipLinks: (row.relationshipLinks || []).map((link) => ({ personId: remapId(link.personId), label: String(link.label || '').trim() })).filter((link) => link.personId && link.label),
+        treeX: Number.isFinite(row.treeX) ? row.treeX : null,
+        treeY: Number.isFinite(row.treeY) ? row.treeY : null,
+      };
+      return { updateOne: { filter: { _id: targetId }, update: { $set: values }, upsert: true } };
+    });
+    await Person.bulkWrite(operations, { ordered: false });
+    res.json({ importedCount: operations.length });
   } catch (e) {
     next(e);
   }

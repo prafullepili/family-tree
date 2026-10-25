@@ -86,7 +86,7 @@ export function resolveNodeOverlaps(movingPositions, stationaryPositions) {
   });
 }
 
-export function layoutTree(people) {
+export function layoutTree(people, { nodeWidth = 196, nodeHeight = 76 } = {}) {
   const representative = new Map(people.map((person) => [person.id, person.id]));
   function find(id) {
     const parent = representative.get(id);
@@ -204,8 +204,6 @@ export function layoutTree(people) {
     rows.set(level, [...(rows.get(level) || []), component]);
   });
 
-  const nodeWidth = 196;
-  const nodeHeight = 76;
   // Leave room for the fixed relationship labels at both ends of partner links.
   const partnerGap = 184;
   const siblingGap = 120;
@@ -447,7 +445,7 @@ export function layoutTree(people) {
     const orderedChildren = children.map((person) => positions.get(person.id)).sort((a, b) => a.x - b.x);
     const partnerEdge = edges.find((edge) => edge.kind === 'partner' && parentIds.includes(edge.fromId) && parentIds.includes(edge.toId));
     const sourceX = partnerEdge ? (partnerEdge.x1 + partnerEdge.x2) / 2 : parents.reduce((sum, parent) => sum + parent.x + parent.w / 2, 0) / parents.length;
-    const sourceY = partnerEdge ? (partnerEdge.y1 + partnerEdge.y2) / 2 : parents.length > 1 ? parents.reduce((sum, parent) => sum + parent.y + parent.h / 2, 0) / parents.length : parents[0].y + 76;
+    const sourceY = partnerEdge ? (partnerEdge.y1 + partnerEdge.y2) / 2 : parents.length > 1 ? parents.reduce((sum, parent) => sum + parent.y + parent.h / 2, 0) / parents.length : parents[0].y + nodeHeight;
     const childTop = Math.min(...orderedChildren.map((child) => child.y));
     const childrenAreAbove = orderedChildren.every((child) => child.y + child.h <= sourceY);
     return {

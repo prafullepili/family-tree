@@ -2220,7 +2220,7 @@ button {
   color: var(--text);
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 238px minmax(0, 1fr) 286px;
+  grid-template-columns: 286px minmax(0, 1fr) 286px;
   font-family: 'DM Sans', sans-serif;
   font-size: 15px;
   transition:
@@ -2675,7 +2675,7 @@ button {
   top: calc(100% + 9px);
   right: 0;
   z-index: 24;
-  width: 248px;
+  width: min(360px, calc(100vw - 24px));
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -2683,6 +2683,8 @@ button {
   color: var(--text);
   box-shadow: 0 14px 38px #101a1438;
   backdrop-filter: blur(12px);
+  max-height: min(620px, calc(100dvh - 84px));
+  overflow-y: auto;
 }
 .tree-settings-heading {
   display: grid;
@@ -2697,6 +2699,153 @@ button {
 .tree-settings-heading small {
   color: var(--muted);
   font-size: 9px;
+}
+.deceased-ribbon-setting {
+  display: grid;
+  grid-template-columns: 1fr 118px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 8px 7px 3px;
+  border-top: 1px solid var(--border);
+}
+.deceased-ribbon-setting > span {
+  display: grid;
+  gap: 3px;
+}
+.deceased-ribbon-setting strong {
+  color: var(--text);
+  font-size: 12px;
+}
+.deceased-ribbon-setting small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+.deceased-ribbon-setting select {
+  width: 100%;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
+.tree-data-settings {
+  display: grid;
+  gap: 6px;
+  margin-top: 5px;
+  padding: 8px 7px 3px;
+  border-top: 1px solid var(--border);
+}
+.tree-data-settings > span {
+  display: grid;
+  gap: 3px;
+}
+.tree-data-settings strong {
+  font-size: 12px;
+  color: var(--text);
+}
+.tree-data-settings small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+.tree-data-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+.tree-data-settings button {
+  min-width: 0;
+  height: 33px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  font-size: 10px;
+}
+.tree-data-settings button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tree-data-settings .export-fields-toggle {
+  width: 100%;
+  height: 30px;
+  justify-content: space-between;
+  padding: 0 9px;
+  background: var(--surface);
+  font-size: 11px;
+}
+.export-fields-toggle strong {
+  color: var(--accent);
+  font-size: 10px;
+}
+.tree-data-settings .export-fields-panel {
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.export-fields-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.tree-data-settings .export-fields-actions button {
+  width: auto;
+  height: 23px;
+  padding: 0 8px;
+  background: var(--surface);
+  font-size: 9px;
+}
+.export-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px 5px;
+}
+.export-fields-grid label {
+  min-width: 0;
+  min-height: 23px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  color: var(--text-soft);
+  font-size: 9px;
+  cursor: pointer;
+}
+.export-fields-grid label > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.export-fields-grid input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.export-fields-grid .link-visibility-check {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+.tree-data-file-input {
+  display: none;
+}
+.import-data-dialog > p + p {
+  margin-top: -8px;
+  color: var(--muted);
+  font-size: 12px;
 }
 .link-visibility-option {
   min-height: 36px;
@@ -2994,6 +3143,7 @@ button {
   user-select: none;
 }
 .tree-person-card {
+  position: relative;
   height: 76px;
   width: 196px;
   display: flex;
@@ -3010,6 +3160,29 @@ button {
     border 0.14s,
     box-shadow 0.14s,
     background 0.14s;
+}
+.family-app.deceased-ribbon-black .tree-person.is-deceased .tree-person-card::after,
+.family-app.deceased-ribbon-red .tree-person.is-deceased .tree-person-card::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: 11px;
+  width: 13px;
+  height: 27px;
+  z-index: 2;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 76%, 0 100%);
+  box-shadow: 0 2px 5px #101a1445;
+  pointer-events: none;
+}
+.family-app.deceased-ribbon-black .tree-person.is-deceased .tree-person-card::after {
+  background: #202422;
+}
+.family-app.deceased-ribbon-red .tree-person.is-deceased .tree-person-card::after {
+  background: #c43c3c;
+}
+.family-app.theme-dark.deceased-ribbon-black .tree-person.is-deceased .tree-person-card::after {
+  background: #080909;
+  outline: 1px solid #ffffff24;
 }
 .tree-person-card:active {
   cursor: grabbing !important;
@@ -3047,6 +3220,82 @@ button {
 .tree-person-card:hover .drag-grip {
   opacity: 1;
   color: var(--accent);
+}
+.tree-node-quick-add {
+  position: absolute;
+  left: 50%;
+  top: 66px;
+  z-index: 8;
+  transform: translateX(-50%);
+}
+.tree-node-quick-add-button {
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 3px 9px #101a142b;
+  opacity: 0.82;
+  transition:
+    transform 0.14s,
+    opacity 0.14s,
+    background 0.14s,
+    color 0.14s;
+}
+.tree-node-quick-add-button:hover,
+.tree-node-quick-add.is-open .tree-node-quick-add-button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  opacity: 1;
+  transform: scale(1.06);
+}
+.theme-dark .tree-node-quick-add-button:hover,
+.theme-dark .tree-node-quick-add.is-open .tree-node-quick-add-button {
+  color: #17251a;
+}
+.tree-person:has(.tree-node-quick-add.is-open) {
+  z-index: 30;
+}
+.tree-node-quick-add-menu {
+  position: absolute;
+  top: 34px;
+  left: 50%;
+  width: 214px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface) 97%, transparent);
+  box-shadow: 0 12px 30px #101a1440;
+  backdrop-filter: blur(10px);
+  transform: translateY(-30%) translateX(10%) scale(2);
+}
+.tree-node-quick-add-menu button {
+  height: 31px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.tree-node-quick-add-menu button:hover {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.tree-node-quick-add-menu button:last-child {
+  grid-column: 1 / -1;
 }
 .canvas-zoom-controls {
   position: absolute;
@@ -3820,7 +4069,7 @@ button {
 }
 @media (max-width: 1050px) {
   .family-app {
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: 250px minmax(0, 1fr);
   }
   .simple-details {
     display: none;
@@ -3844,7 +4093,7 @@ button {
     left: 0;
     top: 0;
     bottom: 0;
-    width: 270px;
+    width: min(300px, 88vw);
     height: 100dvh;
     z-index: 21;
     box-shadow: 10px 0 40px #101a1426;
@@ -4008,7 +4257,7 @@ button {
   }
 }
 .family-app.sidebar-open.details-closed {
-  grid-template-columns: 238px minmax(0, 1fr);
+  grid-template-columns: 286px minmax(0, 1fr);
 }
 .family-app.sidebar-closed.details-closed {
   grid-template-columns: minmax(0, 1fr);
@@ -4055,7 +4304,7 @@ button {
 @media (max-width: 1050px) {
   .family-app.sidebar-open.details-open,
   .family-app.sidebar-open.details-closed {
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: 250px minmax(0, 1fr);
   }
   .family-app.sidebar-closed.details-open,
   .family-app.sidebar-closed.details-closed {
@@ -4393,6 +4642,27 @@ button {
   stroke-linejoin: round;
   letter-spacing: 0.04px;
 }
+.connector-child-name {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease;
+}
+.connector-child-name rect {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 1;
+  filter: drop-shadow(0 2px 5px #101a1438);
+}
+.connector-child-name text {
+  fill: var(--text);
+  font-size: 10px;
+  font-weight: 750;
+}
+.relationship-link:hover .connector-child-name,
+.relationship-link:focus-within .connector-child-name,
+.relationship-link.is-highlighted .connector-child-name {
+  opacity: 1;
+}
 .connector-hit:focus {
   outline: none;
 }
@@ -4417,7 +4687,9 @@ button {
 }
 .tree-person.link-highlighted .tree-person-card {
   border-color: #f0a928 !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, #f0a928 30%, transparent), 0 8px 20px #17203326 !important;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, #f0a928 30%, transparent),
+    0 8px 20px #17203326 !important;
 }
 .family-app:not(.theme-dark) .relationship-link.is-highlighted .connector,
 .family-app:not(.theme-dark) .relationship-link.is-node-related .connector,
@@ -4433,7 +4705,9 @@ button {
 .family-app:not(.theme-dark) .tree-person.link-highlighted .tree-person-card,
 .family-app:not(.theme-dark) .tree-person.selected .tree-person-card {
   border-color: #e0443e !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, #e0443e 22%, transparent), 0 8px 20px #332f2b20 !important;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, #e0443e 22%, transparent),
+    0 8px 20px #332f2b20 !important;
 }
 .family-app:not(.theme-dark) #family-link-highlight-arrow path,
 .family-app:not(.theme-dark) #partner-link-highlight-arrow path,
@@ -4495,7 +4769,9 @@ button {
   background: color-mix(in srgb, var(--surface) 96%, transparent);
   backdrop-filter: blur(12px);
   color: var(--text);
-  box-shadow: 0 14px 34px #0c17112e, 0 2px 8px #0c171118;
+  box-shadow:
+    0 14px 34px #0c17112e,
+    0 2px 8px #0c171118;
   font-size: 11px;
   line-height: 1.45;
   opacity: 0;
@@ -5057,7 +5333,7 @@ button {
 }
 @media (min-width: 1051px) {
   .family-app.sidebar-open.details-open {
-    grid-template-columns: 238px minmax(0, 1fr);
+    grid-template-columns: 286px minmax(0, 1fr);
   }
   .family-app.sidebar-closed.details-open {
     grid-template-columns: minmax(0, 1fr);
@@ -5067,7 +5343,7 @@ button {
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(var(--details-width, 390px), calc(100vw - 238px));
+    width: min(var(--details-width, 390px), calc(100vw - 286px));
     height: 100dvh;
     z-index: 18;
     box-shadow: -12px 0 35px #111b1530;
@@ -5527,7 +5803,7 @@ button {
   --dashboard-line: #58d7ad;
   --dashboard-card: #202a25;
   --dashboard-card-text: #f1f5f3;
-  --dashboard-card-muted: #9cacA3;
+  --dashboard-card-muted: #9caca3;
   --dashboard-canvas: #131a16;
 }
 .tree-style-dashboard .simple-canvas {
@@ -5540,7 +5816,10 @@ button {
   background: var(--dashboard-card);
   box-shadow: 0 8px 20px color-mix(in srgb, #0f172a 13%, transparent);
   color: var(--dashboard-card-text);
-  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    border-color 0.16s ease;
 }
 .tree-style-dashboard .tree-person-card:hover,
 .tree-style-dashboard .tree-person.selected .tree-person-card {
@@ -5563,7 +5842,11 @@ button {
   stroke: var(--dashboard-line);
   stroke-width: 2.4;
   opacity: 0.62 !important;
-  transition: opacity 0.14s ease, stroke 0.14s ease, stroke-width 0.14s ease, filter 0.14s ease;
+  transition:
+    opacity 0.14s ease,
+    stroke 0.14s ease,
+    stroke-width 0.14s ease,
+    filter 0.14s ease;
 }
 .tree-style-dashboard.theme-dark .connector {
   opacity: 0.72 !important;
@@ -5606,7 +5889,11 @@ button {
   stroke-width: 1.35;
   stroke-linecap: round;
   opacity: 0.5;
-  transition: opacity 0.16s ease, stroke 0.16s ease, stroke-width 0.16s ease, filter 0.16s ease;
+  transition:
+    opacity 0.16s ease,
+    stroke 0.16s ease,
+    stroke-width 0.16s ease,
+    filter 0.16s ease;
 }
 .link-style-smooth #smooth-link-dot circle {
   fill: color-mix(in srgb, var(--line) 78%, var(--accent));
@@ -5666,14 +5953,12 @@ button {
 }
 .tree-style-atlas .simple-canvas {
   background-color: var(--atlas-canvas);
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--atlas-grid) 8%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--atlas-grid) 8%, transparent) 1px, transparent 1px),
-    radial-gradient(color-mix(in srgb, var(--atlas-grid) 22%, transparent) 0.7px, transparent 0.7px);
-  background-size: 80px 80px, 80px 80px, 16px 16px;
+  background-image: none;
 }
 .tree-style-atlas .tree-person {
-  transition: opacity 0.18s ease, filter 0.18s ease;
+  transition:
+    opacity 0.18s ease,
+    filter 0.18s ease;
 }
 .tree-style-atlas .tree-person-card {
   position: relative;
@@ -5736,7 +6021,9 @@ button {
 .tree-style-atlas .tree-person.link-path-node .tree-person-card,
 .tree-style-atlas .tree-person.selected .tree-person-card {
   border-color: #f0a928;
-  box-shadow: 0 0 0 2px color-mix(in srgb, #f0a928 24%, transparent), 0 9px 24px #07131b2b;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, #f0a928 24%, transparent),
+    0 9px 24px #07131b2b;
 }
 .tree-style-atlas .connector-relation {
   stroke: var(--atlas-canvas);
@@ -5802,13 +6089,40 @@ button {
   }
 }
 
-/* Keep every canvas clean in both color modes. Atlas retains its line grid. */
+/* Keep every canvas clean in both color modes. */
 .family-app .simple-canvas {
   background-image: none;
 }
 .family-app.tree-style-atlas .simple-canvas {
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--atlas-grid) 8%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--atlas-grid) 8%, transparent) 1px, transparent 1px);
-  background-size: 80px 80px;
+  background-image: none;
+}
+
+/* The member drawer overlays the workspace, so opening it never shifts the tree. */
+.family-app,
+.family-app.sidebar-open,
+.family-app.sidebar-closed,
+.family-app.sidebar-open.details-open,
+.family-app.sidebar-open.details-closed,
+.family-app.sidebar-closed.details-open,
+.family-app.sidebar-closed.details-closed {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+.family-app > .simple-main {
+  grid-column: 1;
+}
+.family-app > .simple-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: min(286px, 88vw);
+  height: 100dvh;
+  z-index: 21;
+  box-shadow: 12px 0 38px #101a1438;
+}
+.family-app > .sidebar-scrim {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  border: 0;
+  background: #10161338;
 }
