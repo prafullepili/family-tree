@@ -43,6 +43,8 @@ import { layoutTree, resolveNodeOverlaps } from './layoutTree.js';
 import { relationshipPlacement } from './relationshipPlacement.js';
 
 const fullName = (p) => [p?.firstName, p?.lastName].filter(Boolean).join(' ') || 'Unnamed person';
+const API_BASE_URL = String(import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const apiUrl = (path) => `${API_BASE_URL}${path}`;
 const DATA_COLUMNS = [
   'First Name',
   'Last Name',
@@ -1233,7 +1235,7 @@ export default function App() {
           .filter(Boolean)
           .join(','),
       );
-    fetch(`/api/layouts?${layoutQuery}`, { cache: 'no-store' })
+    fetch(apiUrl(`/api/layouts?${layoutQuery}`), { cache: 'no-store' })
       .then((response) => {
         if (!response.ok) throw Error();
         return response.json();
@@ -1263,7 +1265,7 @@ export default function App() {
       try {
         let ready = false;
         for (let i = 0; i < 8; i++) {
-          const h = await fetch('/api/health');
+          const h = await fetch(apiUrl('/api/health'));
           if (!h.ok) throw Error();
           const state = await h.json();
           if (!state.configured) {
@@ -1281,7 +1283,7 @@ export default function App() {
           if (i < 7) await new Promise((r) => setTimeout(r, 1000));
         }
         if (!ready) throw Error();
-        const response = await fetch('/api/people');
+        const response = await fetch(apiUrl('/api/people'));
         if (!response.ok) throw Error();
         const savedRows = await response.json();
         const rows = savedRows.map(fromApi);
@@ -1313,7 +1315,7 @@ export default function App() {
     try {
       let ready = false;
       for (let i = 0; i < 8; i++) {
-        const healthResponse = await fetch('/api/health', { cache: 'no-store' });
+        const healthResponse = await fetch(apiUrl('/api/health'), { cache: 'no-store' });
         if (!healthResponse.ok) throw Error();
         const health = await healthResponse.json();
         if (!health.configured) {
@@ -1329,7 +1331,7 @@ export default function App() {
         if (i < 7) await new Promise((resolve) => setTimeout(resolve, 1000));
       }
       if (!ready) throw Error();
-      const response = await fetch('/api/people', { cache: 'no-store' });
+      const response = await fetch(apiUrl('/api/people'), { cache: 'no-store' });
       if (!response.ok) throw Error();
       const rows = (await response.json()).map(fromApi);
       storageRemove('kinfolk-demo-people');
@@ -1431,7 +1433,7 @@ export default function App() {
     setIsImporting(true);
     try {
       if (apiState === 'connected') {
-        const response = await fetch('/api/people/import', {
+        const response = await fetch(apiUrl('/api/people/import'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ people: pendingImport.people }),
@@ -1489,7 +1491,7 @@ export default function App() {
     setTimeout(() => setToast(''), 2600);
   }
   async function refreshPeople() {
-    const r = await fetch('/api/people');
+    const r = await fetch(apiUrl('/api/people'));
     if (!r.ok) throw Error('Could not reload your family tree');
     return (await r.json()).map(fromApi);
   }
@@ -1525,7 +1527,7 @@ export default function App() {
             )
             .map((person) => ({ id: person._id, treeX: person.treeX, treeY: person.treeY }));
           if (positions.length) {
-            const response = await fetch('/api/people/layout/positions', {
+            const response = await fetch(apiUrl('/api/people/layout/positions'), {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ positions }),
@@ -1533,7 +1535,7 @@ export default function App() {
             if (!response.ok) throw Error('Could not preserve the family positions');
           }
         }
-        const r = await fetch(prior ? `/api/people/${prior._id}` : '/api/people', {
+        const r = await fetch(apiUrl(prior ? `/api/people/${prior._id}` : '/api/people'), {
           method: prior ? 'PATCH' : 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -1547,7 +1549,7 @@ export default function App() {
           .filter((child) => child._id && currentChildren.some((person) => person.id === child.id) !== nextChildIds.has(child.id))
           .map(async (child) => {
             const parentIds = nextChildIds.has(child.id) ? [...new Set([...(child.parentIds || []), saved.id])] : (child.parentIds || []).filter((id) => id !== saved.id);
-            const response = await fetch(`/api/people/${child._id}`, {
+            const response = await fetch(apiUrl(`/api/people/${child._id}`), {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ parentIds }),
@@ -1640,7 +1642,7 @@ export default function App() {
         });
       if (apiState === 'connected') {
         const positions = rows.filter((person) => person._id).map((person) => ({ id: person._id, treeX: person.treeX, treeY: person.treeY }));
-        const saved = await fetch('/api/people/layout/positions', {
+        const saved = await fetch(apiUrl('/api/people/layout/positions'), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ positions }),
@@ -1648,7 +1650,7 @@ export default function App() {
         if (!saved.ok) throw Error('Could not preserve the current tree layout');
         const ids = removedPeople.filter((person) => person._id).map((person) => person._id);
         if (ids.length) {
-          const response = await fetch('/api/people/batch', {
+          const response = await fetch(apiUrl('/api/people/batch'), {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids }),
@@ -1857,7 +1859,7 @@ export default function App() {
             })();
       if (apiState === 'connected') {
         const databasePositions = arrangedPositions.map((position) => ({ ...position, id: people.find((person) => person.id === position.id)?._id })).filter((position) => position.id);
-        const response = await fetch('/api/people/layout/positions', {
+        const response = await fetch(apiUrl('/api/people/layout/positions'), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ positions: databasePositions }),
@@ -1898,7 +1900,7 @@ export default function App() {
         .filter((position) => position?.personId);
       let saved;
       if (apiState === 'connected') {
-        const response = await fetch('/api/layouts', {
+        const response = await fetch(apiUrl('/api/layouts'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, familyId: layoutScopeId, familyName: selectedFamily?.name || 'All families', positions }),
@@ -1954,7 +1956,7 @@ export default function App() {
       const availablePositions = positions.filter((position) => currentIds.has(position.id));
       if (!availablePositions.length) throw Error('No matching people remain in this saved view');
       if (apiState === 'connected') {
-        const response = await fetch('/api/people/layout/positions', {
+        const response = await fetch(apiUrl('/api/people/layout/positions'), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ positions: availablePositions }),
@@ -1985,7 +1987,7 @@ export default function App() {
     setDeletingLayoutId(savedLayout._id);
     try {
       if (apiState === 'connected') {
-        const response = await fetch(`/api/layouts/${savedLayout._id}`, { method: 'DELETE' });
+        const response = await fetch(apiUrl(`/api/layouts/${savedLayout._id}`), { method: 'DELETE' });
         if (!response.ok) throw Error((await response.json().catch(() => null))?.error || 'Could not remove this saved view');
       } else {
         let allLayouts = [];
@@ -2331,7 +2333,7 @@ export default function App() {
         .filter(Boolean);
       if (databasePositions.length) {
         try {
-          const response = await fetch('/api/people/layout/positions', {
+          const response = await fetch(apiUrl('/api/people/layout/positions'), {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ positions: databasePositions }),

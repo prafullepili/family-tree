@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
@@ -7,6 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import Person from './models/Person.js';
 import TreeLayout from './models/TreeLayout.js';
+
+const serverDir = path.dirname(fileURLToPath(import.meta.url));
+const workspaceDir = path.resolve(serverDir, '..');
+dotenv.config({ path: [path.join(serverDir, '.env'), path.join(workspaceDir, '.env')] });
 
 const app = express();
 app.use(cors());
@@ -242,8 +246,7 @@ app.delete('/api/people/:id', async (req, res, next) => {
     next(e);
   }
 });
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const distDir = path.join(rootDir, 'dist');
+const distDir = path.join(workspaceDir, 'client', 'dist');
 if (existsSync(distDir)) {
   app.use(express.static(distDir));
   app.get('*', (_req, res) => res.sendFile(path.join(distDir, 'index.html')));

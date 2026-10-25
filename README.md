@@ -1,6 +1,11 @@
 # Kinfolk family archive
 
-A responsive family history website built with React, SVG, Express, MongoDB, and JavaScript. It includes a data-driven, zoomable and draggable family tree, live parent and partner connectors, member profiles, search, member create/edit/delete, and light and dark themes.
+A responsive family history website built as two npm workspace packages:
+
+- `client` — React and Vite website
+- `server` — Express and MongoDB API
+
+The root package only coordinates development, builds, tests, and production startup.
 
 ## Requirements
 
@@ -10,10 +15,16 @@ A responsive family history website built with React, SVG, Express, MongoDB, and
 ## Run locally
 
 1. Install packages: `npm install`
-2. Copy `.env.example` to `.env` and set `MONGODB_URI`.
-3. Start the API: `npm run server`.
-4. In another terminal, start the website: `npm run dev`.
-5. Open the URL printed by Vite, usually `http://localhost:5173`.
+2. Copy `server/.env.example` to `server/.env` and set `MONGODB_URI`.
+3. Run both packages with `npm run dev`.
+4. Open the URL printed by Vite, usually `http://localhost:5173`.
+
+You can also run the packages independently:
+
+```sh
+npm run dev:server
+npm run dev:client
+```
 
 The frontend proxy forwards `/api` calls to Express on port 4000. If no MongoDB URI is configured, the app opens in demo mode with sample family records saved in the browser. When a URI is configured, MongoDB is the source of truth; if the database cannot be reached, the app shows an unavailable state instead of loading sample records. People, family links, and manually arranged node positions are stored in MongoDB.
 
@@ -27,7 +38,14 @@ npm run build
 npm start
 ```
 
-Express serves the generated `dist` website and the `/api` routes from one service. Keep the MongoDB URI private and use a database account limited to the app's database.
+The root build command creates `client/dist`. Express can serve that build along with `/api` routes, so a single-service deployment still works.
+
+The packages can also be deployed separately:
+
+- Deploy `client` as a static Vite application. Set `VITE_API_URL` to the public server origin, such as `https://api.example.com`.
+- Deploy `server` as a Node service. Set `MONGODB_URI` and optionally `PORT`.
+
+Keep the MongoDB URI private and use a database account limited to the app's database.
 
 ## Data model
 
