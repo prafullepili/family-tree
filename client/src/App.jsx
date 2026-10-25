@@ -828,6 +828,9 @@ export default function App() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteDescendants, setDeleteDescendants] = useState(() => storageGet('kinfolk-delete-descendants') === 'true');
   const drag = useRef(null);
+  const pendingPositionSaves = useRef(new Map());
+  const positionSaveTimer = useRef(0);
+  const positionSaveMessage = useRef({ success: 'Position saved', failure: 'Moved for this session; the position could not be saved' });
   const spacePan = useRef(false);
   const pinch = useRef(null);
   const zoomFrame = useRef(0);
@@ -2096,6 +2099,37 @@ export default function App() {
     setDetailsOpen(false);
     setMobileDetailsOpen(false);
   }
+  async function flushPositionSaves({ silent = false, keepalive = false } = {}) {
+    if (positionSaveTimer.current) {
+      clearTimeout(positionSaveTimer.current);
+      positionSaveTimer.current = 0;
+    }
+    const positions = [...pendingPositionSaves.current.values()];
+    if (!positions.length) return;
+    pendingPositionSaves.current.clear();
+    const message = positionSaveMessage.current;
+    try {
+      const response = await fetch(apiUrl('/api/people/layout/positions'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ positions }),
+        keepalive,
+      });
+      if (!response.ok) throw Error();
+      if (!silent) notify(message.success);
+    } catch {
+      positions.forEach((position) => {
+        if (!pendingPositionSaves.current.has(position.id)) pendingPositionSaves.current.set(position.id, position);
+      });
+      if (!silent) notify(message.failure);
+    }
+  }
+  function queuePositionSave(positions, message) {
+    positions.forEach((position) => pendingPositionSaves.current.set(position.id, position));
+    positionSaveMessage.current = message;
+    if (positionSaveTimer.current) clearTimeout(positionSaveTimer.current);
+    positionSaveTimer.current = window.setTimeout(() => flushPositionSaves(), 650);
+  }
   function startDrag(e, p, pos) {
     if (e.button !== 0) return;
     if (e.target.closest('.tree-node-info,.tree-node-edit,.tree-node-delete,.tree-node-about,.tree-node-about-tooltip,.tree-node-quick-add')) return;
@@ -2332,17 +2366,10 @@ export default function App() {
         })
         .filter(Boolean);
       if (databasePositions.length) {
-        try {
-          const response = await fetch(apiUrl('/api/people/layout/positions'), {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ positions: databasePositions }),
-          });
-          if (!response.ok) throw Error();
-          notify(d.familyPositions ? 'Selected positions saved' : 'Position saved');
-        } catch {
-          notify(d.familyPositions ? 'Moved for this session; positions could not be saved' : 'Moved for this session; the position could not be saved');
-        }
+        queuePositionSave(databasePositions, {
+          success: d.familyPositions ? 'Selected positions saved' : 'Position saved',
+          failure: d.familyPositions ? 'Moved for this session; positions could not be saved' : 'Moved for this session; the position could not be saved',
+        });
       } else notify(d.familyPositions ? 'Positions saved on this device' : 'Position saved on this device');
     }
     window.addEventListener('pointermove', onMove, { passive: false });
@@ -2358,6 +2385,7 @@ export default function App() {
       window.removeEventListener('mouseup', onUp);
       if (drag.current?.holdTimer) clearTimeout(drag.current.holdTimer);
       if (drag.current?.frame) cancelAnimationFrame(drag.current.frame);
+      if (pendingPositionSaves.current.size) flushPositionSaves({ silent: true, keepalive: true });
     };
   }, []);
   const treeName = selectedFamilyId === '__all__' ? 'All families' : selectedFamily?.name || 'Your family';
