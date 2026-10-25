@@ -844,6 +844,10 @@ export default function App() {
   const families = useMemo(() => getFamilyGroups(people), [people]);
   const selectedFamily = selectedFamilyId === '__all__' ? null : families.find((group) => group.id === selectedFamilyId) || [...families].sort((a, b) => b.people.length - a.people.length)[0];
   const familyPeople = selectedFamilyId === '__all__' ? people : selectedFamily?.people || people;
+  const familyPeopleIdentity = familyPeople
+    .map((person) => String(person._id || person.id))
+    .sort()
+    .join('|');
   const layoutScopeId = selectedFamilyId === '__all__' ? '__all__' : selectedFamily?.id || familyPeople[0]?.id || '__all__';
   const treePeople = useMemo(
     () => (memberFamilyFilter === '__all__' ? familyPeople : familyPeople.filter((person) => (person.lastName?.trim().toLocaleLowerCase() || '__other__') === memberFamilyFilter)),
@@ -876,6 +880,46 @@ export default function App() {
   const familyColors = useMemo(() => familyColorMap(treePeople, familyColorFocusId), [treePeople, familyColorFocusId]);
   const selected = people.find((p) => p.id === selectedId) || null;
   const byId = (id) => people.find((p) => p.id === id);
+  const familyLinkGroups = useMemo(() => {
+    if (!selected) return [];
+    const peopleById = new Map(people.map((person) => [person.id, person]));
+    const seen = new Set();
+    const makeGroup = (key, label, links) => ({
+      key,
+      label,
+      links: links.filter((link) => {
+        if (!peopleById.has(link.id) || seen.has(link.id)) return false;
+        seen.add(link.id);
+        return true;
+      }),
+    });
+    const siblings = people
+      .filter((person) => person.id !== selected.id && ((person.siblingIds || []).includes(selected.id) || (person.parentIds || []).some((parentId) => (selected.parentIds || []).includes(parentId))))
+      .map((person) => ({ id: person.id, role: 'Sibling' }));
+    return [
+      makeGroup(
+        'parents',
+        'Parents',
+        (selected.parentIds || []).map((id) => ({ id, role: 'Parent' })),
+      ),
+      makeGroup(
+        'partners',
+        'Partners',
+        (selected.partnerIds || []).map((id) => ({ id, role: 'Partner', label: partnerDisplayLabel(selected, peopleById.get(id)) })),
+      ),
+      makeGroup(
+        'children',
+        'Children',
+        people.filter((person) => (person.parentIds || []).includes(selected.id)).map((person) => ({ id: person.id, role: 'Child' })),
+      ),
+      makeGroup('siblings', 'Siblings', siblings),
+      makeGroup(
+        'other',
+        'Other relationships',
+        (selected.relationshipLinks || []).map((link) => ({ id: link.personId, role: link.label || 'Related' })),
+      ),
+    ].filter((group) => group.links.length);
+  }, [people, selected]);
   const layoutPeople = useMemo(() => {
     if (!isCompactViewport || !Object.keys(phoneLayoutPreview).length) return treePeople;
     return treePeople.map((person) => {
@@ -1252,7 +1296,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [apiState, familyPeople, layoutScopeId]);
+  }, [apiState, familyPeopleIdentity, layoutScopeId]);
   useEffect(() => {
     if (apiState !== 'connected' || !hasMongoSnapshot) return;
     try {
@@ -1500,7 +1544,8 @@ export default function App() {
   }
   async function saveMember(values) {
     const prior = modal.person;
-    const { childIds = [], ...memberValues } = values;
+    const { childIds = [], childRelationships = [], ...memberValues } = values;
+    const childRoleById = new Map(childRelationships.map((link) => [link.personId, link.role]));
     const currentPositions = new Map([...layoutTree(people).positions, ...layout.positions]);
     const placement = relationshipPlacement(people, values, prior, currentPositions);
     const anchoredPeople = placement
@@ -1549,13 +1594,20 @@ export default function App() {
         const nextChildIds = new Set(childIds.filter((id) => people.some((person) => person.id === id && person._id)));
         const currentChildren = prior ? people.filter((person) => (person.parentIds || []).includes(prior.id)) : [];
         const childUpdates = [...new Map([...currentChildren, ...people.filter((person) => nextChildIds.has(person.id))].map((person) => [person.id, person])).values()]
-          .filter((child) => child._id && currentChildren.some((person) => person.id === child.id) !== nextChildIds.has(child.id))
+          .filter((child) => {
+            const role = childRoleById.get(child.id);
+            const requestedGender = role === 'Son' ? 'male' : role === 'Daughter' ? 'female' : null;
+            const linkChanged = currentChildren.some((person) => person.id === child.id) !== nextChildIds.has(child.id);
+            return child._id && (linkChanged || (requestedGender && child.gender !== requestedGender));
+          })
           .map(async (child) => {
             const parentIds = nextChildIds.has(child.id) ? [...new Set([...(child.parentIds || []), saved.id])] : (child.parentIds || []).filter((id) => id !== saved.id);
+            const role = childRoleById.get(child.id);
+            const requestedGender = role === 'Son' ? 'male' : role === 'Daughter' ? 'female' : null;
             const response = await fetch(apiUrl(`/api/people/${child._id}`), {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ parentIds }),
+              body: JSON.stringify({ parentIds, ...(requestedGender ? { gender: requestedGender } : {}) }),
             });
             if (!response.ok) throw Error('Person saved, but a child link could not be updated');
           });
@@ -1593,9 +1645,12 @@ export default function App() {
       if (p.id === id) return p;
       let updated = p;
       if (currentChildren.has(p.id) || nextChildren.has(p.id)) {
+        const childRole = childRoleById.get(p.id);
+        const requestedGender = childRole === 'Son' ? 'male' : childRole === 'Daughter' ? 'female' : null;
         updated = {
           ...updated,
           parentIds: nextChildren.has(p.id) ? [...new Set([...(updated.parentIds || []), id])] : (updated.parentIds || []).filter((parentId) => parentId !== id),
+          ...(requestedGender ? { gender: requestedGender } : {}),
         };
       }
       const next = nextPartners.has(p.id);
@@ -2063,13 +2118,24 @@ export default function App() {
       },
     };
     const preset = presets[kind];
+    const initialRelationships = [{ personId: person.id, role: preset.role, customLabel: '' }];
+    if (kind === 'son' || kind === 'daughter') {
+      const otherParent = (person.partnerIds || []).map((id) => people.find((candidate) => candidate.id === id)).find(Boolean);
+      if (otherParent) {
+        initialRelationships.push({
+          personId: otherParent.id,
+          role: otherParent.gender === 'male' ? 'Father' : otherParent.gender === 'female' ? 'Mother' : 'Parent',
+          customLabel: '',
+        });
+      }
+    }
     setQuickAddForId('');
     setSelectedId(person.id);
     setSelectedNodeIds([]);
     setModal({
       inline: true,
       defaults: { gender: preset.gender, lastName: preset.lastName },
-      initialRelationships: [{ personId: person.id, role: preset.role, customLabel: '' }],
+      initialRelationships,
     });
     setDetailsOpen(true);
     if (window.innerWidth <= 1050) {
@@ -3041,6 +3107,7 @@ export default function App() {
                         <span className="tree-person-copy">
                           <strong>{fullName(person)}</strong>
                           <small>
+                            {person.maidenName ? `Born: ${person.maidenName} · ` : ''}
                             {year(person.birthDate)}
                             {person.deathDate ? ` — ${year(person.deathDate)}` : ' —'}
                           </small>
@@ -3370,36 +3437,38 @@ export default function App() {
                     <Pencil size={13} />
                   </button>
                 </div>
-                {[
-                  ...(selected.parentIds || []).map((id) => ({ id, role: 'Parent' })),
-                  ...(selected.partnerIds || []).map((id) => ({
-                    id,
-                    role: 'Partner',
-                    label: partnerDisplayLabel(selected, byId(id)),
-                  })),
-                  ...people.filter((p) => (p.parentIds || []).includes(selected.id)).map((p) => ({ id: p.id, role: 'Child' })),
-                  ...people
-                    .filter((p) => p.id !== selected.id && ((p.siblingIds || []).includes(selected.id) || (p.parentIds || []).some((parentId) => (selected.parentIds || []).includes(parentId))))
-                    .map((p) => ({ id: p.id, role: 'Sibling' })),
-                  ...(selected.relationshipLinks || []).map((link) => ({ id: link.personId, role: link.label || 'Related' })),
-                ].map(
-                  (link, i) =>
-                    byId(link.id) && (
-                      <button
-                        className="details-link-row"
-                        key={`${link.role}-${link.id}-${i}`}
-                        onClick={() => {
-                          openPersonDetails(link.id);
-                          focusPersonInTree(link.id);
-                        }}
-                      >
-                        <PersonAvatar person={byId(link.id)} />
-                        <span className="details-link-person">
-                          <strong>{fullName(byId(link.id))}</strong>
-                        </span>
-                        <small className="details-link-role">{link.label || relationshipLabel(link.role, byId(link.id), selected)}</small>
-                      </button>
-                    ),
+                {familyLinkGroups.length ? (
+                  <div className="details-link-groups">
+                    {familyLinkGroups.map((group) => (
+                      <section className="details-link-group" key={group.key} aria-labelledby={`family-link-group-${group.key}`}>
+                        <h3 id={`family-link-group-${group.key}`}>
+                          <span>{group.label}</span>
+                          <small>{group.links.length}</small>
+                        </h3>
+                        {group.links.map((link) => {
+                          const person = byId(link.id);
+                          return (
+                            <button
+                              className="details-link-row"
+                              key={`${group.key}-${link.id}`}
+                              onClick={() => {
+                                openPersonDetails(link.id);
+                                focusPersonInTree(link.id);
+                              }}
+                            >
+                              <PersonAvatar person={person} />
+                              <span className="details-link-person">
+                                <strong>{fullName(person)}</strong>
+                              </span>
+                              <small className="details-link-role">{link.label || relationshipLabel(link.role, person, selected)}</small>
+                            </button>
+                          );
+                        })}
+                      </section>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="details-links-empty">No family links added yet.</p>
                 )}
                 <div className="details-actions-row">
                   <button
@@ -3772,6 +3841,7 @@ function PersonModal({ modal, people, onClose, onSave }) {
       siblingIds: byRole(['Brother', 'Sister', 'Sibling']),
       relationshipLinks,
       childIds: byRole(['Son', 'Daughter', 'Child']),
+      childRelationships: relationships.filter((link) => ['Son', 'Daughter', 'Child'].includes(link.role)).map(({ personId, role }) => ({ personId, role })),
     });
   }
   const title = p ? 'Edit person' : 'Add a person';
