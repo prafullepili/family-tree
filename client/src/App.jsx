@@ -78,9 +78,7 @@ function personDataRow(person, peopleById) {
       return `${personName(id)}${label ? ` (${label})` : ''}`;
     })
     .join('; ');
-  const otherRelationships = (person.relationshipLinks || [])
-    .map((link) => `${personName(link.personId)}${link.label ? ` (${link.label})` : ''}`)
-    .join('; ');
+  const otherRelationships = (person.relationshipLinks || []).map((link) => `${personName(link.personId)}${link.label ? ` (${link.label})` : ''}`).join('; ');
   return {
     'First Name': person.firstName || '',
     'Last Name': person.lastName || '',
@@ -749,7 +747,13 @@ export default function App() {
   const [familyQuery, setFamilyQuery] = useState('');
   const [visibleLinkTypes, setVisibleLinkTypes] = useState(() => {
     try {
-      return { parent: true, partner: true, sibling: true, custom: true, ...JSON.parse(storageGet('kinfolk-visible-link-types-v1') || '{}') };
+      return {
+        parent: true,
+        partner: true,
+        sibling: true,
+        custom: true,
+        ...JSON.parse(storageGet('kinfolk-visible-link-types-v1') || '{}'),
+      };
     } catch {
       return { parent: true, partner: true, sibling: true, custom: true };
     }
@@ -2118,16 +2122,31 @@ export default function App() {
       },
     };
     const preset = presets[kind];
-    const initialRelationships = [{ personId: person.id, role: preset.role, customLabel: '' }];
+    const initialRelationships = [];
+    const addInitialRelationship = (personId, role) => {
+      if (!personId || initialRelationships.some((link) => link.personId === personId)) return;
+      initialRelationships.push({ personId, role, customLabel: '' });
+    };
+    addInitialRelationship(person.id, preset.role);
     if (kind === 'son' || kind === 'daughter') {
       const otherParent = (person.partnerIds || []).map((id) => people.find((candidate) => candidate.id === id)).find(Boolean);
       if (otherParent) {
-        initialRelationships.push({
-          personId: otherParent.id,
-          role: otherParent.gender === 'male' ? 'Father' : otherParent.gender === 'female' ? 'Mother' : 'Parent',
-          customLabel: '',
-        });
+        addInitialRelationship(otherParent.id, otherParent.gender === 'male' ? 'Father' : otherParent.gender === 'female' ? 'Mother' : 'Parent');
       }
+      const parentIds = new Set([person.id, otherParent?.id].filter(Boolean));
+      people
+        .filter((candidate) => candidate.id !== person.id && (candidate.parentIds || []).some((parentId) => parentIds.has(parentId)))
+        .forEach((sibling) => addInitialRelationship(sibling.id, sibling.gender === 'male' ? 'Brother' : sibling.gender === 'female' ? 'Sister' : 'Sibling'));
+    }
+    if (kind === 'brother' || kind === 'sister') {
+      (person.parentIds || [])
+        .map((id) => people.find((candidate) => candidate.id === id))
+        .filter(Boolean)
+        .forEach((parent) => addInitialRelationship(parent.id, parent.gender === 'male' ? 'Father' : parent.gender === 'female' ? 'Mother' : 'Parent'));
+      const sharedParentIds = new Set(person.parentIds || []);
+      people
+        .filter((candidate) => candidate.id !== person.id && ((person.siblingIds || []).includes(candidate.id) || (candidate.parentIds || []).some((parentId) => sharedParentIds.has(parentId))))
+        .forEach((sibling) => addInitialRelationship(sibling.id, sibling.gender === 'male' ? 'Brother' : sibling.gender === 'female' ? 'Sister' : 'Sibling'));
     }
     setQuickAddForId('');
     setSelectedId(person.id);
@@ -3659,28 +3678,18 @@ export default function App() {
   );
 }
 
-const relationshipOptions = [
-  'Father',
-  'Mother',
-  'Parent',
-  'Son',
-  'Daughter',
-  'Child',
-  'Husband',
-  'Wife',
-  'Boyfriend',
-  'Girlfriend',
-  'Fiancé',
-  'Fiancée',
-  'Partner',
-  'Spouse',
-  'Former spouse',
-  'Former partner',
-  'Brother',
-  'Sister',
-  'Sibling',
-  'Other',
+const relationshipOptionGroups = [
+  { label: 'Parents', options: ['Father', 'Mother', 'Parent'] },
+  { label: 'Partners', options: ['Husband', 'Wife', 'Boyfriend', 'Girlfriend', 'Fiancé', 'Partner', 'Spouse'] },
+  { label: 'Children', options: ['Son', 'Daughter', 'Child'] },
+  { label: 'Siblings', options: ['Brother', 'Sister', 'Sibling'] },
+  { label: 'Other relationships', options: ['Other'] },
 ];
+const relationshipOptions = relationshipOptionGroups.flatMap((group) => group.options);
+
+function relationshipCategory(role) {
+  return relationshipOptionGroups.find((group) => group.options.includes(role))?.label || 'Uncategorized';
+}
 function defaultPartnerLabel(gender) {
   return gender === 'male' ? 'Husband' : gender === 'female' ? 'Wife' : 'Spouse';
 }
@@ -3688,6 +3697,17 @@ function RelationshipEditor({ people, relationships, onChange, excludeId }) {
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const selectedIds = relationships.map((link) => link.personId);
+  const groupedRelationships = relationshipOptionGroups
+    .map((group) => ({
+      ...group,
+      links: relationships.map((link, index) => ({ link, index })).filter(({ link }) => relationshipCategory(link.role) === group.label),
+    }))
+    .concat({
+      label: 'Uncategorized',
+      options: [],
+      links: relationships.map((link, index) => ({ link, index })).filter(({ link }) => relationshipCategory(link.role) === 'Uncategorized'),
+    })
+    .filter((group) => group.links.length > 0);
   const results = people.filter((person) => person.id !== excludeId && !selectedIds.includes(person.id) && fullName(person).toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6);
   function add(id) {
     onChange([...relationships, { personId: id, role: '', customLabel: '' }]);
@@ -3715,48 +3735,67 @@ function RelationshipEditor({ people, relationships, onChange, excludeId }) {
     <div className="relationship-editor">
       {relationships.length > 0 && (
         <div className="relationship-list">
-          {relationships.map((link, index) => {
-            const person = people.find((item) => item.id === link.personId);
-            if (!person) return null;
-            return (
-              <div className="relationship-row" key={`${link.personId}-${index}`}>
-                <strong title={fullName(person)}>{fullName(person)}</strong>
-                <select
-                  aria-label={`Relationship with ${fullName(person)}`}
-                  value={link.role}
-                  required
-                  onChange={(e) => update(index, { role: e.target.value, customLabel: e.target.value === 'Other' ? link.customLabel : '' })}
-                >
-                  <option value="" disabled>
-                    Select relationship
-                  </option>
-                  {relationshipOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option === 'Other' ? 'Custom…' : option}
-                    </option>
-                  ))}
-                </select>
-                {link.role === 'Other' && (
-                  <input
-                    className="custom-relationship-input"
-                    aria-label={`Custom relationship with ${fullName(person)}`}
-                    value={link.customLabel}
-                    onChange={(e) => update(index, { customLabel: e.target.value })}
-                    placeholder="Describe relationship"
-                    required
-                  />
-                )}
-                <button
-                  type="button"
-                  className="remove-link-button"
-                  onClick={() => onChange(relationships.filter((_, rowIndex) => rowIndex !== index))}
-                  aria-label={`Remove relationship with ${fullName(person)}`}
-                >
-                  <X size={13} />
-                </button>
+          {groupedRelationships.map((group) => (
+            <section className="relationship-group" key={group.label}>
+              <h4>
+                <span>{group.label}</span>
+                <small>{group.links.length}</small>
+              </h4>
+              <div className="relationship-group-rows">
+                {group.links.map(({ link, index }) => {
+                  const person = people.find((item) => item.id === link.personId);
+                  if (!person) return null;
+                  return (
+                    <div className="relationship-row" key={`${link.personId}-${index}`}>
+                      <div className="relationship-person" title={fullName(person)}>
+                        <span className="relationship-person-avatar" aria-hidden="true">
+                          {initials(person)}
+                        </span>
+                        <strong>{fullName(person)}</strong>
+                      </div>
+                      <select
+                        aria-label={`Relationship with ${fullName(person)}`}
+                        value={link.role}
+                        required
+                        onChange={(e) => update(index, { role: e.target.value, customLabel: e.target.value === 'Other' ? link.customLabel : '' })}
+                      >
+                        <option value="" disabled>
+                          Select relationship
+                        </option>
+                        {relationshipOptionGroups.map((optionGroup) => (
+                          <optgroup key={optionGroup.label} label={optionGroup.label}>
+                            {optionGroup.options.map((option) => (
+                              <option key={option} value={option}>
+                                {option === 'Other' ? 'Custom…' : option}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                      {link.role === 'Other' && (
+                        <input
+                          className="custom-relationship-input"
+                          aria-label={`Custom relationship with ${fullName(person)}`}
+                          value={link.customLabel}
+                          onChange={(e) => update(index, { customLabel: e.target.value })}
+                          placeholder="Describe relationship"
+                          required
+                        />
+                      )}
+                      <button
+                        type="button"
+                        className="remove-link-button"
+                        onClick={() => onChange(relationships.filter((_, rowIndex) => rowIndex !== index))}
+                        aria-label={`Remove relationship with ${fullName(person)}`}
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </section>
+          ))}
         </div>
       )}
       <label className="link-search relationship-search">

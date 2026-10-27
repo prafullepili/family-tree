@@ -3890,20 +3890,77 @@ button {
 }
 .relationship-list {
   display: grid;
-  gap: 7px;
+  gap: 9px;
   margin-bottom: 9px;
+}
+.relationship-group {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-soft);
+}
+.relationship-group h4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  color: var(--text-soft);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.relationship-group h4 small {
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+  color: var(--text);
+  font-size: 9px;
+  letter-spacing: 0;
+}
+.relationship-group-rows {
+  display: grid;
 }
 .relationship-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(138px, 0.82fr) auto;
   align-items: center;
   gap: 7px;
-  padding: 7px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-soft);
+  min-height: 43px;
+  padding: 5px 7px 5px 9px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
-.relationship-row > strong {
+.relationship-row:last-child {
+  border-bottom: 0;
+}
+.relationship-person {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+.relationship-person-avatar {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 800;
+}
+.relationship-person > strong {
   min-width: 0;
   overflow: hidden;
   font-size: 11px;
@@ -3914,11 +3971,11 @@ button {
 .relationship-row input {
   width: 100%;
   min-width: 0;
-  height: 31px;
+  height: 29px;
   padding: 0 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--surface);
+  background: var(--surface-soft);
   color: var(--text);
   font-size: 10px;
 }
@@ -5948,6 +6005,13 @@ button {
   stroke-width: 1.35;
   stroke-dasharray: none;
 }
+
+.link-style-smooth .connector.sibling {
+  stroke: color-mix(in srgb, red 60%, orange);
+  stroke-width: 1.35;
+  stroke-dasharray: 4;
+}
+
 .link-style-smooth .family-branch-links > g > .family-route {
   opacity: 0.34;
 }
