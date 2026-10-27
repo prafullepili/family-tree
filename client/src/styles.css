@@ -3011,6 +3011,21 @@ button {
   background-image: radial-gradient(color-mix(in srgb, var(--muted) 27%, transparent) 0.7px, transparent 0.7px);
   background-size: 19px 19px;
 }
+.simple-canvas:fullscreen,
+.simple-canvas.is-fullscreen-fallback {
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100dvh;
+  background: var(--bg);
+}
+.simple-canvas:fullscreen {
+  overflow: hidden;
+}
+.simple-canvas.is-fullscreen-fallback {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
 .canvas-help {
   position: absolute;
   top: 13px;
@@ -3047,8 +3062,9 @@ button {
   top: 42px;
   left: 0;
   z-index: 30;
-  width: min(340px, calc(100vw - 32px));
-  padding: 11px 14px;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(540px, calc(100dvh - 120px));
+  padding: 12px;
   border: 1px solid var(--border);
   border-radius: 9px;
   background: var(--surface);
@@ -3065,15 +3081,45 @@ button {
     transform 0.16s ease,
     visibility 0.16s;
   pointer-events: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
-.canvas-help-tooltip p {
-  margin: 0;
+.canvas-help-heading {
+  display: grid;
+  gap: 2px;
+  padding: 1px 2px 10px;
+  border-bottom: 1px solid var(--border);
 }
-.canvas-help-tooltip p + p {
-  margin-top: 7px;
-}
-.canvas-help-tooltip strong {
+.canvas-help-heading strong {
   color: var(--text);
+  font-size: 13px;
+}
+.canvas-help-heading span {
+  color: var(--muted);
+  font-size: 9px;
+}
+.canvas-help-items {
+  display: grid;
+}
+.canvas-help-items p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 8px 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+.canvas-help-items p:last-child {
+  padding-bottom: 2px;
+  border-bottom: 0;
+}
+.canvas-help-items strong {
+  color: var(--text);
+  font-size: 10px;
+}
+.canvas-help-items span {
+  color: var(--text-soft);
+  font-size: 10px;
+  line-height: 1.45;
 }
 .canvas-help.open .canvas-help-tooltip {
   opacity: 1;
@@ -3350,13 +3396,13 @@ button {
 .mobile-tree-style-control {
   position: absolute;
   right: 14px;
-  bottom: 96px;
+  bottom: 64px;
   z-index: 6;
 }
 .canvas-settings-control {
   position: absolute;
   right: 14px;
-  bottom: 144px;
+  bottom: 112px;
   z-index: 7;
 }
 .canvas-settings-control.is-open {
@@ -6267,11 +6313,14 @@ button {
   }
   .mobile-tree-style-control {
     right: 16px;
-    bottom: 92px;
+    bottom: 64px;
   }
   .canvas-settings-control {
     right: 16px;
-    bottom: 140px;
+    bottom: 112px;
+  }
+  .canvas-zoom-controls {
+    right: 16px;
   }
 }
 @media (max-width: 380px) {

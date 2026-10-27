@@ -17,6 +17,8 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
+  Minimize2,
+  Fullscreen,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -781,6 +783,9 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const canvasHelpRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [isCanvasFullscreen, setIsCanvasFullscreen] = useState(false);
+  const [fullscreenFallback, setFullscreenFallback] = useState(false);
   const [treeStyleMenuOpen, setTreeStyleMenuOpen] = useState(false);
   const treeStyleControlRef = useRef(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1824,6 +1829,55 @@ export default function App() {
     document.addEventListener('pointerdown', closeHelpOutside);
     return () => document.removeEventListener('pointerdown', closeHelpOutside);
   }, []);
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fullscreenElement) {
+        setIsCanvasFullscreen(fullscreenElement === canvasRef.current);
+        setFullscreenFallback(false);
+      } else if (!fullscreenFallback) setIsCanvasFullscreen(false);
+    };
+    const closeFallbackOnEscape = (event) => {
+      if (event.key === 'Escape' && fullscreenFallback) {
+        setFullscreenFallback(false);
+        setIsCanvasFullscreen(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', syncFullscreenState);
+    document.addEventListener('webkitfullscreenchange', syncFullscreenState);
+    window.addEventListener('keydown', closeFallbackOnEscape);
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreenState);
+      document.removeEventListener('webkitfullscreenchange', syncFullscreenState);
+      window.removeEventListener('keydown', closeFallbackOnEscape);
+    };
+  }, [fullscreenFallback]);
+  async function toggleCanvasFullscreen() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (fullscreenFallback) {
+      setFullscreenFallback(false);
+      setIsCanvasFullscreen(false);
+      return;
+    }
+    const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fullscreenElement) {
+      const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exitFullscreen) await exitFullscreen.call(document);
+      return;
+    }
+    const requestFullscreen = canvas.requestFullscreen || canvas.webkitRequestFullscreen;
+    if (requestFullscreen) {
+      try {
+        await requestFullscreen.call(canvas);
+        return;
+      } catch {
+        // Browsers may block the native API; the fixed canvas fallback still provides the mode.
+      }
+    }
+    setFullscreenFallback(true);
+    setIsCanvasFullscreen(true);
+  }
   function focusPersonInTree(id) {
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
@@ -2824,7 +2878,7 @@ export default function App() {
             </div>
           </div>
         </div>
-        <section className="simple-canvas">
+        <section ref={canvasRef} className={`simple-canvas ${fullscreenFallback ? 'is-fullscreen-fallback' : ''}`}>
           <div className={`canvas-help ${helpOpen ? 'open' : ''}`} ref={canvasHelpRef}>
             <button
               className="canvas-help-button"
@@ -2837,19 +2891,40 @@ export default function App() {
               <Info size={17} />
             </button>
             <div id="canvas-help-tooltip" className="canvas-help-tooltip" role="tooltip">
-              <p>
-                <strong>Select and move:</strong> Drag any person to move them. Click or tap to select; selected people move together. Use the lock button to prevent accidental moves.
-              </p>
-              <p>
-                <strong>Select a group:</strong> On laptop, drag empty canvas. On phone, hold empty canvas briefly, then drag to draw a rectangle.
-              </p>
-              <p>
-                <strong>Move the canvas:</strong> On phone, drag empty space. On laptop, hold Space while dragging or use the middle mouse button.
-              </p>
-              <p>
-                <strong>More:</strong> Hold a person for details. Use the eye icon to show details on laptop. Ctrl + mouse wheel or trackpad pinch zooms. Ctrl+A selects this family; Delete removes the
-                selection. Use the + on a node to add a family member.
-              </p>
+              <div className="canvas-help-heading">
+                <strong>Canvas controls</strong>
+                <span>Move around and manage your family tree</span>
+              </div>
+              <div className="canvas-help-items">
+                <p>
+                  <strong>Select and move people</strong>
+                  <span>Click or tap a person to select them. Drag a person to move them; dragging any person in a group selection moves the whole group. Lock movement to prevent accidental changes.</span>
+                </p>
+                <p>
+                  <strong>Select several people</strong>
+                  <span>On desktop, drag on empty canvas to draw a selection box; hold Shift to add to the selection. On phone, press empty canvas briefly, then drag.</span>
+                </p>
+                <p>
+                  <strong>Move and zoom the canvas</strong>
+                  <span>On desktop, hold Space and drag, or drag with the middle mouse button. On phone, drag empty space. Pinch with two fingers or use Ctrl/⌘ + wheel to zoom.</span>
+                </p>
+                <p>
+                  <strong>Inspect relationships</strong>
+                  <span>Select a person to keep their parents, grandparents, and related links highlighted. Hover a link to see its relationship; on mobile, tap a person.</span>
+                </p>
+                <p>
+                  <strong>Person shortcuts</strong>
+                  <span>Use + to add a relative, the pencil to edit, and the details icon to open the profile. Press and hold a person on mobile to open details.</span>
+                </p>
+                <p>
+                  <strong>Tree tools</strong>
+                  <span>Arrange creates a clear layout, Saved views stores favorite positions, and Maximize resets to 100% and centers the tree. Full screen, Settings, and tree themes are in the bottom-right corner.</span>
+                </p>
+                <p>
+                  <strong>Keyboard</strong>
+                  <span>Ctrl/⌘ + A selects everyone in the current family. Delete removes the selection after confirmation. Escape closes open panels and help.</span>
+                </p>
+              </div>
             </div>
           </div>
           {selectedNodeIds.length > 1 && (
@@ -3225,11 +3300,13 @@ export default function App() {
             )
           )}
           <div className="canvas-zoom-controls">
-            <button onClick={() => zoomTo(Math.min(maxCanvasZoom, +(zoomValue.current + 0.1).toFixed(2)))} aria-label="Zoom in">
-              <Plus size={17} />
-            </button>
-            <button onClick={() => zoomTo(Math.max(0.1, +(zoomValue.current - 0.1).toFixed(2)))} aria-label="Zoom out">
-              <span>−</span>
+            <button
+              type="button"
+              onClick={toggleCanvasFullscreen}
+              aria-label={isCanvasFullscreen ? 'Exit full screen' : 'Enter full screen'}
+              title={isCanvasFullscreen ? 'Exit full screen' : 'Full screen'}
+            >
+              {isCanvasFullscreen ? <Minimize2 size={16} /> : <Fullscreen size={17} />}
             </button>
           </div>
           <div className={`canvas-settings-control ${settingsOpen ? 'is-open' : ''}`} ref={settingsControlRef}>
