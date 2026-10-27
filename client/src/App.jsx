@@ -2715,100 +2715,6 @@ export default function App() {
                 </button>
               )}
             </label>
-            <div className={`top-settings ${settingsOpen ? 'is-open' : ''}`} ref={settingsControlRef}>
-              <button type="button" className="top-theme-toggle" aria-label="Tree settings" aria-expanded={settingsOpen} title="Tree settings" onClick={() => setSettingsOpen((open) => !open)}>
-                <Settings size={17} />
-              </button>
-              {settingsOpen && (
-                <div className="tree-settings-menu" role="dialog" aria-label="Tree settings">
-                  <div className="tree-settings-heading">
-                    <strong>Visible relationships</strong>
-                    <small>Choose which relationships appear in the tree</small>
-                  </div>
-                  {[
-                    ['parent', 'Parents and children'],
-                    ['partner', 'Partners and spouses'],
-                    ['sibling', 'Siblings'],
-                    ['custom', 'Other relationships'],
-                  ].map(([type, label]) => (
-                    <label className="link-visibility-option" key={type}>
-                      <input type="checkbox" checked={visibleLinkTypes[type]} onChange={(event) => setVisibleLinkTypes((current) => ({ ...current, [type]: event.target.checked }))} />
-                      <span className="link-visibility-check" aria-hidden="true">
-                        {visibleLinkTypes[type] && <Check size={12} />}
-                      </span>
-                      <span>{label}</span>
-                    </label>
-                  ))}
-                  <label className="deceased-ribbon-setting">
-                    <span>
-                      <strong>Deceased marker</strong>
-                      <small>Show a corner ribbon when a death date is recorded</small>
-                    </span>
-                    <select value={deceasedRibbon} onChange={(event) => setDeceasedRibbon(event.target.value)} aria-label="Deceased person ribbon">
-                      <option value="off">Off</option>
-                      <option value="black">Black ribbon</option>
-                      <option value="red">Red ribbon</option>
-                    </select>
-                  </label>
-                  <div className="tree-data-settings">
-                    <span>
-                      <strong>Family data</strong>
-                      <small>Choose fields, then export as CSV or Excel</small>
-                    </span>
-                    <button type="button" className="export-fields-toggle" onClick={() => setExportFieldsOpen((open) => !open)} aria-expanded={exportFieldsOpen}>
-                      <span>Fields to export</span>
-                      <strong>
-                        {exportColumns.length} of {DATA_COLUMNS.length}
-                      </strong>
-                    </button>
-                    {exportFieldsOpen && (
-                      <div className="export-fields-panel">
-                        <div className="export-fields-actions">
-                          <button type="button" onClick={() => updateExportColumns(DATA_COLUMNS)}>
-                            Select all
-                          </button>
-                          <button type="button" onClick={() => updateExportColumns([])}>
-                            Clear
-                          </button>
-                        </div>
-                        <div className="export-fields-grid">
-                          {DATA_COLUMNS.map((column) => {
-                            const checked = exportColumns.includes(column);
-                            return (
-                              <label key={column}>
-                                <input type="checkbox" checked={checked} onChange={() => updateExportColumns(checked ? exportColumns.filter((item) => item !== column) : [...exportColumns, column])} />
-                                <span className="link-visibility-check" aria-hidden="true">
-                                  {checked && <Check size={11} />}
-                                </span>
-                                <span>{column}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                    <div className="tree-data-actions">
-                      <button type="button" onClick={exportCsv} title="Export CSV">
-                        <Download size={13} /> CSV
-                      </button>
-                      <button type="button" onClick={exportExcel} title="Export Excel workbook">
-                        <FileSpreadsheet size={13} /> Excel
-                      </button>
-                      <button type="button" onClick={() => importFileRef.current?.click()} title="Import CSV or Excel">
-                        <Upload size={13} /> Import
-                      </button>
-                    </div>
-                    <input
-                      ref={importFileRef}
-                      className="tree-data-file-input"
-                      type="file"
-                      accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                      onChange={handleImportFile}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
             <button className="top-theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label="Toggle color mode">
               {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
             </button>
@@ -3326,6 +3232,122 @@ export default function App() {
               <span>−</span>
             </button>
           </div>
+          <div className={`canvas-settings-control ${settingsOpen ? 'is-open' : ''}`} ref={settingsControlRef}>
+            {settingsOpen && (
+              <>
+                <button type="button" className="tree-settings-scrim" aria-label="Close tree settings" onClick={() => setSettingsOpen(false)} />
+                <div className="tree-settings-menu" role="dialog" aria-label="Tree settings">
+                  <div className="tree-settings-heading">
+                    <span>
+                      <strong>Tree settings</strong>
+                      <small>Customize relationships, markers, and family data</small>
+                    </span>
+                    <button type="button" aria-label="Close tree settings" onClick={() => setSettingsOpen(false)}>
+                      <X size={17} />
+                    </button>
+                  </div>
+                  <div className="tree-settings-section-heading">
+                    <strong>Visible relationships</strong>
+                    <small>Choose which relationships appear in the tree</small>
+                  </div>
+                {[
+                  ['parent', 'Parents and children'],
+                  ['partner', 'Partners and spouses'],
+                  ['sibling', 'Siblings'],
+                  ['custom', 'Other relationships'],
+                ].map(([type, label]) => (
+                  <label className="link-visibility-option" key={type}>
+                    <input type="checkbox" checked={visibleLinkTypes[type]} onChange={(event) => setVisibleLinkTypes((current) => ({ ...current, [type]: event.target.checked }))} />
+                    <span className="link-visibility-check" aria-hidden="true">
+                      {visibleLinkTypes[type] && <Check size={12} />}
+                    </span>
+                    <span>{label}</span>
+                  </label>
+                ))}
+                <label className="deceased-ribbon-setting">
+                  <span>
+                    <strong>Deceased marker</strong>
+                    <small>Show a corner ribbon when a death date is recorded</small>
+                  </span>
+                  <select value={deceasedRibbon} onChange={(event) => setDeceasedRibbon(event.target.value)} aria-label="Deceased person ribbon">
+                    <option value="off">Off</option>
+                    <option value="black">Black ribbon</option>
+                    <option value="red">Red ribbon</option>
+                  </select>
+                </label>
+                <div className="tree-data-settings">
+                  <span>
+                    <strong>Family data</strong>
+                    <small>Choose fields, then export as CSV or Excel</small>
+                  </span>
+                  <button type="button" className="export-fields-toggle" onClick={() => setExportFieldsOpen((open) => !open)} aria-expanded={exportFieldsOpen}>
+                    <span>Fields to export</span>
+                    <strong>
+                      {exportColumns.length} of {DATA_COLUMNS.length}
+                    </strong>
+                  </button>
+                  {exportFieldsOpen && (
+                    <div className="export-fields-panel">
+                      <div className="export-fields-actions">
+                        <button type="button" onClick={() => updateExportColumns(DATA_COLUMNS)}>
+                          Select all
+                        </button>
+                        <button type="button" onClick={() => updateExportColumns([])}>
+                          Clear
+                        </button>
+                      </div>
+                      <div className="export-fields-grid">
+                        {DATA_COLUMNS.map((column) => {
+                          const checked = exportColumns.includes(column);
+                          return (
+                            <label key={column}>
+                              <input type="checkbox" checked={checked} onChange={() => updateExportColumns(checked ? exportColumns.filter((item) => item !== column) : [...exportColumns, column])} />
+                              <span className="link-visibility-check" aria-hidden="true">
+                                {checked && <Check size={11} />}
+                              </span>
+                              <span>{column}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  <div className="tree-data-actions">
+                    <button type="button" onClick={exportCsv} title="Export CSV">
+                      <Download size={13} /> CSV
+                    </button>
+                    <button type="button" onClick={exportExcel} title="Export Excel workbook">
+                      <FileSpreadsheet size={13} /> Excel
+                    </button>
+                    <button type="button" onClick={() => importFileRef.current?.click()} title="Import CSV or Excel">
+                      <Upload size={13} /> Import
+                    </button>
+                  </div>
+                  <input
+                    ref={importFileRef}
+                    className="tree-data-file-input"
+                    type="file"
+                    accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    onChange={handleImportFile}
+                  />
+                </div>
+                </div>
+              </>
+            )}
+            <button
+              type="button"
+              className="tree-style-fab"
+              aria-label="Tree settings"
+              aria-expanded={settingsOpen}
+              title="Tree settings"
+              onClick={() => {
+                setTreeStyleMenuOpen(false);
+                setSettingsOpen((open) => !open);
+              }}
+            >
+              <Settings size={18} />
+            </button>
+          </div>
           <div className={`mobile-tree-style-control ${treeStyleMenuOpen ? 'is-open' : ''}`} ref={treeStyleControlRef}>
             {treeStyleMenuOpen && (
               <div className="tree-style-selection" role="menu" aria-label="Select tree style">
@@ -3351,7 +3373,17 @@ export default function App() {
                 ))}
               </div>
             )}
-            <button type="button" className="tree-style-fab" aria-label="Choose tree style" aria-expanded={treeStyleMenuOpen} title="Tree style" onClick={() => setTreeStyleMenuOpen((open) => !open)}>
+            <button
+              type="button"
+              className="tree-style-fab"
+              aria-label="Choose tree style"
+              aria-expanded={treeStyleMenuOpen}
+              title="Tree style"
+              onClick={() => {
+                setSettingsOpen(false);
+                setTreeStyleMenuOpen((open) => !open);
+              }}
+            >
               <Network size={18} />
             </button>
           </div>

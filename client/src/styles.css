@@ -2687,18 +2687,45 @@ button {
   overflow-y: auto;
 }
 .tree-settings-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 6px 11px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 7px;
+}
+.tree-settings-heading > span,
+.tree-settings-section-heading {
   display: grid;
   gap: 2px;
-  padding: 4px 6px 9px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
+}
+.tree-settings-heading > button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  flex: 0 0 30px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+.tree-settings-section-heading {
+  padding: 4px 7px 5px;
 }
 .tree-settings-heading strong {
-  font-size: 12px;
+  font-size: 14px;
 }
-.tree-settings-heading small {
+.tree-settings-heading small,
+.tree-settings-section-heading small {
   color: var(--muted);
   font-size: 9px;
+}
+.tree-settings-section-heading strong {
+  font-size: 11px;
 }
 .deceased-ribbon-setting {
   display: grid;
@@ -3325,6 +3352,57 @@ button {
   right: 14px;
   bottom: 96px;
   z-index: 6;
+}
+.canvas-settings-control {
+  position: absolute;
+  right: 14px;
+  bottom: 144px;
+  z-index: 7;
+}
+.canvas-settings-control.is-open {
+  z-index: 30;
+}
+.canvas-settings-control .tree-settings-menu {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: auto;
+  width: min(380px, 92vw);
+  max-width: none;
+  max-height: none;
+  border-width: 0 0 0 1px;
+  border-radius: 0;
+  padding: 12px;
+  box-shadow: -14px 0 42px #07120c52;
+  animation: settingsDrawerIn 0.18s ease;
+}
+.tree-settings-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 23;
+  padding: 0;
+  border: 0;
+  background: #08110c70;
+  cursor: default;
+}
+.canvas-settings-control .tree-settings-menu {
+  z-index: 24;
+}
+@keyframes settingsDrawerIn {
+  from {
+    transform: translateX(20px);
+    opacity: 0.7;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.canvas-settings-control.is-open .tree-style-fab {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
 }
 .tree-style-fab {
   width: 40px;
@@ -4207,6 +4285,11 @@ button {
     height: 63px;
     padding: 0 13px;
   }
+  .canvas-settings-control .tree-settings-menu {
+    width: min(360px, 94vw);
+    padding: 10px;
+    overscroll-behavior: contain;
+  }
   .header-member-search {
     display: none;
   }
@@ -4260,6 +4343,17 @@ button {
   }
   .simple-topbar {
     padding: 0 9px;
+  }
+  .canvas-settings-control .tree-settings-menu {
+    width: min(350px, 96vw);
+    padding: 8px;
+  }
+  .deceased-ribbon-setting {
+    grid-template-columns: minmax(0, 1fr) 108px;
+    gap: 7px;
+  }
+  .export-fields-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .zoom-tools {
     gap: 1px;
@@ -6174,6 +6268,10 @@ button {
   .mobile-tree-style-control {
     right: 16px;
     bottom: 92px;
+  }
+  .canvas-settings-control {
+    right: 16px;
+    bottom: 140px;
   }
 }
 @media (max-width: 380px) {
