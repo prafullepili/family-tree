@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { curveBumpX, curveBumpY, curveLinear, line as d3Line } from 'd3-shape';
 import {
   Plus,
@@ -26,7 +26,6 @@ import {
   Lock,
   Unlock,
   Heart,
-  Camera,
   RefreshCw,
   Info,
   Palette,
@@ -43,6 +42,8 @@ import {
 import { initialPeople } from './demoFamily.js';
 import { layoutTree, resolveNodeOverlaps } from './layoutTree.js';
 import { relationshipPlacement } from './relationshipPlacement.js';
+
+const PersonModal = lazy(() => import('./PersonModal.jsx'));
 
 const fullName = (p) => [p?.firstName, p?.lastName].filter(Boolean).join(' ') || 'Unnamed person';
 const API_BASE_URL = String(import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
@@ -66,116 +67,6 @@ const DATA_COLUMNS = [
   'Tree X',
   'Tree Y',
 ];
-const exportDate = (value) => {
-  if (!value) return '';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
-};
-function personDataRow(person, peopleById) {
-  const personName = (id) => fullName(peopleById.get(String(id)));
-  const namedPeople = (ids) => (ids || []).map(personName).join('; ');
-  const partners = (person.partnerIds || [])
-    .map((id) => {
-      const label = (person.partnerRelationships || []).find((link) => String(link.partnerId) === String(id))?.label;
-      return `${personName(id)}${label ? ` (${label})` : ''}`;
-    })
-    .join('; ');
-  const otherRelationships = (person.relationshipLinks || []).map((link) => `${personName(link.personId)}${link.label ? ` (${link.label})` : ''}`).join('; ');
-  return {
-    'First Name': person.firstName || '',
-    'Last Name': person.lastName || '',
-    'Maiden Name': person.maidenName || '',
-    Gender: person.gender || 'unspecified',
-    Born: exportDate(person.birthDate),
-    Died: exportDate(person.deathDate),
-    Birthplace: person.birthPlace || '',
-    Occupation: person.occupation || '',
-    About: person.bio || '',
-    'Family Notes': person.notes || '',
-    'Photo URL': person.photoUrl || '',
-    Parents: namedPeople(person.parentIds),
-    Partners: partners,
-    Siblings: namedPeople(person.siblingIds),
-    'Other Relationships': otherRelationships,
-    'Tree X': Number.isFinite(person.treeX) ? person.treeX : '',
-    'Tree Y': Number.isFinite(person.treeY) ? person.treeY : '',
-  };
-}
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-function parseCsv(text) {
-  const rows = [];
-  let row = [],
-    value = '',
-    quoted = false;
-  for (let index = 0; index <= text.length; index += 1) {
-    const character = text[index] ?? '\n';
-    if (quoted) {
-      if (character === '"' && text[index + 1] === '"') {
-        value += '"';
-        index += 1;
-      } else if (character === '"') quoted = false;
-      else value += character;
-    } else if (character === '"') quoted = true;
-    else if (character === ',') {
-      row.push(value);
-      value = '';
-    } else if (character === '\n') {
-      row.push(value.replace(/\r$/, ''));
-      if (row.some((cell) => cell !== '')) rows.push(row);
-      row = [];
-      value = '';
-    } else value += character;
-  }
-  const [headers = [], ...data] = rows;
-  return data.map((cells) => Object.fromEntries(headers.map((header, index) => [header.trim(), cells[index] ?? ''])));
-}
-function parseJsonCell(value, fallback = []) {
-  if (Array.isArray(value)) return value;
-  if (!value) return fallback;
-  try {
-    const parsed = JSON.parse(String(value));
-    return Array.isArray(parsed) ? parsed : fallback;
-  } catch {
-    return String(value)
-      .split(';')
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-}
-function normalizeImportedRows(rows) {
-  return rows
-    .map((row, index) => ({
-      sourceId: String(row['ID'] || row.id || `import-${index + 1}`).trim(),
-      firstName: String(row['First Name'] || row.firstName || '').trim(),
-      lastName: String(row['Last Name'] || row.lastName || '').trim(),
-      maidenName: String(row['Maiden Name'] || row.maidenName || '').trim(),
-      gender: ['female', 'male', 'nonbinary', 'unspecified'].includes(String(row['Gender'] || row.gender || '').toLowerCase()) ? String(row['Gender'] || row.gender).toLowerCase() : 'unspecified',
-      birthDate: String(row['Born'] || row.birthDate || '').trim() || null,
-      deathDate: String(row['Died'] || row.deathDate || '').trim() || null,
-      birthPlace: String(row['Birthplace'] || row.birthPlace || '').trim(),
-      occupation: String(row['Occupation'] || row.occupation || '').trim(),
-      bio: String(row['About'] || row.bio || '').trim(),
-      notes: String(row['Family Notes'] || row.notes || '').trim(),
-      photoUrl: String(row['Photo URL'] || row.photoUrl || '').trim(),
-      parentIds: parseJsonCell(row['Parent IDs'] ?? row.parentIds).map(String),
-      partnerIds: parseJsonCell(row['Partner IDs'] ?? row.partnerIds).map(String),
-      siblingIds: parseJsonCell(row['Sibling IDs'] ?? row.siblingIds).map(String),
-      partnerRelationships: parseJsonCell(row['Partner Relationships'] ?? row.partnerRelationships),
-      relationshipLinks: parseJsonCell(row['Other Relationships'] ?? row.relationshipLinks),
-      treeX: row['Tree X'] === '' || row.treeX === '' ? null : Number(row['Tree X'] ?? row.treeX),
-      treeY: row['Tree Y'] === '' || row.treeY === '' ? null : Number(row['Tree Y'] ?? row.treeY),
-    }))
-    .filter((person) => person.firstName);
-}
 function storageGet(key) {
   try {
     return window.localStorage.getItem(key);
@@ -737,7 +628,6 @@ function FamilyBranchLinks({ branches, people, orthogonal = false, curved = fals
     </g>
   );
 }
-
 export default function App() {
   const [isCompactViewport, setIsCompactViewport] = useState(() => window.innerWidth <= 1050);
   const [initialCache] = useState(readMongoPeopleCache);
@@ -1412,18 +1302,19 @@ export default function App() {
     setExportColumns(ordered);
     storageSet('kinfolk-export-columns-v2', JSON.stringify(ordered));
   }
-  function exportCsv() {
+  async function exportCsv() {
     if (!exportColumns.length) {
       notify('Select at least one field to export');
       return;
     }
-    const peopleById = new Map(people.map((person) => [String(person.id || person._id), person]));
-    const rows = people.map((person) => personDataRow(person, peopleById));
-    const escapeCell = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
-    const csv = [exportColumns.map(escapeCell).join(','), ...rows.map((row) => exportColumns.map((column) => escapeCell(row[column])).join(','))].join('\r\n');
-    downloadBlob(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }), `family-tree-${new Date().toISOString().slice(0, 10)}.csv`);
-    setSettingsOpen(false);
-    notify(`Exported ${people.length} people as CSV`);
+    try {
+      const { exportCsvFile } = await import('./dataTransfer.js');
+      exportCsvFile(people, exportColumns);
+      setSettingsOpen(false);
+      notify(`Exported ${people.length} people as CSV`);
+    } catch {
+      notify('Could not create the CSV file');
+    }
   }
   async function exportExcel() {
     if (!exportColumns.length) {
@@ -1431,20 +1322,8 @@ export default function App() {
       return;
     }
     try {
-      const excelModule = await import('exceljs');
-      const ExcelJS = excelModule.default || excelModule;
-      const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'Kinfolk';
-      const sheet = workbook.addWorksheet('Family Tree', { views: [{ state: 'frozen', ySplit: 1 }] });
-      sheet.columns = exportColumns.map((header) => ({ header, key: header, width: Math.min(42, Math.max(13, header.length + 3)) }));
-      const peopleById = new Map(people.map((person) => [String(person.id || person._id), person]));
-      people.map((person) => personDataRow(person, peopleById)).forEach((row) => sheet.addRow(row));
-      sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2F6B4F' } };
-      const lastColumn = sheet.getColumn(exportColumns.length).letter;
-      sheet.autoFilter = { from: 'A1', to: `${lastColumn}${Math.max(1, people.length + 1)}` };
-      const buffer = await workbook.xlsx.writeBuffer();
-      downloadBlob(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `family-tree-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const { exportExcelFile } = await import('./dataTransfer.js');
+      await exportExcelFile(people, exportColumns);
       setSettingsOpen(false);
       notify(`Exported ${people.length} people as Excel`);
     } catch {
@@ -1456,27 +1335,8 @@ export default function App() {
     event.target.value = '';
     if (!file) return;
     try {
-      let rows;
-      if (file.name.toLowerCase().endsWith('.csv')) rows = parseCsv(await file.text());
-      else {
-        const excelModule = await import('exceljs');
-        const ExcelJS = excelModule.default || excelModule;
-        const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(await file.arrayBuffer());
-        const sheet = workbook.worksheets[0];
-        if (!sheet) throw Error('The workbook has no worksheet');
-        const headers = sheet
-          .getRow(1)
-          .values.slice(1)
-          .map((value) => String(value || '').trim());
-        rows = [];
-        sheet.eachRow((row, rowNumber) => {
-          if (rowNumber === 1) return;
-          const values = row.values.slice(1);
-          if (values.some((value) => value !== null && value !== undefined && value !== '')) rows.push(Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ''])));
-        });
-      }
-      const importedPeople = normalizeImportedRows(rows);
+      const { readImportFile } = await import('./dataTransfer.js');
+      const importedPeople = await readImportFile(file);
       if (!importedPeople.length) throw Error('No people with a first name were found');
       setPendingImport({ filename: file.name, people: importedPeople });
       setSettingsOpen(false);
@@ -3483,19 +3343,21 @@ export default function App() {
             onPointerCancel={endDetailsResize}
           />
           {modal?.inline && (!modal.person || modal.person.id === selected?.id) ? (
-            <PersonModal
-              key={modal.person?.id || modal.kind || 'new'}
-              modal={modal}
-              people={people}
-              onClose={() => {
-                setModal(null);
-                if (!selected) {
-                  setDetailsOpen(false);
-                  setMobileDetailsOpen(false);
-                }
-              }}
-              onSave={saveMember}
-            />
+            <Suspense fallback={<div className="person-editor-loading" role="status">Loading editor…</div>}>
+              <PersonModal
+                key={modal.person?.id || modal.kind || 'new'}
+                modal={modal}
+                people={people}
+                onClose={() => {
+                  setModal(null);
+                  if (!selected) {
+                    setDetailsOpen(false);
+                    setMobileDetailsOpen(false);
+                  }
+                }}
+                onSave={saveMember}
+              />
+            </Suspense>
           ) : selected ? (
             <>
               <div className="details-heading">
@@ -3623,7 +3485,11 @@ export default function App() {
           )}
         </aside>
       )}
-      {modal && !modal.inline && <PersonModal key={modal.person?.id || modal.kind || 'new'} modal={modal} people={people} onClose={() => setModal(null)} onSave={saveMember} />}
+      {modal && !modal.inline && (
+        <Suspense fallback={<div className="person-editor-loading is-modal" role="status">Loading editor…</div>}>
+          <PersonModal key={modal.person?.id || modal.kind || 'new'} modal={modal} people={people} onClose={() => setModal(null)} onSave={saveMember} />
+        </Suspense>
+      )}
       {pendingImport && (
         <div
           className="simple-modal-backdrop"
@@ -3783,318 +3649,6 @@ export default function App() {
         </div>
       )}
       {toast && <div className="simple-toast">{toast}</div>}
-    </div>
-  );
-}
-
-const relationshipOptionGroups = [
-  { label: 'Parents', options: ['Father', 'Mother', 'Parent'] },
-  { label: 'Partners', options: ['Husband', 'Wife', 'Boyfriend', 'Girlfriend', 'Fiancé', 'Partner', 'Spouse'] },
-  { label: 'Children', options: ['Son', 'Daughter', 'Child'] },
-  { label: 'Siblings', options: ['Brother', 'Sister', 'Sibling'] },
-  { label: 'Other relationships', options: ['Other'] },
-];
-const relationshipOptions = relationshipOptionGroups.flatMap((group) => group.options);
-
-function relationshipCategory(role) {
-  return relationshipOptionGroups.find((group) => group.options.includes(role))?.label || 'Uncategorized';
-}
-function defaultPartnerLabel(gender) {
-  return gender === 'male' ? 'Husband' : gender === 'female' ? 'Wife' : 'Spouse';
-}
-function RelationshipEditor({ people, relationships, onChange, excludeId }) {
-  const [query, setQuery] = useState('');
-  const [error, setError] = useState('');
-  const selectedIds = relationships.map((link) => link.personId);
-  const groupedRelationships = relationshipOptionGroups
-    .map((group) => ({
-      ...group,
-      links: relationships.map((link, index) => ({ link, index })).filter(({ link }) => relationshipCategory(link.role) === group.label),
-    }))
-    .concat({
-      label: 'Uncategorized',
-      options: [],
-      links: relationships.map((link, index) => ({ link, index })).filter(({ link }) => relationshipCategory(link.role) === 'Uncategorized'),
-    })
-    .filter((group) => group.links.length > 0);
-  const results = people.filter((person) => person.id !== excludeId && !selectedIds.includes(person.id) && fullName(person).toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6);
-  function add(id) {
-    onChange([...relationships, { personId: id, role: '', customLabel: '' }]);
-    setQuery('');
-  }
-  function update(index, changes) {
-    if (changes.role && ['Father', 'Mother', 'Parent'].includes(changes.role)) {
-      const parentCount = relationships.filter((link, rowIndex) => rowIndex !== index && ['Father', 'Mother', 'Parent'].includes(link.role)).length;
-      if (parentCount >= 2) {
-        setError('A person can have at most two parents.');
-        return;
-      }
-    }
-    if (changes.role && ['Son', 'Daughter', 'Child'].includes(changes.role)) {
-      const relatedPerson = people.find((person) => person.id === relationships[index]?.personId);
-      if (relatedPerson && relatedPerson.parentIds?.length >= 2 && !relatedPerson.parentIds.includes(excludeId)) {
-        setError('This person already has two parents.');
-        return;
-      }
-    }
-    setError('');
-    onChange(relationships.map((link, rowIndex) => (rowIndex === index ? { ...link, ...changes } : link)));
-  }
-  return (
-    <div className="relationship-editor">
-      {relationships.length > 0 && (
-        <div className="relationship-list">
-          {groupedRelationships.map((group) => (
-            <section className="relationship-group" key={group.label}>
-              <h4>
-                <span>{group.label}</span>
-                <small>{group.links.length}</small>
-              </h4>
-              <div className="relationship-group-rows">
-                {group.links.map(({ link, index }) => {
-                  const person = people.find((item) => item.id === link.personId);
-                  if (!person) return null;
-                  return (
-                    <div className="relationship-row" key={`${link.personId}-${index}`}>
-                      <div className="relationship-person" title={fullName(person)}>
-                        <span className="relationship-person-avatar" aria-hidden="true">
-                          {initials(person)}
-                        </span>
-                        <strong>{fullName(person)}</strong>
-                      </div>
-                      <select
-                        aria-label={`Relationship with ${fullName(person)}`}
-                        value={link.role}
-                        required
-                        onChange={(e) => update(index, { role: e.target.value, customLabel: e.target.value === 'Other' ? link.customLabel : '' })}
-                      >
-                        <option value="" disabled>
-                          Select relationship
-                        </option>
-                        {relationshipOptionGroups.map((optionGroup) => (
-                          <optgroup key={optionGroup.label} label={optionGroup.label}>
-                            {optionGroup.options.map((option) => (
-                              <option key={option} value={option}>
-                                {option === 'Other' ? 'Custom…' : option}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
-                      {link.role === 'Other' && (
-                        <input
-                          className="custom-relationship-input"
-                          aria-label={`Custom relationship with ${fullName(person)}`}
-                          value={link.customLabel}
-                          onChange={(e) => update(index, { customLabel: e.target.value })}
-                          placeholder="Describe relationship"
-                          required
-                        />
-                      )}
-                      <button
-                        type="button"
-                        className="remove-link-button"
-                        onClick={() => onChange(relationships.filter((_, rowIndex) => rowIndex !== index))}
-                        aria-label={`Remove relationship with ${fullName(person)}`}
-                      >
-                        <X size={13} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-        </div>
-      )}
-      <label className="link-search relationship-search">
-        <Search size={13} />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search and add a family relationship" />
-      </label>
-      {query && (
-        <div className="link-search-results">
-          {results.map((person) => (
-            <button type="button" key={person.id} onClick={() => add(person.id)}>
-              {fullName(person)}
-            </button>
-          ))}
-          {!results.length && <span>No matching people</span>}
-        </div>
-      )}
-      {error && (
-        <small className="relationship-error" role="alert">
-          {error}
-        </small>
-      )}
-    </div>
-  );
-}
-
-function PersonModal({ modal, people, onClose, onSave }) {
-  const p = modal.person;
-  const familyLinksRef = useRef(null);
-  const [form, setForm] = useState({
-    firstName: p?.firstName || modal.defaults?.firstName || '',
-    lastName: p?.lastName || modal.defaults?.lastName || '',
-    maidenName: p?.maidenName || modal.defaults?.maidenName || '',
-    gender: p?.gender || modal.defaults?.gender || 'unspecified',
-    birthDate: p?.birthDate?.slice(0, 10) || '',
-    deathDate: p?.deathDate?.slice(0, 10) || '',
-    birthPlace: p?.birthPlace || '',
-    photoUrl: p?.photoUrl || '',
-    occupation: p?.occupation || '',
-    bio: p?.bio || '',
-    notes: p?.notes || '',
-  });
-  const [relationships, setRelationships] = useState(() => {
-    if (!p) return modal.initialRelationships || [];
-    const rows = [];
-    const add = (personId, role, customLabel = '') => {
-      if (personId !== p.id && people.some((person) => person.id === personId) && !rows.some((link) => link.personId === personId)) rows.push({ personId, role, customLabel });
-    };
-    (p.parentIds || []).forEach((id) => {
-      const parent = people.find((person) => person.id === id);
-      add(id, parent?.gender === 'male' ? 'Father' : parent?.gender === 'female' ? 'Mother' : 'Parent');
-    });
-    people.filter((person) => (person.parentIds || []).includes(p.id)).forEach((child) => add(child.id, child.gender === 'male' ? 'Son' : child.gender === 'female' ? 'Daughter' : 'Child'));
-    (p.partnerIds || []).forEach((id) => {
-      const stored = partnerRelationship(p, id);
-      const fallback = defaultPartnerLabel(people.find((person) => person.id === id)?.gender);
-      const role = relationshipOptions.includes(stored) ? stored : relationshipOptions.includes(fallback) ? fallback : 'Spouse';
-      add(id, stored && !relationshipOptions.includes(stored) ? 'Other' : role, stored && !relationshipOptions.includes(stored) ? stored : '');
-    });
-    const relatedSiblings = new Set(p.siblingIds || []);
-    people.filter((person) => person.id !== p.id && (person.parentIds || []).some((parentId) => (p.parentIds || []).includes(parentId))).forEach((person) => relatedSiblings.add(person.id));
-    relatedSiblings.forEach((id) => add(id, 'Sibling'));
-    (p.relationshipLinks || []).forEach((link) => add(link.personId, 'Other', link.label));
-    return rows;
-  });
-  useEffect(() => {
-    if (!modal.focusLinks) return;
-    const frame = requestAnimationFrame(() => familyLinksRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
-    return () => cancelAnimationFrame(frame);
-  }, [modal.focusLinks]);
-  const change = (k, v) => setForm((x) => ({ ...x, [k]: v }));
-  function submit(e) {
-    e.preventDefault();
-    const byRole = (roles) => relationships.filter((link) => roles.includes(link.role)).map((link) => link.personId);
-    const partnerIds = byRole(['Husband', 'Wife', 'Boyfriend', 'Girlfriend', 'Fiancé', 'Fiancée', 'Partner', 'Spouse', 'Former spouse', 'Former partner']);
-    const partnerRelationships = relationships.filter((link) => partnerIds.includes(link.personId)).map((link) => ({ partnerId: link.personId, label: link.role }));
-    const relationshipLinks = relationships.filter((link) => link.role === 'Other' && link.customLabel.trim()).map((link) => ({ personId: link.personId, label: link.customLabel.trim() }));
-    onSave({
-      ...form,
-      parentIds: byRole(['Father', 'Mother', 'Parent']),
-      partnerIds,
-      partnerRelationships,
-      siblingIds: byRole(['Brother', 'Sister', 'Sibling']),
-      relationshipLinks,
-      childIds: byRole(['Son', 'Daughter', 'Child']),
-      childRelationships: relationships.filter((link) => ['Son', 'Daughter', 'Child'].includes(link.role)).map(({ personId, role }) => ({ personId, role })),
-    });
-  }
-  const title = p ? 'Edit person' : 'Add a person';
-  const editor = (
-    <form className={modal.inline ? 'inline-person-editor' : 'simple-person-modal'} onSubmit={submit}>
-      <header>
-        <div>
-          <small>FAMILY MEMBER</small>
-          <h2>{title}</h2>
-        </div>
-        <button type="button" className="plain-icon" onClick={onClose}>
-          <X size={18} />
-        </button>
-      </header>
-      <div className="person-form-body">
-        <label className="photo-url">
-          <Camera size={15} />
-          <span>Photo URL</span>
-          <input value={form.photoUrl} onChange={(e) => change('photoUrl', e.target.value)} placeholder="https://…" />
-        </label>
-        <div className="simple-form-grid person-basic-grid">
-          <div className="person-form-row two-field-row">
-            <label>
-              First name *
-              <input required value={form.firstName} onChange={(e) => change('firstName', e.target.value)} placeholder="First name" />
-            </label>
-            <label>
-              Last name
-              <input value={form.lastName} onChange={(e) => change('lastName', e.target.value)} placeholder="Last name" />
-            </label>
-          </div>
-          <div className="person-form-row one-field-row maiden-name-row">
-            <label>
-              Maiden name
-              <input value={form.maidenName} onChange={(e) => change('maidenName', e.target.value)} placeholder="Birth surname" />
-            </label>
-          </div>
-          <div className="person-form-row three-field-row">
-            <label>
-              Born
-              <input type="date" value={form.birthDate} onChange={(e) => change('birthDate', e.target.value)} />
-            </label>
-            <label>
-              Died
-              <input type="date" value={form.deathDate} onChange={(e) => change('deathDate', e.target.value)} />
-            </label>
-            <label>
-              Gender
-              <select value={form.gender} onChange={(e) => change('gender', e.target.value)}>
-                <option value="unspecified">Not specified</option>
-                <option value="female">Female</option>
-                <option value="male">Male</option>
-                <option value="nonbinary">Nonbinary</option>
-              </select>
-            </label>
-          </div>
-          <div className="person-form-row two-field-row">
-            <label>
-              Birthplace
-              <input value={form.birthPlace} onChange={(e) => change('birthPlace', e.target.value)} placeholder="City, country" />
-            </label>
-            <label>
-              Occupation
-              <input value={form.occupation} onChange={(e) => change('occupation', e.target.value)} placeholder="Occupation" />
-            </label>
-          </div>
-        </div>
-        <div className="simple-link-fields" ref={familyLinksRef}>
-          <div className="simple-link-field relationship-field">
-            <strong>Relationships</strong>
-            <p className="relationship-help">Add a person, then choose how they are related.</p>
-            <RelationshipEditor people={people} relationships={relationships} onChange={setRelationships} excludeId={p?.id} />
-          </div>
-        </div>
-        <div className="simple-form-grid person-story-grid">
-          <label className="wide-form-field">
-            About
-            <textarea rows="2" value={form.bio} onChange={(e) => change('bio', e.target.value)} placeholder="A little about this person" />
-          </label>
-          <label className="wide-form-field">
-            Family notes
-            <textarea rows="2" value={form.notes} onChange={(e) => change('notes', e.target.value)} placeholder="Notes for the family archive" />
-          </label>
-        </div>
-      </div>
-      <footer>
-        <button type="button" onClick={onClose}>
-          Cancel
-        </button>
-        <button type="submit" className="save-person-button">
-          {p ? 'Save changes' : 'Add person'}
-        </button>
-      </footer>
-    </form>
-  );
-  return modal.inline ? (
-    editor
-  ) : (
-    <div
-      className="simple-modal-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      {editor}
     </div>
   );
 }
