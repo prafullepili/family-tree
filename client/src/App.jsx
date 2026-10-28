@@ -14,21 +14,15 @@ import {
   Trash2,
   Eye,
   EyeOff,
-  ZoomIn,
-  ZoomOut,
-  Maximize2,
   Minimize2,
   Fullscreen,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
-  Lock,
-  Unlock,
   Heart,
   RefreshCw,
   Info,
-  Palette,
   Network,
   Bookmark,
   Save,
@@ -42,6 +36,8 @@ import {
 import { initialPeople } from './demoFamily.js';
 import { layoutTree, resolveNodeOverlaps } from './layoutTree.js';
 import { relationshipPlacement } from './relationshipPlacement.js';
+import { CanvasHelp, SelectionToolbar, TreeStatus } from './CanvasSupport.jsx';
+import TreeToolbar from './TreeToolbar.jsx';
 
 const PersonModal = lazy(() => import('./PersonModal.jsx'));
 
@@ -2660,144 +2656,27 @@ export default function App() {
             </button>
           </div>
         </header>
-        <div className="tree-toolbar-simple">
-          <div className="tree-toolbar-settings">
-            <label className="tree-style-toolbar-field">
-              <span>TREE STYLE</span>
-              <select className="link-style-select" value={treeVisualStyle} onChange={(event) => setTreeVisualStyle(event.target.value)}>
-                <option value="dashboard">Dashboard cards</option>
-                <option value="classic">Classic cards</option>
-                <option value="atlas">Family atlas</option>
-              </select>
-            </label>
-            <button
-              className={`family-color-toggle ${familyColorsEnabled ? 'active' : ''}`}
-              type="button"
-              aria-label={familyColorsEnabled ? 'Turn off family branch colors' : 'Turn on family branch colors'}
-              aria-pressed={familyColorsEnabled}
-              title="Color ancestors and descendants around the selected person"
-              onClick={() => setFamilyColorsEnabled((enabled) => !enabled)}
-            >
-              <Palette size={14} />
-              <span>Family colors</span>
-            </button>
-          </div>
-          <div className="tree-count">
-            <UsersRound size={15} />
-            <span>{apiState === 'checking' && (!hasMongoSnapshot || !people.length) ? 'Loading family…' : `${treePeople.length} ${treePeople.length === 1 ? 'person' : 'people'}`}</span>
-            {(apiState !== 'checking' || (hasMongoSnapshot && people.length > 0)) && (
-              <>
-                <span className="toolbar-dot">·</span>
-                <span>{layout.generationCount} generations</span>
-              </>
-            )}
-          </div>
-          <div className="tree-toolbar-actions">
-            <button
-              className="arrange-family-button saved-layouts-button"
-              onClick={() => setSavedLayoutsOpen(true)}
-              disabled={!treePeople.length}
-              aria-label="Save or restore a favorite tree view"
-              title="Save or restore a favorite tree view"
-            >
-              <Bookmark size={14} />
-              <span>Saved views</span>
-            </button>
-            <button
-              className="arrange-family-button"
-              onClick={() => setConfirmArrange(true)}
-              disabled={!treePeople.length || isArranging}
-              aria-label="Arrange family into a clear layout"
-              title="Arrange generations and save the new positions"
-            >
-              <GitFork size={14} />
-              <span>{isArranging ? 'Arranging…' : 'Arrange'}</span>
-            </button>
-            <button
-              className={`canvas-lock-button ${movementLocked ? 'locked' : 'unlocked'}`}
-              onClick={() => setMovementLocked((locked) => !locked)}
-              aria-pressed={movementLocked}
-              aria-label={movementLocked ? 'Unlock node movement' : 'Lock node movement'}
-              title={movementLocked ? 'Node movement is locked. Unlock to move people.' : 'Node movement is unlocked. Lock to prevent moving people.'}
-            >
-              {movementLocked ? <Lock size={14} /> : <Unlock size={14} />}
-              <span>{movementLocked ? 'Locked' : 'Unlocked'}</span>
-            </button>
-            <div className="zoom-tools">
-              <button onClick={() => zoomTo(Math.max(0.1, +(zoomValue.current - 0.1).toFixed(2)))} aria-label="Zoom out">
-                <ZoomOut size={16} />
-              </button>
-              <span>{Math.round(zoom * 100)}%</span>
-              <button onClick={() => zoomTo(Math.min(maxCanvasZoom, +(zoomValue.current + 0.1).toFixed(2)))} aria-label="Zoom in">
-                <ZoomIn size={16} />
-              </button>
-              <i />
-              <button onClick={fitTreeToView} aria-label="Reset tree to 100% and center" title="100% and center">
-                <Maximize2 size={15} />
-              </button>
-            </div>
-          </div>
-        </div>
+        <TreeToolbar
+          visualStyle={treeVisualStyle}
+          onVisualStyleChange={setTreeVisualStyle}
+          familyColorsEnabled={familyColorsEnabled}
+          onToggleFamilyColors={() => setFamilyColorsEnabled((enabled) => !enabled)}
+          loading={apiState === 'checking' && (!hasMongoSnapshot || !people.length)}
+          peopleCount={treePeople.length}
+          generationCount={layout.generationCount}
+          onOpenSavedViews={() => setSavedLayoutsOpen(true)}
+          onArrange={() => setConfirmArrange(true)}
+          arranging={isArranging}
+          movementLocked={movementLocked}
+          onToggleMovement={() => setMovementLocked((locked) => !locked)}
+          zoom={zoom}
+          onZoomOut={() => zoomTo(Math.max(0.1, +(zoomValue.current - 0.1).toFixed(2)))}
+          onZoomIn={() => zoomTo(Math.min(maxCanvasZoom, +(zoomValue.current + 0.1).toFixed(2)))}
+          onFit={fitTreeToView}
+        />
         <section ref={canvasRef} className={`simple-canvas ${fullscreenFallback ? 'is-fullscreen-fallback' : ''}`}>
-          <div className={`canvas-help ${helpOpen ? 'open' : ''}`} ref={canvasHelpRef}>
-            <button
-              className="canvas-help-button"
-              aria-label="Canvas help"
-              aria-expanded={helpOpen}
-              aria-controls="canvas-help-tooltip"
-              title="Canvas help"
-              onClick={() => setHelpOpen((open) => !open)}
-            >
-              <Info size={17} />
-            </button>
-            <div id="canvas-help-tooltip" className="canvas-help-tooltip" role="tooltip">
-              <div className="canvas-help-heading">
-                <strong>Canvas controls</strong>
-                <span>Move around and manage your family tree</span>
-              </div>
-              <div className="canvas-help-items">
-                <p>
-                  <strong>Select and move people</strong>
-                  <span>Click or tap a person to select them. Drag a person to move them; dragging any person in a group selection moves the whole group. Lock movement to prevent accidental changes.</span>
-                </p>
-                <p>
-                  <strong>Select several people</strong>
-                  <span>On desktop, drag on empty canvas to draw a selection box; hold Shift to add to the selection. On phone, press empty canvas briefly, then drag.</span>
-                </p>
-                <p>
-                  <strong>Move and zoom the canvas</strong>
-                  <span>On desktop, hold Space and drag, or drag with the middle mouse button. On phone, drag empty space. Pinch with two fingers or use Ctrl/⌘ + wheel to zoom.</span>
-                </p>
-                <p>
-                  <strong>Inspect relationships</strong>
-                  <span>Select a person to keep their parents, grandparents, and related links highlighted. Hover a link to see its relationship; on mobile, tap a person.</span>
-                </p>
-                <p>
-                  <strong>Person shortcuts</strong>
-                  <span>Use + to add a relative, the pencil to edit, and the details icon to open the profile. Press and hold a person on mobile to open details.</span>
-                </p>
-                <p>
-                  <strong>Tree tools</strong>
-                  <span>Arrange creates a clear layout, Saved views stores favorite positions, and Maximize resets to 100% and centers the tree. Full screen, Settings, and tree themes are in the bottom-right corner.</span>
-                </p>
-                <p>
-                  <strong>Keyboard</strong>
-                  <span>Ctrl/⌘ + A selects everyone in the current family. Delete removes the selection after confirmation. Escape closes open panels and help.</span>
-                </p>
-              </div>
-            </div>
-          </div>
-          {selectedNodeIds.length > 1 && (
-            <div className="selection-toolbar" aria-live="polite">
-              <span>{selectedNodeIds.length} selected</span>
-              <button onClick={() => setConfirmDelete(true)}>
-                <Trash2 size={14} /> Remove selected
-              </button>
-              <button className="selection-clear-button" aria-label="Clear selection" title="Clear selection" onClick={clearSelection}>
-                <X size={14} />
-              </button>
-            </div>
-          )}
+          <CanvasHelp open={helpOpen} controlRef={canvasHelpRef} onToggle={() => setHelpOpen((open) => !open)} />
+          <SelectionToolbar count={selectedNodeIds.length} onRemove={() => setConfirmDelete(true)} onClear={clearSelection} />
           <div
             className="tree-scroll"
             ref={treeScroll}
@@ -3127,38 +3006,15 @@ export default function App() {
             </div>
             {marqueeRect && <div className="marquee-selection" style={{ left: marqueeRect.left, top: marqueeRect.top, width: marqueeRect.width, height: marqueeRect.height }} aria-hidden="true" />}
           </div>
-          {apiState === 'checking' && (!hasMongoSnapshot || !people.length) ? (
-            <div className="tree-loading" role="status" aria-live="polite">
-              <span className="loading-spinner" />
-              <span>Loading your family tree…</span>
-            </div>
-          ) : (
-            !treePeople.length && (
-              <div className="tree-empty">
-                <div className="tree-empty-icon">
-                  <GitFork size={26} />
-                </div>
-                {apiState === 'error' ? (
-                  <>
-                    <h2>Couldn’t load your family tree</h2>
-                    <p>Check that the API and MongoDB are running, then try again.</p>
-                    <button className="add-person-button" onClick={refreshFromDatabase} disabled={isRefreshing}>
-                      {isRefreshing ? 'Refreshing…' : 'Try again'}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <h2>Start your family tree</h2>
-                    <p>Add a person, then link parents and partners to build the branches.</p>
-                    <button className="add-person-button" onClick={() => openAddPersonForm()}>
-                      <Plus size={16} />
-                      Add first person
-                    </button>
-                  </>
-                )}
-              </div>
-            )
-          )}
+          <TreeStatus
+            apiState={apiState}
+            hasSnapshot={hasMongoSnapshot}
+            peopleCount={people.length}
+            treePeopleCount={treePeople.length}
+            refreshing={isRefreshing}
+            onRefresh={refreshFromDatabase}
+            onAdd={() => openAddPersonForm()}
+          />
           <div className="canvas-zoom-controls">
             <button
               type="button"
