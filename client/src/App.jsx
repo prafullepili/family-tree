@@ -16,11 +16,7 @@ import {
   Minimize2,
   Fullscreen,
   PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
   Heart,
-  RefreshCw,
   Info,
   Bookmark,
   Save,
@@ -33,6 +29,7 @@ import { relationshipPlacement } from './relationshipPlacement.js';
 import { CanvasHelp, SelectionToolbar, TreeStatus } from './CanvasSupport.jsx';
 import TreeToolbar from './TreeToolbar.jsx';
 import TreeSettingsControls, { DATA_COLUMNS } from './TreeSettingsControls.jsx';
+import { AppHeader } from './AppNavigation.jsx';
 import { FamilyBranchLinks, PersonAvatar } from './TreeRenderComponents.jsx';
 import {
   applyDragPositions,
@@ -2022,87 +2019,42 @@ export default function App() {
         </>
       )}
       <main className="simple-main">
-        <header className="simple-topbar">
-          <div className="topbar-left">
-            <button
-              className="plain-icon open-sidebar"
-              onClick={() => {
-                const next = !sidebarOpen;
-                setSidebarOpen(next);
-                if (next && window.innerWidth <= 1050) setMobileDetailsOpen(false);
-              }}
-              aria-label={sidebarOpen ? 'Hide family members' : 'Show family members'}
-              title={sidebarOpen ? 'Hide family members' : 'Show family members'}
-            >
-              {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
-            </button>
-            <div className="topbar-title">
-              <span>FAMILY TREE</span>
-              <h1>{treeName}</h1>
-            </div>
-          </div>
-          <div className="topbar-actions">
-            <label className="header-member-search">
-              <select value={memberFamilyFilter} onChange={(event) => setMemberFamilyFilter(event.target.value)} aria-label="Search within family group">
-                <option value="__all__">All groups</option>
-                {memberFamilyOptions.map((group) => (
-                  <option key={group.key} value={group.key}>
-                    {group.name} ({group.count})
-                  </option>
-                ))}
-              </select>
-              <Search size={14} />
-              <input
-                value={query}
-                placeholder="Search people"
-                aria-label="Search family members"
-                onFocus={() => {
-                  setSidebarOpen(true);
-                  if (window.innerWidth <= 1050) setMobileDetailsOpen(false);
-                }}
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  setSidebarOpen(true);
-                  if (window.innerWidth <= 1050) setMobileDetailsOpen(false);
-                }}
-              />
-              {query && (
-                <button type="button" onClick={() => setQuery('')} aria-label="Clear member search">
-                  <X size={12} />
-                </button>
-              )}
-            </label>
-            <button className="top-theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label="Toggle color mode">
-              {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
-            </button>
-            <button
-              className={`top-theme-toggle data-refresh-toggle ${isRefreshing ? 'is-refreshing' : ''}`}
-              onClick={refreshFromDatabase}
-              disabled={isRefreshing}
-              aria-label={isRefreshing ? 'Refreshing family data' : 'Refresh family data'}
-              title={isRefreshing ? 'Refreshing family data…' : 'Refresh family data'}
-            >
-              <RefreshCw size={16} />
-            </button>
-            <button
-              className="right-panel-toggle"
-              onClick={() => {
-                if (window.innerWidth <= 1050) {
-                  setSidebarOpen(false);
-                  setDetailsOpen(true);
-                  setMobileDetailsOpen(!mobileDetailsOpen);
-                } else setDetailsOpen(!detailsOpen);
-              }}
-              aria-label={(window.innerWidth <= 1050 ? mobileDetailsOpen : detailsOpen) ? 'Hide person details' : 'Show person details'}
-            >
-              {(window.innerWidth <= 1050 ? mobileDetailsOpen : detailsOpen) ? <PanelRightClose size={17} /> : <PanelRightOpen size={17} />}
-            </button>
-            <button className="add-person-button" onClick={() => openAddPersonForm()}>
-              <Plus size={16} />
-              <span>Add person</span>
-            </button>
-          </div>
-        </header>
+        <AppHeader
+          sidebarOpen={sidebarOpen}
+          onSidebarOpenChange={(open) => {
+            setSidebarOpen(open);
+            if (open && window.innerWidth <= 1050) setMobileDetailsOpen(false);
+          }}
+          treeName={treeName}
+          memberFamilyFilter={memberFamilyFilter}
+          memberFamilyOptions={memberFamilyOptions}
+          onMemberFamilyFilterChange={setMemberFamilyFilter}
+          query={query}
+          onQueryChange={(value) => {
+            setQuery(value);
+            if (value) {
+              setSidebarOpen(true);
+              if (window.innerWidth <= 1050) setMobileDetailsOpen(false);
+            }
+          }}
+          onSearchFocus={() => {
+            setSidebarOpen(true);
+            if (window.innerWidth <= 1050) setMobileDetailsOpen(false);
+          }}
+          theme={theme}
+          onThemeChange={setTheme}
+          isRefreshing={isRefreshing}
+          onRefresh={refreshFromDatabase}
+          detailsVisible={window.innerWidth <= 1050 ? mobileDetailsOpen : detailsOpen}
+          onToggleDetails={() => {
+            if (window.innerWidth <= 1050) {
+              setSidebarOpen(false);
+              setDetailsOpen(true);
+              setMobileDetailsOpen(!mobileDetailsOpen);
+            } else setDetailsOpen(!detailsOpen);
+          }}
+          onAddPerson={() => openAddPersonForm()}
+        />
         <TreeToolbar
           visualStyle={treeVisualStyle}
           onVisualStyleChange={setTreeVisualStyle}
