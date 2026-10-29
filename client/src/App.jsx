@@ -1,11 +1,8 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus,
-  Search,
   GitFork,
   UsersRound,
-  Sun,
-  Moon,
   X,
   MapPin,
   CalendarDays,
@@ -15,7 +12,6 @@ import {
   EyeOff,
   Minimize2,
   Fullscreen,
-  PanelLeftClose,
   Heart,
   Info,
   Bookmark,
@@ -29,7 +25,7 @@ import { relationshipPlacement } from './relationshipPlacement.js';
 import { CanvasHelp, SelectionToolbar, TreeStatus } from './CanvasSupport.jsx';
 import TreeToolbar from './TreeToolbar.jsx';
 import TreeSettingsControls, { DATA_COLUMNS } from './TreeSettingsControls.jsx';
-import { AppHeader } from './AppNavigation.jsx';
+import { AppHeader, FamilySidebar } from './AppNavigation.jsx';
 import { FamilyBranchLinks, PersonAvatar } from './TreeRenderComponents.jsx';
 import {
   applyDragPositions,
@@ -1834,189 +1830,57 @@ export default function App() {
       style={{ '--details-width': `${detailsWidth}px` }}
     >
       {sidebarOpen && (
-        <>
-          <button className="sidebar-scrim" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" />
-          <aside className="simple-sidebar">
-            <div className="simple-brand">
-              <div className="simple-brand-mark">
-                <GitFork size={18} />
-              </div>
-              <span>kinfolk</span>
-              <button className="plain-icon hide-sidebar" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">
-                <PanelLeftClose size={17} />
-              </button>
-            </div>
-            <div className="sidebar-family">
-              <span className="sidebar-family-mark">{treeName[0] || 'F'}</span>
-              <div>
-                <strong>{treeName}</strong>
-                <small>{apiState === 'checking' && (!hasMongoSnapshot || !people.length) ? 'Loading…' : `${familyPeople.length} ${familyPeople.length === 1 ? 'person' : 'people'}`}</small>
-              </div>
-            </div>
-            {families.length > 1 && (
-              <div className="family-picker-label">
-                <span>FAMILY</span>
-                <div
-                  className="family-picker-control"
-                  onBlur={(e) => {
-                    if (!e.currentTarget.contains(e.relatedTarget)) setFamilyPickerOpen(false);
-                  }}
-                >
-                  <label className="family-picker-search">
-                    <Search size={13} />
-                    <input
-                      value={familyPickerOpen ? familyQuery : selectedFamilyId === '__all__' ? (families.length === 2 ? 'Both families' : 'All families') : selectedFamily?.name || ''}
-                      placeholder="Search families"
-                      onFocus={() => {
-                        setFamilyPickerOpen(true);
-                        setFamilyQuery('');
-                      }}
-                      onChange={(e) => {
-                        setFamilyQuery(e.target.value);
-                        setFamilyPickerOpen(true);
-                      }}
-                      aria-label="Search and select a family"
-                      aria-expanded={familyPickerOpen}
-                    />
-                    {familyPickerOpen && familyQuery && (
-                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setFamilyQuery('')} aria-label="Clear family search">
-                        <X size={12} />
-                      </button>
-                    )}
-                  </label>
-                  {familyPickerOpen && (
-                    <div className="family-picker-options">
-                      <button
-                        type="button"
-                        className={selectedFamilyId === '__all__' ? 'active' : ''}
-                        onClick={() => {
-                          setSelectedFamilyId('__all__');
-                          setSelectedId('');
-                          setFamilyPickerOpen(false);
-                          setFamilyQuery('');
-                          setDetailsOpen(false);
-                          setMobileDetailsOpen(false);
-                          if (treeScroll.current) {
-                            treeScroll.current.scrollLeft = 0;
-                            treeScroll.current.scrollTop = 0;
-                          }
-                        }}
-                      >
-                        {families.length === 2 ? 'Both families' : 'All families'} · {people.length}
-                      </button>
-                      {families
-                        .filter((group) => group.name.toLowerCase().includes(familyQuery.toLowerCase()))
-                        .map((group) => (
-                          <button
-                            type="button"
-                            key={group.id}
-                            className={selectedFamilyId === group.id || (!selectedFamilyId && selectedFamily?.id === group.id) ? 'active' : ''}
-                            onClick={() => {
-                              setSelectedFamilyId(group.id);
-                              setSelectedId('');
-                              setFamilyPickerOpen(false);
-                              setFamilyQuery('');
-                              setDetailsOpen(false);
-                              setMobileDetailsOpen(false);
-                              if (treeScroll.current) {
-                                treeScroll.current.scrollLeft = 0;
-                                treeScroll.current.scrollTop = 0;
-                              }
-                            }}
-                          >
-                            {group.name} · {group.people.length}
-                          </button>
-                        ))}
-                      {!families.some((group) => group.name.toLowerCase().includes(familyQuery.toLowerCase())) && <span>No matching families</span>}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            <div className="side-caption">FAMILY MEMBERS</div>
-            <label className="sidebar-search">
-              <select value={memberFamilyFilter} onChange={(event) => setMemberFamilyFilter(event.target.value)} aria-label="Filter family group">
-                <option value="__all__">All groups</option>
-                {memberFamilyOptions.map((group) => (
-                  <option key={group.key} value={group.key}>
-                    {group.name} ({group.count})
-                  </option>
-                ))}
-              </select>
-              <Search size={14} />
-              <input placeholder="Find a person" value={query} onChange={(e) => setQuery(e.target.value)} />
-              {query && (
-                <button onClick={() => setQuery('')}>
-                  <X size={12} />
-                </button>
-              )}
-            </label>
-            <div className="member-list" ref={memberList}>
-              {sidebarMemberGroups.map((group) => (
-                <section className="member-family-group" key={group.name}>
-                  <div className="member-family-heading">
-                    <strong>{group.name}</strong>
-                    <span>{group.people.length}</span>
-                  </div>
-                  <div className="member-family-people">
-                    {group.people.map((p) => (
-                      <button
-                        key={p.id}
-                        className={`member-list-item ${selectedId === p.id || selectedNodeIds.includes(p.id) ? 'active' : ''}`}
-                        onClick={(e) => {
-                          e.currentTarget.focus();
-                          selectPerson(p.id);
-                          setDetailsOpen(true);
-                          if (window.innerWidth < 800) {
-                            setSidebarOpen(false);
-                            setMobileDetailsOpen(true);
-                          }
-                          focusPersonInTree(p.id);
-                        }}
-                      >
-                        <PersonAvatar person={p} />
-                        <span>{fullName(p)}</span>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              ))}
-              {!filtered.length && (
-                <div className="empty-list">
-                  {apiState === 'checking' && (!hasMongoSnapshot || !people.length)
-                    ? 'Loading family members…'
-                    : apiState === 'error'
-                      ? 'Could not load family members'
-                      : query || memberFamilyFilter !== '__all__'
-                        ? 'No matching people'
-                        : 'No people yet'}
-                </div>
-              )}
-            </div>
-            <div className="sidebar-bottom">
-              <div className="storage-status">
-                <span className={`status-light ${refreshFailed ? 'error' : apiState}`} />
-                <span>
-                  {refreshFailed && hasMongoSnapshot
-                    ? 'Offline · showing saved data'
-                    : isRefreshing && hasMongoSnapshot
-                      ? 'Refreshing data…'
-                      : apiState === 'connected'
-                        ? 'Saved to MongoDB'
-                        : apiState === 'checking'
-                          ? 'Connecting…'
-                          : apiState === 'demo'
-                            ? 'Saved in this browser'
-                            : 'Database unavailable'}
-                </span>
-              </div>
-              <button className="theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
-                {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
-                <span>Switch to {theme === 'light' ? 'dark' : 'light'} mode</span>
-              </button>
-            </div>
-          </aside>
-        </>
+        <FamilySidebar
+          treeName={treeName}
+          apiState={apiState}
+          hasMongoSnapshot={hasMongoSnapshot}
+          peopleCount={people.length}
+          familyPeopleCount={familyPeople.length}
+          families={families}
+          selectedFamilyId={selectedFamilyId}
+          selectedFamily={selectedFamily}
+          familyPickerOpen={familyPickerOpen}
+          familyQuery={familyQuery}
+          onFamilyPickerOpenChange={setFamilyPickerOpen}
+          onFamilyQueryChange={setFamilyQuery}
+          onSelectFamily={(familyId) => {
+            setSelectedFamilyId(familyId);
+            setSelectedId('');
+            setFamilyPickerOpen(false);
+            setFamilyQuery('');
+            setDetailsOpen(false);
+            setMobileDetailsOpen(false);
+            if (treeScroll.current) {
+              treeScroll.current.scrollLeft = 0;
+              treeScroll.current.scrollTop = 0;
+            }
+          }}
+          memberFamilyFilter={memberFamilyFilter}
+          memberFamilyOptions={memberFamilyOptions}
+          onMemberFamilyFilterChange={setMemberFamilyFilter}
+          query={query}
+          onQueryChange={setQuery}
+          memberListRef={memberList}
+          sidebarMemberGroups={sidebarMemberGroups}
+          selectedId={selectedId}
+          selectedNodeIds={selectedNodeIds}
+          onSelectMember={(personId, target) => {
+            target.focus();
+            selectPerson(personId);
+            setDetailsOpen(true);
+            if (window.innerWidth < 800) {
+              setSidebarOpen(false);
+              setMobileDetailsOpen(true);
+            }
+            focusPersonInTree(personId);
+          }}
+          filteredCount={filtered.length}
+          refreshFailed={refreshFailed}
+          isRefreshing={isRefreshing}
+          theme={theme}
+          onThemeChange={setTheme}
+          onClose={() => setSidebarOpen(false)}
+        />
       )}
       <main className="simple-main">
         <AppHeader
