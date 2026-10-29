@@ -85,6 +85,12 @@ export function exportTreeSvg({ board, people, treeName, theme, deceasedRibbon }
   const padding = 80;
   const width = Math.max(1, Math.ceil(contentMaxX - contentMinX + padding * 2));
   const height = Math.max(1, Math.ceil(contentMaxY - contentMinY + padding * 2));
+  // Keep the complete, full-resolution tree in the viewBox, but give the
+  // downloaded file a practical initial display size. SVG remains vector data,
+  // so viewers can still zoom in without losing any detail.
+  const previewScale = Math.min(1, 1600 / width, 1200 / height);
+  const displayWidth = Math.max(1, Math.round(width * previewScale));
+  const displayHeight = Math.max(1, Math.round(height * previewScale));
   const translateX = padding - contentMinX;
   const translateY = padding - contentMinY;
   const connector = liveConnector?.cloneNode(true);
@@ -106,7 +112,7 @@ export function exportTreeSvg({ board, people, treeName, theme, deceasedRibbon }
   const safeName = String(treeName || 'family-tree').trim().replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || 'family-tree';
   const displayTitle = /\bfamily$/i.test(String(treeName || '').trim()) ? String(treeName).trim() : `${String(treeName || 'Family').trim()} family`;
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="tree-title tree-description">
+<svg xmlns="http://www.w3.org/2000/svg" width="${displayWidth}" height="${displayHeight}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="tree-title tree-description">
   <title id="tree-title">${escapeXml(displayTitle)} tree</title>
   <desc id="tree-description">Family tree containing ${people.length} people with relationship lines and person information.</desc>
   <style>
@@ -129,5 +135,5 @@ export function exportTreeSvg({ board, people, treeName, theme, deceasedRibbon }
   </g>
 </svg>`;
   downloadSvg(svg, `${safeName}.svg`);
-  return { width, height, peopleCount: people.length };
+  return { width, height, displayWidth, displayHeight, peopleCount: people.length };
 }
