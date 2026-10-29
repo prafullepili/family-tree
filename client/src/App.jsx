@@ -785,6 +785,17 @@ export default function App() {
       notify('Could not create the Excel file');
     }
   }
+  async function exportSvg() {
+    try {
+      const board = treeScroll.current?.querySelector('.tree-board');
+      const { exportTreeSvg } = await import('./svgExport.js');
+      const result = exportTreeSvg({ board, people: treePeople, treeName, theme, deceasedRibbon });
+      setSettingsOpen(false);
+      notify(`Exported the full tree as SVG · ${result.peopleCount} people`);
+    } catch (error) {
+      notify(error.message || 'Could not create the SVG image');
+    }
+  }
   async function handleImportFile(event) {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -2530,7 +2541,7 @@ export default function App() {
                 <div className="tree-data-settings">
                   <span>
                     <strong>Family data</strong>
-                    <small>Choose fields, then export as CSV or Excel</small>
+                    <small>Export tree data or download the complete canvas</small>
                   </span>
                   <button type="button" className="export-fields-toggle" onClick={() => setExportFieldsOpen((open) => !open)} aria-expanded={exportFieldsOpen}>
                     <span>Fields to export</span>
@@ -2570,6 +2581,9 @@ export default function App() {
                     </button>
                     <button type="button" onClick={exportExcel} title="Export Excel workbook">
                       <FileSpreadsheet size={13} /> Excel
+                    </button>
+                    <button type="button" onClick={exportSvg} title="Download the entire family tree as an SVG image">
+                      <Download size={13} /> SVG
                     </button>
                     <button type="button" onClick={() => importFileRef.current?.click()} title="Import CSV or Excel">
                       <Upload size={13} /> Import
