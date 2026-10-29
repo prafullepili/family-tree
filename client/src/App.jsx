@@ -1,23 +1,14 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus,
-  GitFork,
-  UsersRound,
   X,
-  MapPin,
-  CalendarDays,
   Pencil,
   Trash2,
   Eye,
   EyeOff,
   Minimize2,
   Fullscreen,
-  Heart,
   Info,
-  Bookmark,
-  Save,
-  FolderOpen,
-  Upload,
 } from 'lucide-react';
 import { initialPeople } from './demoFamily.js';
 import { layoutTree, resolveNodeOverlaps } from './layoutTree.js';
@@ -26,13 +17,14 @@ import { CanvasHelp, SelectionToolbar, TreeStatus } from './CanvasSupport.jsx';
 import TreeToolbar from './TreeToolbar.jsx';
 import TreeSettingsControls, { DATA_COLUMNS } from './TreeSettingsControls.jsx';
 import { AppHeader, FamilySidebar } from './AppNavigation.jsx';
+import AppDialogs from './AppDialogs.jsx';
+import PersonDetailsPanel, { PersonModalDialog } from './PersonDetailsPanel.jsx';
 import { FamilyBranchLinks, PersonAvatar } from './TreeRenderComponents.jsx';
 import {
   applyDragPositions,
   compactDashboardPositions,
   descendantIds,
   familyColorMap,
-  formatLongDate,
   fromApi,
   fullName,
   getFamilyGroups,
@@ -48,8 +40,6 @@ import {
   storageSet,
   year,
 } from './appHelpers.js';
-
-const PersonModal = lazy(() => import('./PersonModal.jsx'));
 
 const API_BASE_URL = String(import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 const apiUrl = (path) => `${API_BASE_URL}${path}`;
@@ -2313,328 +2303,73 @@ export default function App() {
           />
         </section>
       </main>
-      {mobileDetailsOpen && <button className="details-scrim" onClick={clearSelection} aria-label="Close person details and clear selection" />}
-      {detailsOpen && (
-        <aside className={`simple-details ${mobileDetailsOpen ? 'show-mobile' : ''} ${modal?.inline ? 'editing-person' : ''}`}>
-          <div
-            className="details-resize-handle"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize details panel"
-            aria-valuenow={detailsWidth}
-            tabIndex={0}
-            onKeyDown={handleDetailsResizeKey}
-            onPointerDown={beginDetailsResize}
-            onPointerMove={moveDetailsResize}
-            onPointerUp={endDetailsResize}
-            onPointerCancel={endDetailsResize}
-          />
-          {modal?.inline && (!modal.person || modal.person.id === selected?.id) ? (
-            <Suspense fallback={<div className="person-editor-loading" role="status">Loading editor…</div>}>
-              <PersonModal
-                key={modal.person?.id || modal.kind || 'new'}
-                modal={modal}
-                people={people}
-                onClose={() => {
-                  setModal(null);
-                  if (!selected) {
-                    setDetailsOpen(false);
-                    setMobileDetailsOpen(false);
-                  }
-                }}
-                onSave={saveMember}
-              />
-            </Suspense>
-          ) : selected ? (
-            <>
-              <div className="details-heading">
-                <span>PERSON DETAILS</span>
-                <div>
-                  <button className="family-links-edit-button" onClick={() => setModal({ person: selected, inline: true })} aria-label="Edit person" title="Edit person">
-                    <Pencil size={14} />
-                  </button>
-                </div>
-              </div>
-              <div className="selected-profile">
-                <PersonAvatar person={selected} size="profile" />
-                <h2>{fullName(selected)}</h2>
-                <span className="person-years">
-                  {year(selected.birthDate)}
-                  {selected.deathDate ? ` — ${year(selected.deathDate)}` : ' —'}
-                </span>
-              </div>
-              <div className="details-fields">
-                <div className="detail-field">
-                  <CalendarDays size={15} />
-                  <span>
-                    <small>Born</small>
-                    <strong>{formatLongDate(selected.birthDate)}</strong>
-                  </span>
-                </div>
-                <div className="detail-field">
-                  <MapPin size={15} />
-                  <span>
-                    <small>Birthplace</small>
-                    <strong>{selected.birthPlace || 'Not added'}</strong>
-                  </span>
-                </div>
-                {selected.deathDate && (
-                  <div className="detail-field">
-                    <CalendarDays size={15} />
-                    <span>
-                      <small>Died</small>
-                      <strong>
-                        {new Date(`${selected.deathDate}T00:00:00`).toLocaleDateString(undefined, {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                        })}
-                      </strong>
-                    </span>
-                  </div>
-                )}
-                {selected.occupation && (
-                  <div className="detail-field">
-                    <Heart size={15} />
-                    <span>
-                      <small>Occupation</small>
-                      <strong>{selected.occupation}</strong>
-                    </span>
-                  </div>
-                )}
-              </div>
-              <div className="details-bio">
-                <label>ABOUT</label>
-                <p>{selected.bio || 'Add a short story or memory about this person.'}</p>
-              </div>
-              <div className="details-links">
-                <div className="details-links-heading">
-                  <label>FAMILY LINKS</label>
-                  <button className="family-links-edit-button" onClick={openLinkEditor} aria-label="Edit family links" title="Edit family links">
-                    <Pencil size={13} />
-                  </button>
-                </div>
-                {familyLinkGroups.length ? (
-                  <div className="details-link-groups">
-                    {familyLinkGroups.map((group) => (
-                      <section className="details-link-group" key={group.key} aria-labelledby={`family-link-group-${group.key}`}>
-                        <h3 id={`family-link-group-${group.key}`}>
-                          <span>{group.label}</span>
-                          <small>{group.links.length}</small>
-                        </h3>
-                        {group.links.map((link) => {
-                          const person = byId(link.id);
-                          return (
-                            <button
-                              className="details-link-row"
-                              key={`${group.key}-${link.id}`}
-                              onClick={() => {
-                                openPersonDetails(link.id);
-                                focusPersonInTree(link.id);
-                              }}
-                            >
-                              <PersonAvatar person={person} />
-                              <span className="details-link-person">
-                                <strong>{fullName(person)}</strong>
-                              </span>
-                              <small className="details-link-role">{link.label || relationshipLabel(link.role, person, selected)}</small>
-                            </button>
-                          );
-                        })}
-                      </section>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="details-links-empty">No family links added yet.</p>
-                )}
-                <div className="details-actions-row">
-                  <button
-                    className="details-cancel-button"
-                    onClick={() => {
-                      setModal(null);
-                      setDetailsOpen(false);
-                      setMobileDetailsOpen(false);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button className="remove-person-button" onClick={() => setConfirmDelete(true)}>
-                    <Trash2 size={14} /> Remove person
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="details-empty">
-              <UsersRound size={23} />
-              <p>Select a person in the tree to see details.</p>
-            </div>
-          )}
-        </aside>
-      )}
-      {modal && !modal.inline && (
-        <Suspense fallback={<div className="person-editor-loading is-modal" role="status">Loading editor…</div>}>
-          <PersonModal key={modal.person?.id || modal.kind || 'new'} modal={modal} people={people} onClose={() => setModal(null)} onSave={saveMember} />
-        </Suspense>
-      )}
-      {pendingImport && (
-        <div
-          className="simple-modal-backdrop"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !isImporting) setPendingImport(null);
-          }}
-        >
-          <div className="delete-dialog import-data-dialog" role="dialog" aria-modal="true" aria-labelledby="import-data-title">
-            <div className="arrange-dialog-icon" aria-hidden="true">
-              <Upload size={20} />
-            </div>
-            <h2 id="import-data-title">Import family data?</h2>
-            <p>
-              <strong>{pendingImport.filename}</strong> contains {pendingImport.people.length} {pendingImport.people.length === 1 ? 'person' : 'people'}.
-            </p>
-            <p>Matching IDs will be updated. New IDs will be added. Existing people missing from the file will remain in the tree.</p>
-            <div>
-              <button type="button" onClick={() => setPendingImport(null)} disabled={isImporting}>
-                Cancel
-              </button>
-              <button type="button" className="arrange-action" onClick={confirmDataImport} disabled={isImporting}>
-                {isImporting ? 'Importing…' : 'Import data'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {confirmDelete && selected && (
-        <div className="simple-modal-backdrop">
-          <div className="delete-dialog">
-            <h2>{selectedNodeIds.length > 1 ? `Remove ${selectedNodeIds.length} selected people?` : `Remove ${fullName(selected)}?`}</h2>
-            <p>
-              {selectedNodeIds.length > 1
-                ? 'This will permanently remove the selected family members and their links.'
-                : deleteDescendants
-                  ? `This will also delete ${selectedDescendants.length} descendant${selectedDescendants.length === 1 ? '' : 's'} and their links.`
-                  : 'This also removes their links from the tree.'}
-            </p>
-            {selectedNodeIds.length <= 1 && (
-              <label className="delete-descendants-option">
-                <input type="checkbox" checked={deleteDescendants} onChange={(e) => setDeleteDescendants(e.target.checked)} />
-                <span>Also delete all descendants ({selectedDescendants.length})</span>
-              </label>
-            )}
-            <div>
-              <button onClick={() => setConfirmDelete(false)}>Cancel</button>
-              <button className="danger-action" onClick={removePerson}>
-                Remove {selectedNodeIds.length > 1 ? 'selected people' : 'person'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {confirmArrange && (
-        <div
-          className="simple-modal-backdrop"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !isArranging) setConfirmArrange(false);
-          }}
-        >
-          <div className="delete-dialog arrange-dialog" role="dialog" aria-modal="true" aria-labelledby="arrange-family-title">
-            <div className="arrange-dialog-icon" aria-hidden="true">
-              <GitFork size={20} />
-            </div>
-            <h2 id="arrange-family-title">Arrange this family?</h2>
-            <p>The visible family will be placed in clear generation rows with partners and siblings together. The new positions will be saved for every device.</p>
-            <div>
-              <button onClick={() => setConfirmArrange(false)} disabled={isArranging}>
-                Cancel
-              </button>
-              <button className="arrange-action" onClick={arrangeFamily} disabled={isArranging}>
-                {isArranging ? 'Arranging…' : 'Arrange family'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {savedLayoutsOpen && (
-        <div
-          className="simple-modal-backdrop"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !isSavingLayout && !applyingLayoutId) setSavedLayoutsOpen(false);
-          }}
-        >
-          <div className="delete-dialog saved-layouts-dialog" role="dialog" aria-modal="true" aria-labelledby="saved-layouts-title">
-            <button className="saved-layouts-close" onClick={() => setSavedLayoutsOpen(false)} aria-label="Close saved tree views">
-              <X size={17} />
-            </button>
-            <div className="arrange-dialog-icon" aria-hidden="true">
-              <Bookmark size={20} />
-            </div>
-            <h2 id="saved-layouts-title">Favorite tree views</h2>
-            <p>Save this family’s current node positions with a name. Restoring a view also saves it as the active layout on every device.</p>
-            <form className="save-layout-form" onSubmit={saveNamedLayout}>
-              <label htmlFor="saved-layout-name">View name</label>
-              <div>
-                <input id="saved-layout-name" value={layoutName} onChange={(event) => setLayoutName(event.target.value)} maxLength={60} placeholder="Example: My favorite layout" autoFocus />
-                <button type="submit" className="arrange-action" disabled={!layoutName.trim() || isSavingLayout}>
-                  <Save size={14} />
-                  {isSavingLayout ? 'Saving…' : 'Save current'}
-                </button>
-              </div>
-            </form>
-            <div className="saved-layout-list" aria-label="Saved tree views">
-              <div className="saved-layout-list-heading">
-                <span>Saved views</span>
-                <small>{savedLayouts.length}</small>
-              </div>
-              {savedLayouts.length ? (
-                savedLayouts.map((savedLayout) => (
-                  <div className="saved-layout-row" key={savedLayout._id}>
-                    <div>
-                      <strong>{savedLayout.name}</strong>
-                      <small>
-                        {savedLayout.positions?.length || 0} people · {new Date(savedLayout.updatedAt).toLocaleDateString()}
-                      </small>
-                    </div>
-                    <div className="saved-layout-actions">
-                      {confirmLayoutDeleteId === savedLayout._id ? (
-                        <>
-                          <button type="button" onClick={() => setConfirmLayoutDeleteId('')} disabled={deletingLayoutId === savedLayout._id}>
-                            Cancel
-                          </button>
-                          <button className="remove-saved-layout-confirm" type="button" onClick={() => removeNamedLayout(savedLayout)} disabled={deletingLayoutId === savedLayout._id}>
-                            {deletingLayoutId === savedLayout._id ? 'Removing…' : 'Remove'}
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button type="button" onClick={() => applyNamedLayout(savedLayout)} disabled={Boolean(applyingLayoutId || deletingLayoutId)}>
-                            <FolderOpen size={14} />
-                            {applyingLayoutId === savedLayout._id ? 'Restoring…' : 'Restore'}
-                          </button>
-                          <button
-                            className="remove-saved-layout"
-                            type="button"
-                            onClick={() => setConfirmLayoutDeleteId(savedLayout._id)}
-                            disabled={Boolean(applyingLayoutId || deletingLayoutId)}
-                            aria-label={`Remove saved view ${savedLayout.name}`}
-                            title="Remove saved view"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="saved-layout-empty">
-                  <Bookmark size={18} />
-                  <span>No favorite views saved for this family yet.</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <PersonDetailsPanel
+        open={detailsOpen}
+        mobileOpen={mobileDetailsOpen}
+        editingModal={modal}
+        selected={selected}
+        people={people}
+        detailsWidth={detailsWidth}
+        onResizeKeyDown={handleDetailsResizeKey}
+        onResizePointerDown={beginDetailsResize}
+        onResizePointerMove={moveDetailsResize}
+        onResizePointerUp={endDetailsResize}
+        onClearSelection={clearSelection}
+        onCloseEditor={() => {
+          setModal(null);
+          if (!selected) {
+            setDetailsOpen(false);
+            setMobileDetailsOpen(false);
+          }
+        }}
+        onSavePerson={saveMember}
+        onEditPerson={() => setModal({ person: selected, inline: true })}
+        familyLinkGroups={familyLinkGroups}
+        getPersonById={byId}
+        onEditLinks={openLinkEditor}
+        onOpenLinkedPerson={(personId) => {
+          openPersonDetails(personId);
+          focusPersonInTree(personId);
+        }}
+        onClosePanel={() => {
+          setModal(null);
+          setDetailsOpen(false);
+          setMobileDetailsOpen(false);
+        }}
+        onRequestDelete={() => setConfirmDelete(true)}
+      />
+      <PersonModalDialog modal={modal} people={people} onClose={() => setModal(null)} onSave={saveMember} />
+      <AppDialogs
+        pendingImport={pendingImport}
+        isImporting={isImporting}
+        onCancelImport={() => setPendingImport(null)}
+        onConfirmImport={confirmDataImport}
+        confirmDelete={confirmDelete}
+        selected={selected}
+        selectedNodeIds={selectedNodeIds}
+        deleteDescendants={deleteDescendants}
+        selectedDescendants={selectedDescendants}
+        onDeleteDescendantsChange={setDeleteDescendants}
+        onCancelDelete={() => setConfirmDelete(false)}
+        onRemovePerson={removePerson}
+        confirmArrange={confirmArrange}
+        isArranging={isArranging}
+        onCancelArrange={() => setConfirmArrange(false)}
+        onArrange={arrangeFamily}
+        savedLayoutsOpen={savedLayoutsOpen}
+        onSavedLayoutsOpenChange={setSavedLayoutsOpen}
+        isSavingLayout={isSavingLayout}
+        applyingLayoutId={applyingLayoutId}
+        layoutName={layoutName}
+        onLayoutNameChange={setLayoutName}
+        onSaveLayout={saveNamedLayout}
+        savedLayouts={savedLayouts}
+        confirmLayoutDeleteId={confirmLayoutDeleteId}
+        onConfirmLayoutDeleteIdChange={setConfirmLayoutDeleteId}
+        deletingLayoutId={deletingLayoutId}
+        onRemoveLayout={removeNamedLayout}
+        onApplyLayout={applyNamedLayout}
+      />
       {toast && <div className="simple-toast">{toast}</div>}
     </div>
   );
