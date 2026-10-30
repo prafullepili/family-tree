@@ -15,6 +15,7 @@ import PersonDetailsPanel, { PersonModalDialog } from './PersonDetailsPanel.jsx'
 import TreePersonNode from './TreePersonNode.jsx';
 import { apiUrl, loadInitialFamilyData, loadRemoteFamilyData } from './apiClient.js';
 import { FamilyBranchLinks, PersonAvatar } from './TreeRenderComponents.jsx';
+import { stepCanvasZoom } from './zoomMath.js';
 import {
   applyDragPositions,
   compactDashboardPositions,
@@ -1179,19 +1180,12 @@ export default function App() {
       setZoom(nextZoom);
       return;
     }
-    const board = viewport.querySelector('.tree-board');
-    const boardRect = board?.getBoundingClientRect();
-    if (boardRect && layout.positions.size) {
-      const positions = [...layout.positions.values()];
-      const minX = Math.min(...positions.map((position) => position.x));
-      const maxX = Math.max(...positions.map((position) => position.x + position.w));
-      const minY = Math.min(...positions.map((position) => position.y));
-      const maxY = Math.max(...positions.map((position) => position.y + position.h));
-      zoomAround(boardRect.left + ((minX + maxX) / 2) * zoomValue.current, boardRect.top + ((minY + maxY) / 2) * zoomValue.current, nextZoom);
-      return;
-    }
     const rect = viewport.getBoundingClientRect();
-    zoomAround(rect.left + rect.width / 2, rect.top + rect.height / 2, nextZoom);
+    zoomAround(rect.left + viewport.clientWidth / 2, rect.top + viewport.clientHeight / 2, nextZoom);
+  }
+  function stepZoom(direction) {
+    const currentZoom = pendingZoom.current?.nextZoom ?? zoomValue.current;
+    zoomTo(stepCanvasZoom(currentZoom, direction, maxCanvasZoom));
   }
   function fitTreeToView() {
     manualZoomTouched.current = true;
@@ -1891,8 +1885,8 @@ export default function App() {
           movementLocked={movementLocked}
           onToggleMovement={() => setMovementLocked((locked) => !locked)}
           zoom={zoom}
-          onZoomOut={() => zoomTo(Math.max(0.1, +(zoomValue.current - 0.1).toFixed(2)))}
-          onZoomIn={() => zoomTo(Math.min(maxCanvasZoom, +(zoomValue.current + 0.1).toFixed(2)))}
+          onZoomOut={() => stepZoom(-1)}
+          onZoomIn={() => stepZoom(1)}
           onFit={fitTreeToView}
         />
         <section ref={canvasRef} className={`simple-canvas ${fullscreenFallback ? 'is-fullscreen-fallback' : ''}`}>
