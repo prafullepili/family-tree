@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7f8f5" />
+    <title>Kinfolk — Your family's story</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <style>
+      html, body, #root { min-height: 100%; margin: 0; }
+      body { background: #f7f8f5; }
+      #boot-screen { position: fixed; inset: 0; z-index: 9999; display: grid; place-content: center; gap: 12px; color: #26352d; background: #f7f8f5; font: 500 15px 'DM Sans', sans-serif; text-align: center; }
+      #boot-screen span { width: 22px; height: 22px; justify-self: center; border: 2px solid #dce4dc; border-top-color: #688c72; border-radius: 50%; animation: boot-spin .8s linear infinite; }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      html[data-theme="dark"] body { background: #1b211e; }
+      html[data-theme="dark"] #boot-screen { color: #eef2ee; background: #1b211e; }
+    </style>
+    <script>
+      try { if (localStorage.getItem('kinfolk-theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch {}
+    </script>
+    <script type="module" crossorigin src="/assets/index-BBKv93U1.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-Vxd6jlKx.css">
+  </head>
+  <body>
+    <div id="boot-screen" role="status"><span></span>Loading your family tree…</div>
+    <div id="root"></div>
+  </body>
+</html>

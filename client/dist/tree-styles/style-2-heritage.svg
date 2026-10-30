@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">Family Heritage</title>
+  <desc id="desc">An artistic family tree with organic branches and ornate oval frames.</desc>
+  <rect width="1200" height="900" fill="#F4ECD8"/>
+  <defs><filter id="paper"><feTurbulence baseFrequency=".7" numOctaves="2" seed="7" result="noise"/><feBlend in="SourceGraphic" in2="noise" mode="soft-light"/></filter></defs>
+  <rect x="22" y="22" width="1156" height="856" rx="12" fill="none" stroke="#8B6B46" stroke-width="2" filter="url(#paper)"/>
+  <g fill="none" stroke="#1E3F20" stroke-width="7" stroke-linecap="round" opacity=".92">
+    <path d="M600 792 Q570 680 600 560 T585 330 Q520 250 350 230 M600 560 Q690 460 850 390 M585 330 Q650 250 830 230"/>
+    <path d="M600 560 Q470 470 290 445 M600 560 Q610 470 595 420 M850 390 Q940 350 1000 300"/>
+    <path d="M600 792 Q510 810 430 842 M600 792 Q690 810 770 842"/>
+  </g>
+  <g font-family="Georgia, 'Times New Roman', serif" text-anchor="middle" fill="#4A3525">
+    <g><path d="M360 48H840L805 126H395Z" fill="#E6D3A3" stroke="#4A3525" stroke-width="3"/><text x="600" y="91" font-size="34" font-weight="700">Family Heritage</text></g>
+    <g transform="translate(250 180)"><ellipse rx="120" ry="68" fill="#FFF9E9" stroke="#4A3525" stroke-width="4"/><ellipse rx="110" ry="58" fill="none" stroke="#B08A55" stroke-width="2"/><text y="6" font-size="21">Grandfather (Name)</text></g>
+    <g transform="translate(480 230)"><ellipse rx="120" ry="68" fill="#FFF9E9" stroke="#4A3525" stroke-width="4"/><ellipse rx="110" ry="58" fill="none" stroke="#B08A55" stroke-width="2"/><text y="6" font-size="21">Grandmother (Name)</text></g>
+    <g transform="translate(830 180)"><ellipse rx="120" ry="68" fill="#FFF9E9" stroke="#4A3525" stroke-width="4"/><ellipse rx="110" ry="58" fill="none" stroke="#B08A55" stroke-width="2"/><text y="6" font-size="21">Grandparents</text></g>
+    <g transform="translate(280 400)"><ellipse rx="115" ry="65" fill="#FFF9E9" stroke="#4A3525" stroke-width="4"/><text y="6" font-size="22">Aunt (Name)</text></g>
+    <g transform="translate(600 400)"><ellipse rx="115" ry="65" fill="#FFF9E9" stroke="#4A3525" stroke-width="4"/><text y="6" font-size="22">Parent (Name)</text></g>
+    <g transform="translate(900 365)"><ellipse rx="115" ry="65" fill="#FFF9E9" stroke="#4A3525" stroke-width="4"/><text y="6" font-size="22">Uncle (Name)</text></g>
+    <g transform="translate(430 650)"><path d="M0-70 90-42 75 48 0 88-75 48-90-42Z" fill="#FFF9E9" stroke="#4A3525" stroke-width="4"/><text y="4" font-size="22">Child (Name)</text></g>
+    <g transform="translate(770 650)"><path d="M0-70 90-42 75 48 0 88-75 48-90-42Z" fill="#FFF9E9" stroke="#4A3525" stroke-width="4"/><text y="4" font-size="22">Child (Name)</text></g>
+  </g>
+</svg>
