@@ -1,14 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  Plus,
-  X,
-  Pencil,
-  Trash2,
-  Eye,
-  EyeOff,
   Minimize2,
   Fullscreen,
-  Info,
 } from 'lucide-react';
 import { initialPeople } from './demoFamily.js';
 import { layoutTree, resolveNodeOverlaps } from './layoutTree.js';
@@ -19,6 +12,8 @@ import TreeSettingsControls, { DATA_COLUMNS } from './TreeSettingsControls.jsx';
 import { AppHeader, FamilySidebar } from './AppNavigation.jsx';
 import AppDialogs from './AppDialogs.jsx';
 import PersonDetailsPanel, { PersonModalDialog } from './PersonDetailsPanel.jsx';
+import TreePersonNode from './TreePersonNode.jsx';
+import { apiUrl, loadInitialFamilyData, loadRemoteFamilyData } from './apiClient.js';
 import { FamilyBranchLinks, PersonAvatar } from './TreeRenderComponents.jsx';
 import {
   applyDragPositions,
@@ -41,8 +36,6 @@ import {
   year,
 } from './appHelpers.js';
 
-const API_BASE_URL = String(import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
-const apiUrl = (path) => `${API_BASE_URL}${path}`;
 export default function App() {
   const [isCompactViewport, setIsCompactViewport] = useState(() => window.innerWidth <= 1050);
   const [initialCache] = useState(readMongoPeopleCache);
@@ -154,6 +147,7 @@ export default function App() {
   const treeScroll = useRef(null);
   const previousOrigin = useRef(null);
   const refreshDataRef = useRef(null);
+  const refreshInFlight = useRef(null);
   const importFileRef = useRef(null);
   const families = useMemo(() => getFamilyGroups(people), [people]);
   const selectedFamily = selectedFamilyId === '__all__' ? null : families.find((group) => group.id === selectedFamilyId) || [...families].sort((a, b) => b.people.length - a.people.length)[0];
@@ -612,7 +606,7 @@ export default function App() {
     };
   }, [apiState, familyPeopleIdentity, layoutScopeId]);
   useEffect(() => {
-    if (apiState !== 'connected' || !hasMongoSnapshot) return;
+    if (!['connected', 'offline'].includes(apiState) || !hasMongoSnapshot) return;
     try {
       storageSet(mongoPeopleCacheKey, JSON.stringify({ people, updatedAt: Date.now() }));
     } catch {
@@ -624,30 +618,16 @@ export default function App() {
     (async () => {
       setIsRefreshing(true);
       try {
-        let ready = false;
-        for (let i = 0; i < 8; i++) {
-          const h = await fetch(apiUrl('/api/health'));
-          if (!h.ok) throw Error();
-          const state = await h.json();
-          if (!state.configured) {
-            if (active) {
-              setPeople(initialPeople());
-              setHasMongoSnapshot(false);
-              setApiState('demo');
-            }
-            return;
+        const result = await loadInitialFamilyData();
+        if (result.mode === 'demo') {
+          if (active) {
+            setPeople(initialPeople());
+            setHasMongoSnapshot(false);
+            setApiState('demo');
           }
-          if (state.database === 'connected') {
-            ready = true;
-            break;
-          }
-          if (i < 7) await new Promise((r) => setTimeout(r, 1000));
+          return;
         }
-        if (!ready) throw Error();
-        const response = await fetch(apiUrl('/api/people'));
-        if (!response.ok) throw Error();
-        const savedRows = await response.json();
-        const rows = savedRows.map(fromApi);
+        const rows = result.rows.map(fromApi);
         if (active) {
           storageRemove('kinfolk-demo-people');
           setHasMongoSnapshot(true);
@@ -659,7 +639,7 @@ export default function App() {
       } catch {
         if (active) {
           setRefreshFailed(true);
-          setApiState(initialCache.hasSnapshot ? 'connected' : 'error');
+          setApiState(initialCache.hasSnapshot ? 'offline' : 'error');
         }
       } finally {
         if (active) setIsRefreshing(false);
@@ -670,45 +650,33 @@ export default function App() {
     };
   }, []);
   async function refreshFromDatabase() {
-    if (isRefreshing) return;
-    setIsRefreshing(true);
-    setRefreshFailed(false);
-    try {
-      let ready = false;
-      for (let i = 0; i < 8; i++) {
-        const healthResponse = await fetch(apiUrl('/api/health'), { cache: 'no-store' });
-        if (!healthResponse.ok) throw Error();
-        const health = await healthResponse.json();
-        if (!health.configured) {
-          setRefreshFailed(hasMongoSnapshot);
-          if (!hasMongoSnapshot) setApiState('error');
-          notify('MongoDB is not configured for this app');
-          return;
-        }
-        if (health.database === 'connected') {
-          ready = true;
-          break;
-        }
-        if (i < 7) await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-      if (!ready) throw Error();
-      const response = await fetch(apiUrl('/api/people'), { cache: 'no-store' });
-      if (!response.ok) throw Error();
-      const rows = (await response.json()).map(fromApi);
-      storageRemove('kinfolk-demo-people');
-      storageSet(mongoPeopleCacheKey, JSON.stringify({ people: rows, updatedAt: Date.now() }));
-      setPeople(rows);
-      setHasMongoSnapshot(true);
-      setSelectedId((selectedId) => (rows.some((person) => person.id === selectedId) ? selectedId : ''));
-      setApiState('connected');
+    if (refreshInFlight.current) return refreshInFlight.current;
+    const request = (async () => {
+      setIsRefreshing(true);
       setRefreshFailed(false);
-      notify(`Synced ${rows.length} ${rows.length === 1 ? 'person' : 'people'} from MongoDB`);
-    } catch {
-      setRefreshFailed(true);
-      if (!hasMongoSnapshot) setApiState('error');
-      notify(hasMongoSnapshot ? 'Could not refresh from MongoDB. Showing the last saved data.' : 'Could not load family data from MongoDB.');
+      try {
+        const rows = (await loadRemoteFamilyData()).map(fromApi);
+        storageRemove('kinfolk-demo-people');
+        storageSet(mongoPeopleCacheKey, JSON.stringify({ people: rows, updatedAt: Date.now() }));
+        setPeople(rows);
+        setHasMongoSnapshot(true);
+        setSelectedId((selectedId) => (rows.some((person) => person.id === selectedId) ? selectedId : ''));
+        setApiState('connected');
+        setRefreshFailed(false);
+        notify(`Synced ${rows.length} ${rows.length === 1 ? 'person' : 'people'} from MongoDB`);
+      } catch (error) {
+        setRefreshFailed(true);
+        setApiState(hasMongoSnapshot ? 'offline' : 'error');
+        notify(error.message || (hasMongoSnapshot ? 'Could not refresh from MongoDB. Showing the last saved data.' : 'Could not load family data from MongoDB.'));
+      } finally {
+        setIsRefreshing(false);
+      }
+    })();
+    refreshInFlight.current = request;
+    try {
+      return await request;
     } finally {
-      setIsRefreshing(false);
+      if (refreshInFlight.current === request) refreshInFlight.current = null;
     }
   }
   refreshDataRef.current = refreshFromDatabase;
@@ -2064,195 +2032,53 @@ export default function App() {
                   const pos = layout.positions.get(person.id);
                   const isDetailsVisible = detailsOpen && selectedId === person.id;
                   return (
-                    <div
+                    <TreePersonNode
                       key={person.id}
-                      data-person-id={person.id}
-                      className={`tree-person gender-${person.gender || 'unspecified'} ${person.deathDate ? 'is-deceased' : ''} ${highlightedLink?.ids?.includes(person.id) ? 'link-highlighted' : ''} ${highlightedNetworkIds.has(person.id) ? 'link-path-node' : ''} ${selectedId === person.id || selectedNodeIds.includes(person.id) ? 'selected' : ''} ${familyColorsEnabled && familyColors.has(person.id) ? `family-colored family-color-${familyColors.get(person.id)}` : ''}`}
-                      style={{ left: pos.x, top: pos.y }}
-                      onPointerEnter={(e) => {
-                        if (e.pointerType !== 'touch') setHighlightedNodeId(person.id);
-                      }}
-                      onPointerLeave={(e) => {
-                        if (e.pointerType !== 'touch') {
-                          setHighlightedNodeId((current) => (current === person.id ? '' : current));
-                        }
-                      }}
-                      onPointerDown={(e) => {
-                        if (e.pointerType === 'touch') startDrag(e, person, pos);
-                      }}
-                      onPointerUp={(e) => {
-                        if (e.pointerType === 'touch' && drag.current?.id === person.id && !drag.current.moved) {
+                      person={person}
+                      position={pos}
+                      detailsVisible={isDetailsVisible}
+                      linkHighlighted={highlightedLink?.ids?.includes(person.id)}
+                      networkHighlighted={highlightedNetworkIds.has(person.id)}
+                      selected={selectedId === person.id || selectedNodeIds.includes(person.id)}
+                      familyColorIndex={familyColorsEnabled && familyColors.has(person.id) ? familyColors.get(person.id) : null}
+                      quickAddOpen={quickAddForId === person.id}
+                      aboutOpen={aboutTooltipId === person.id}
+                      aboutDismissed={dismissedAboutTooltipId === person.id}
+                      onHoverStart={() => setHighlightedNodeId(person.id)}
+                      onHoverEnd={() => setHighlightedNodeId((current) => (current === person.id ? '' : current))}
+                      onTouchDragStart={(event) => startDrag(event, person, pos)}
+                      onTouchPointerUp={() => {
+                        if (drag.current?.id === person.id && !drag.current.moved) {
                           setHighlightedNodeId((current) => (current === person.id ? '' : person.id));
                         }
                       }}
-                      onMouseDown={(e) => startDrag(e, person, pos)}
-                    >
-                      <button
-                        className="tree-person-card"
-                        aria-label={`Select ${fullName(person)}; drag to move; press and hold to open details`}
-                        onContextMenu={(e) => e.preventDefault()}
-                        onClick={(e) => {
-                          if (e.detail === 0) openPersonDetails(person.id);
-                        }}
-                      >
-                        <PersonAvatar person={person} size="large" />
-                        <span className="tree-person-copy">
-                          <strong>{fullName(person)}</strong>
-                          <small>
-                            {person.maidenName ? `Born: ${person.maidenName} · ` : ''}
-                            {year(person.birthDate)}
-                            {person.deathDate ? ` — ${year(person.deathDate)}` : ' —'}
-                          </small>
-                        </span>
-                        <span className="drag-grip">⠿</span>
-                      </button>
-                      <div className={`tree-node-quick-add ${quickAddForId === person.id ? 'is-open' : ''}`}>
-                        <button
-                          type="button"
-                          className="tree-node-quick-add-button"
-                          aria-label={`Quickly add a relative of ${fullName(person)}`}
-                          aria-expanded={quickAddForId === person.id}
-                          title="Add relative"
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setQuickAddForId((current) => (current === person.id ? '' : person.id));
-                          }}
-                        >
-                          <Plus size={16} />
-                        </button>
-                        {quickAddForId === person.id && (
-                          <div className="tree-node-quick-add-menu" role="menu" aria-label={`Add relative of ${fullName(person)}`}>
-                            {[
-                              ['father', 'Father'],
-                              ['mother', 'Mother'],
-                              ['brother', 'Brother'],
-                              ['sister', 'Sister'],
-                              ['son', 'Son'],
-                              ['daughter', 'Daughter'],
-                              ['partner', 'Partner'],
-                            ].map(([kind, label]) => (
-                              <button
-                                type="button"
-                                role="menuitem"
-                                key={kind}
-                                onPointerDown={(event) => event.stopPropagation()}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  openQuickAdd(person, kind);
-                                }}
-                              >
-                                <Plus size={12} />
-                                Add {label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        className="tree-node-edit"
-                        title={`Edit ${fullName(person)}`}
-                        aria-label={`Edit ${fullName(person)}`}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openPersonEditor(person);
-                        }}
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        className="tree-node-info"
-                        title={isDetailsVisible ? `Hide ${fullName(person)} details` : `View ${fullName(person)} details`}
-                        aria-label={isDetailsVisible ? `Hide ${fullName(person)} details` : `View ${fullName(person)} details`}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (isDetailsVisible) {
-                            setDetailsOpen(false);
-                            setMobileDetailsOpen(false);
-                          } else openPersonDetails(person.id);
-                        }}
-                      >
-                        {isDetailsVisible ? <EyeOff size={13} /> : <Eye size={13} />}
-                      </button>
-                      <div
-                        className={`tree-node-about-wrap ${aboutTooltipId === person.id ? 'is-open' : ''} ${dismissedAboutTooltipId === person.id ? 'is-dismissed' : ''}`}
-                        onPointerEnter={(event) => {
-                          if (event.pointerType !== 'touch' && dismissedAboutTooltipId === person.id) {
-                            setDismissedAboutTooltipId('');
-                          }
-                        }}
-                      >
-                        <button
-                          className="tree-node-about"
-                          aria-label={`Information about ${fullName(person)}`}
-                          aria-describedby={`tree-person-tooltip-${person.id}`}
-                          aria-expanded={aboutTooltipId === person.id}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (aboutTooltipId === person.id) {
-                              setDismissedAboutTooltipId(person.id);
-                              setAboutTooltipId('');
-                            } else {
-                              setDismissedAboutTooltipId('');
-                              setAboutTooltipId(person.id);
-                            }
-                          }}
-                        >
-                          <Info size={13} />
-                        </button>
-                        <div
-                          id={`tree-person-tooltip-${person.id}`}
-                          className="tree-node-about-tooltip"
-                          role="tooltip"
-                          onPointerDown={(e) => e.stopPropagation()}
-                          onMouseDown={(e) => e.stopPropagation()}
-                        >
-                          <div className="tree-node-about-heading">
-                            <span>PERSON DETAILS</span>
-                            <strong>{fullName(person)}</strong>
-                          </div>
-                          <div className="tree-node-about-facts">
-                            <div className="tree-node-about-fact">
-                              <span>Gender</span>
-                              <strong>{person.gender && person.gender !== 'unspecified' ? `${person.gender[0].toUpperCase()}${person.gender.slice(1)}` : 'Not specified'}</strong>
-                            </div>
-                            <div className="tree-node-about-fact">
-                              <span>Born</span>
-                              <strong>{person.birthDate ? year(person.birthDate) : 'Not added'}</strong>
-                            </div>
-                            {person.birthPlace && (
-                              <div className="tree-node-about-fact">
-                                <span>Birthplace</span>
-                                <strong>{person.birthPlace}</strong>
-                              </div>
-                            )}
-                            {person.occupation && (
-                              <div className="tree-node-about-fact">
-                                <span>Occupation</span>
-                                <strong>{person.occupation}</strong>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        className="tree-node-delete"
-                        title={`Delete ${fullName(person)}`}
-                        aria-label={`Delete ${fullName(person)}`}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedId(person.id);
-                          setSelectedNodeIds([]);
-                          setConfirmDelete(true);
-                        }}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+                      onMouseDragStart={(event) => startDrag(event, person, pos)}
+                      onOpenFromKeyboard={() => openPersonDetails(person.id)}
+                      onToggleQuickAdd={() => setQuickAddForId((current) => (current === person.id ? '' : person.id))}
+                      onQuickAdd={(kind) => openQuickAdd(person, kind)}
+                      onEdit={() => openPersonEditor(person)}
+                      onToggleDetails={() => {
+                        if (isDetailsVisible) {
+                          setDetailsOpen(false);
+                          setMobileDetailsOpen(false);
+                        } else openPersonDetails(person.id);
+                      }}
+                      onRestoreAboutHover={() => setDismissedAboutTooltipId('')}
+                      onToggleAbout={() => {
+                        if (aboutTooltipId === person.id) {
+                          setDismissedAboutTooltipId(person.id);
+                          setAboutTooltipId('');
+                        } else {
+                          setDismissedAboutTooltipId('');
+                          setAboutTooltipId(person.id);
+                        }
+                      }}
+                      onDelete={() => {
+                        setSelectedId(person.id);
+                        setSelectedNodeIds([]);
+                        setConfirmDelete(true);
+                      }}
+                    />
                   );
                 })}
               </div>
