@@ -1,3 +1,4 @@
+
 name: Deploy Family Tree
 
 on:
@@ -20,13 +21,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: client/package-lock.json
 
       - name: Install dependencies
         working-directory: client
@@ -36,9 +37,11 @@ jobs:
         working-directory: client
         run: npm run build
 
-      - uses: actions/configure-pages@v5
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
 
-      - uses: actions/upload-pages-artifact@v4
+      - name: Upload build
+        uses: actions/upload-pages-artifact@v4
         with:
           path: client/dist
 
@@ -51,5 +54,6 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - uses: actions/deploy-pages@v4
+      - name: Deploy
         id: deployment
+        uses: actions/deploy-pages@v4
