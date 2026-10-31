@@ -5,6 +5,12 @@ export const apiUrl = (path) => `${API_BASE_URL}${path}`;
 let initialFamilyRequest;
 let initialFamilyRequestKey = '';
 let csrfToken = '';
+let activeTreeId = '';
+
+export function setActiveTreeId(treeId) {
+  activeTreeId = String(treeId || '');
+  resetFamilyDataRequest();
+}
 
 export function setAuthCsrfToken(token) {
   csrfToken = String(token || '');
@@ -18,6 +24,7 @@ export function resetFamilyDataRequest() {
 export async function apiFetch(input, options = {}) {
   const method = String(options.method || 'GET').toUpperCase();
   const headers = new Headers(options.headers || {});
+  if (activeTreeId && !headers.has('X-Tree-Id')) headers.set('X-Tree-Id', activeTreeId);
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && csrfToken && !headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', csrfToken);
   const response = await fetch(input, { ...options, method, headers, credentials: 'include' });
   if (response.status === 401 && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('kinfolk:unauthorized'));
@@ -35,6 +42,7 @@ async function parseResponse(response, fallbackMessage) {
 // bootstrap promise at module scope lets both effect runs share one network
 // sequence while each run can still apply the result independently.
 export function loadInitialFamilyData(sessionKey = '') {
+  const treeHeaders = activeTreeId ? { 'X-Tree-Id': activeTreeId } : {};
   if (!initialFamilyRequest || initialFamilyRequestKey !== sessionKey) {
     initialFamilyRequestKey = sessionKey;
     initialFamilyRequest = (async () => {
@@ -42,7 +50,7 @@ export function loadInitialFamilyData(sessionKey = '') {
       const health = await parseResponse(healthResponse, 'Could not reach the family API');
       if (!health.configured) return { mode: 'demo', rows: [] };
       if (health.database !== 'connected') throw Error('MongoDB is currently disconnected');
-      const peopleResponse = await apiFetch(apiUrl('/api/people'), { cache: 'no-store' });
+      const peopleResponse = await apiFetch(apiUrl('/api/people'), { cache: 'no-store', headers: treeHeaders });
       const rows = await parseResponse(peopleResponse, 'Could not load family data');
       return { mode: 'connected', rows };
     })();
@@ -51,10 +59,11 @@ export function loadInitialFamilyData(sessionKey = '') {
 }
 
 export async function loadRemoteFamilyData() {
+  const treeHeaders = activeTreeId ? { 'X-Tree-Id': activeTreeId } : {};
   const healthResponse = await apiFetch(apiUrl('/api/health'), { cache: 'no-store' });
   const health = await parseResponse(healthResponse, 'Could not reach the family API');
   if (!health.configured) throw Error('MongoDB is not configured for this app');
   if (health.database !== 'connected') throw Error('MongoDB is currently disconnected');
-  const peopleResponse = await apiFetch(apiUrl('/api/people'), { cache: 'no-store' });
+  const peopleResponse = await apiFetch(apiUrl('/api/people'), { cache: 'no-store', headers: treeHeaders });
   return parseResponse(peopleResponse, 'Could not load family data');
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import App from './App.jsx';
+import TreeWorkspace from './TreeWorkspace.jsx';
 import LoginPage from './LoginPage.jsx';
 import { apiUrl, resetFamilyDataRequest, setAuthCsrfToken } from './apiClient.js';
 
@@ -105,7 +105,7 @@ export default function AuthApp() {
   if (status === 'checking') {
     return (
       <main className="auth-loading" aria-live="polite">
-        <span className="auth-loading-mark" aria-hidden="true">K</span>
+        <span className="auth-loading-mark" aria-hidden="true">V</span>
         <div className="auth-loading-spinner" />
         <p>Opening your family archive…</p>
       </main>
@@ -127,5 +127,5 @@ export default function AuthApp() {
     );
   }
 
-  return <App key={session.user.id} authUser={session.user} onLogout={logout} />;
+  return <TreeWorkspace key={session.user.id} user={session.user} onLogout={logout} />;
 }

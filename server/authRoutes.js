@@ -54,8 +54,8 @@ async function createSession(user, req, res) {
 async function claimLegacyTree(user) {
   if (user.role !== 'owner') return;
   await Promise.all([
-    Person.updateMany({ ownerId: null }, { $set: { ownerId: user._id } }),
-    TreeLayout.updateMany({ ownerId: null }, { $set: { ownerId: user._id } }),
+    Person.updateMany({ ownerId: null, treeId: null }, { $set: { ownerId: user._id } }),
+    TreeLayout.updateMany({ ownerId: null, treeId: null }, { $set: { ownerId: user._id } }),
   ]);
 }
 

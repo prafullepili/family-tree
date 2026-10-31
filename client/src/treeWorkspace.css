@@ -1,0 +1,31 @@
+.tree-workspace { --panel: #f7f8f5; --text: #22362c; --border: #ccd3cc; height: 100dvh; display: flex; flex-direction: column; }
+html[data-theme='dark'] .tree-workspace { --panel: #1e2822; --text: #eef4ef; --border: #39463e; }
+.workspace-content { flex: 1; min-height: 0; }
+.workspace-content > .family-app { height: 100%; min-height: 0; }
+.tree-workspace .simple-main { height: 100%; min-height: 0; }
+.tree-workspace .simple-canvas { min-height: 0; }
+.workspace-bar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--panel, #f7f8f5); color: var(--text, #22362c); border-bottom: 1px solid var(--border, #ccc); flex-shrink: 0; overflow-x: auto; }
+.workspace-bar label { display: flex; align-items: center; gap: 8px; }
+.workspace-bar button, .workspace-bar select, .workspace-panel button, .workspace-panel input, .workspace-panel select { font: inherit; color: inherit; background: var(--panel, #f7f8f5); border: 1px solid var(--border, #b8c4b9); border-radius: 8px; padding: 8px 10px; }
+.workspace-bar button { white-space: nowrap; }
+.workspace-bar select { max-width: 230px; }
+.workspace-role { text-transform: capitalize; font-size: 12px; padding: 4px 8px; border-radius: 12px; background: #7fae8c24; }
+.workspace-scrim { position: fixed; inset: 0; z-index: 200; background: #0005; border: 0; }
+.workspace-panel { position: fixed; inset: 0 0 0 auto; width: min(480px, 100%); z-index: 201; padding: 22px; overflow: auto; background: var(--panel, #f7f8f5); color: var(--text, #22362c); box-shadow: -8px 0 40px #0003; }
+.workspace-panel header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.workspace-panel h2 { font-size: 20px; }
+.workspace-panel h3 { font-size: 15px; margin-top: 24px; }
+.workspace-panel form { display: grid; gap: 12px; padding: 16px 0; }
+.workspace-panel label { display: grid; gap: 6px; font-size: 13px; }
+.workspace-panel input, .workspace-panel select { width: 100%; min-width: 0; }
+.workspace-panel p { font-size: 13px; line-height: 1.6; }
+.workspace-panel ul { padding: 0; list-style: none; }
+.workspace-panel li { display: flex; align-items: center; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--border, #ccd3cc); }
+.workspace-panel li > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.workspace-panel li select { width: 100px; }
+.workspace-panel small { display: block; opacity: .7; margin-top: 4px; }
+.workspace-error { color: #d05050; }
+.workspace-loading { padding: 40px; }
+.tree-workspace-viewer .tree-node-edit, .tree-workspace-viewer .tree-node-delete, .tree-workspace-viewer .tree-node-quick-add { display: none !important; }
+.tree-workspace-viewer .add-person-button, .tree-workspace-viewer .family-links-edit-button, .tree-workspace-viewer .arrange-family-button, .tree-workspace-viewer button[title='Import CSV or Excel'] { display: none !important; }
+@media (max-width: 600px) { .workspace-bar { padding: 6px 10px; gap: 6px; font-size: 12px; } .workspace-bar select { max-width: 150px; } .workspace-panel { padding: 16px; } }

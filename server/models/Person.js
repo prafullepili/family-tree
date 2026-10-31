@@ -3,6 +3,9 @@ import mongoose from 'mongoose';
 const PersonSchema = new mongoose.Schema(
   {
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+    treeId: { type: mongoose.Schema.Types.ObjectId, ref: 'FamilyTree', default: null, index: true },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, trim: true, default: '' },
     maidenName: { type: String, trim: true, default: '' },

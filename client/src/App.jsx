@@ -13,7 +13,7 @@ import { AppHeader, FamilySidebar } from './AppNavigation.jsx';
 import AppDialogs from './AppDialogs.jsx';
 import PersonDetailsPanel, { PersonModalDialog } from './PersonDetailsPanel.jsx';
 import TreePersonNode from './TreePersonNode.jsx';
-import { apiFetch, apiUrl, loadInitialFamilyData, loadRemoteFamilyData } from './apiClient.js';
+import { apiFetch as sharedApiFetch, apiUrl, loadInitialFamilyData, loadRemoteFamilyData } from './apiClient.js';
 import { FamilyBranchLinks, PersonAvatar } from './TreeRenderComponents.jsx';
 import { stepCanvasZoom } from './zoomMath.js';
 import {
@@ -39,8 +39,15 @@ import {
 
 export default function App({ authUser, onLogout }) {
   const [isCompactViewport, setIsCompactViewport] = useState(() => window.innerWidth <= 1050);
-  const cacheKey = mongoPeopleCacheKey(authUser?.id);
-  const [initialCache] = useState(() => readMongoPeopleCache(authUser?.id));
+  const workspaceKey = `${authUser?.id}:${authUser?.treeId}`;
+  const readOnly = authUser?.treeRole === 'viewer';
+  const apiFetch = (input, options = {}) => {
+    const headers = new Headers(options.headers || {});
+    headers.set('X-Tree-Id', authUser.treeId);
+    return sharedApiFetch(input, { ...options, headers });
+  };
+  const cacheKey = mongoPeopleCacheKey(workspaceKey);
+  const [initialCache] = useState(() => readMongoPeopleCache(workspaceKey));
   const [people, setPeople] = useState(() => initialCache.people);
   const [hasMongoSnapshot, setHasMongoSnapshot] = useState(initialCache.hasSnapshot);
   const memberList = useRef(null);
@@ -76,7 +83,8 @@ export default function App({ authUser, onLogout }) {
   const [highlightedLink, setHighlightedLink] = useState(null);
   const [highlightedNodeId, setHighlightedNodeId] = useState('');
   const [dismissedAboutTooltipId, setDismissedAboutTooltipId] = useState('');
-  const [movementLocked, setMovementLocked] = useState(() => storageGet('kinfolk-canvas-movement-locked-v2') === 'true');
+  const [movementUnlockedSetting, setMovementLocked] = useState(() => storageGet('kinfolk-canvas-movement-locked-v2') === 'true');
+  const movementLocked = readOnly || movementUnlockedSetting;
   const [marqueeRect, setMarqueeRect] = useState(null);
   const [phoneLayoutPreview, setPhoneLayoutPreview] = useState({});
   const [theme, setTheme] = useState(() => storageGet('kinfolk-theme') || 'light');
@@ -620,7 +628,7 @@ export default function App({ authUser, onLogout }) {
     (async () => {
       setIsRefreshing(true);
       try {
-        const result = await loadInitialFamilyData(authUser?.id);
+        const result = await loadInitialFamilyData(workspaceKey);
         if (result.mode === 'demo') {
           if (active) {
             setPeople(initialPeople());
@@ -741,6 +749,7 @@ export default function App({ authUser, onLogout }) {
     }
   }
   async function confirmDataImport() {
+    if (readOnly) return notify('This tree is read-only.');
     if (!pendingImport || isImporting) return;
     setIsImporting(true);
     try {
@@ -808,6 +817,7 @@ export default function App({ authUser, onLogout }) {
     return (await r.json()).map(fromApi);
   }
   async function saveMember(values) {
+    if (readOnly) return notify('This tree is read-only.');
     const prior = modal.person;
     const { childIds = [], childRelationships = [], ...memberValues } = values;
     const childRoleById = new Map(childRelationships.map((link) => [link.personId, link.role]));
@@ -943,6 +953,7 @@ export default function App({ authUser, onLogout }) {
     notify(prior ? 'Person updated for this browser' : 'Person added for this browser');
   }
   async function removePerson() {
+    if (readOnly) return notify('This tree is read-only.');
     if (!selected) return;
     const isBulkSelection = selectedNodeIds.length > 1;
     try {
@@ -1026,6 +1037,7 @@ export default function App({ authUser, onLogout }) {
         return;
       }
       const code = String(event.code || '').toLowerCase();
+      if (readOnly) return;
       if (!['delete', 'del', 'backspace'].includes(key) && !['delete', 'numpaddecimal'].includes(code) && event.keyCode !== 46) return;
       if (event.ctrlKey || event.metaKey || !state.selectedId) return;
       event.preventDefault();
@@ -1209,6 +1221,7 @@ export default function App({ authUser, onLogout }) {
     });
   }
   async function arrangeFamily() {
+    if (readOnly) return notify('This tree is read-only.');
     if (!treePeople.length || isArranging) return;
     setIsArranging(true);
     try {
@@ -1251,6 +1264,7 @@ export default function App({ authUser, onLogout }) {
     }
   }
   async function saveNamedLayout(event) {
+    if (readOnly) { event?.preventDefault(); return notify('This tree is read-only.'); }
     event.preventDefault();
     const name = layoutName.trim();
     if (!name || !treePeople.length || isSavingLayout) return;
@@ -1307,6 +1321,7 @@ export default function App({ authUser, onLogout }) {
     }
   }
   async function applyNamedLayout(savedLayout) {
+    if (readOnly) return notify('This tree is read-only.');
     if (applyingLayoutId) return;
     setApplyingLayoutId(savedLayout._id);
     try {
@@ -1348,6 +1363,7 @@ export default function App({ authUser, onLogout }) {
     }
   }
   async function removeNamedLayout(savedLayout) {
+    if (readOnly) return notify('This tree is read-only.');
     if (deletingLayoutId) return;
     setDeletingLayoutId(savedLayout._id);
     try {
@@ -1400,6 +1416,7 @@ export default function App({ authUser, onLogout }) {
     setSelectedNodeIds([]);
   }
   function openAddPersonForm() {
+    if (readOnly) return notify('This tree is read-only.');
     setModal({ inline: true });
     setDetailsOpen(true);
     if (window.innerWidth <= 1050) {
@@ -1408,6 +1425,7 @@ export default function App({ authUser, onLogout }) {
     }
   }
   function openQuickAdd(person, kind) {
+    if (readOnly) return notify('This tree is read-only.');
     const childRole = person.gender === 'male' ? 'Son' : person.gender === 'female' ? 'Daughter' : 'Child';
     const parentRole = person.gender === 'male' ? 'Father' : person.gender === 'female' ? 'Mother' : 'Parent';
     const partnerRole = person.gender === 'male' ? 'Husband' : person.gender === 'female' ? 'Wife' : 'Partner';
@@ -1474,10 +1492,12 @@ export default function App({ authUser, onLogout }) {
     }
   }
   function openPersonEditor(person) {
+    if (readOnly) return;
     openPersonDetails(person.id);
     setModal({ person, inline: true });
   }
   function openLinkEditor() {
+    if (readOnly) return;
     if (selected) setModal({ person: selected, inline: true, focusLinks: true });
   }
   function clearSelection() {
@@ -1488,6 +1508,7 @@ export default function App({ authUser, onLogout }) {
     setMobileDetailsOpen(false);
   }
   async function flushPositionSaves({ silent = false, keepalive = false } = {}) {
+    if (readOnly) return;
     if (positionSaveTimer.current) {
       clearTimeout(positionSaveTimer.current);
       positionSaveTimer.current = 0;
@@ -1499,7 +1520,7 @@ export default function App({ authUser, onLogout }) {
     try {
       const response = await apiFetch(apiUrl('/api/people/layout/positions'), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Tree-Id': authUser.treeId },
         body: JSON.stringify({ positions }),
         keepalive,
       });
@@ -2146,7 +2167,7 @@ export default function App({ authUser, onLogout }) {
           }
         }}
         onSavePerson={saveMember}
-        onEditPerson={() => setModal({ person: selected, inline: true })}
+        onEditPerson={() => { if (!readOnly) setModal({ person: selected, inline: true }); }}
         familyLinkGroups={familyLinkGroups}
         getPersonById={byId}
         onEditLinks={openLinkEditor}

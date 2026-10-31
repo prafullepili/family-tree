@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 const TreeLayoutSchema = new mongoose.Schema(
   {
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+    treeId: { type: mongoose.Schema.Types.ObjectId, ref: 'FamilyTree', default: null, index: true },
     name: { type: String, required: true, trim: true, maxlength: 60 },
     normalizedName: { type: String, required: true, trim: true },
     familyId: { type: String, required: true, trim: true },
@@ -18,6 +19,6 @@ const TreeLayoutSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-TreeLayoutSchema.index({ ownerId: 1, familyId: 1, normalizedName: 1 }, { unique: true });
+TreeLayoutSchema.index({ treeId: 1, familyId: 1, normalizedName: 1 }, { unique: true, partialFilterExpression: { treeId: { $type: 'objectId' } } });
 
 export default mongoose.model('TreeLayout', TreeLayoutSchema);

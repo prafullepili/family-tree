@@ -62,7 +62,23 @@ Person records include first, last, and maiden names; gender; birth and death da
 | PATCH | `/api/people/:id` | Update details and relationships |
 | DELETE | `/api/people/:id` | Delete a member and clean up references |
 
-Each account has a private family tree. Family image fields currently accept image URLs; local image uploads still require an object-storage provider.
+Each account starts with an owned family tree and can create additional trees or join shared trees by invitation. Family image fields currently accept image URLs; local image uploads still require an object-storage provider.
+
+### Shared family trees
+
+The tree selector above the canvas switches between owned and invited trees. People and saved views belong to a tree; access is checked on every API request using membership and the `X-Tree-Id` header.
+
+- **Owner:** edit the tree, invite people, change Editor/Viewer roles, revoke invitations, and remove members. The owner cannot be removed or downgraded through member management.
+- **Editor:** add/edit people and relationships, move nodes, import data, manage saved views, delete people, and restore them.
+- **Viewer:** browse and export tree data, view activity and the recycle bin; cannot change people, positions, views, or membership.
+
+Use **Members → Create invitation link** to invite an email address as Editor or Viewer. Share the generated link manually (no email provider is configured). Links expire after seven days, are stored as hashes, can be revoked, and can only be accepted once by an account with the invited email address. **Join tree** also accepts a pasted link or invitation code.
+
+**Activity** shows the latest 100 changes with the acting member and time. Deleted people go to **Recycle bin**; restoring preserves their stored positions and relationship references. Related deleted people must also be restored before their connections reappear. There is no automatic permanent deletion in this version.
+
+Existing account-owned people and saved views migrate idempotently into that account's first workspace when its tree list is opened. Legacy owner fields remain for migration compatibility. Deploy the API before the new frontend, since people/layout requests now require a selected tree.
+
+Run `npm test` for client, authentication, and collaboration tests. Collaboration tests start an isolated temporary MongoDB instance; the first run downloads a MongoDB binary and never uses `MONGODB_URI` or the live database.
 
 ## Authentication
 
