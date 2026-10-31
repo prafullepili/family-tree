@@ -379,10 +379,10 @@ export function fromApi(p) {
     color: ['sage', 'rose', 'blue', 'peach', 'lavender', 'yellow', 'mint', 'pink'][(p.firstName?.charCodeAt(0) || 0) % 8],
   };
 }
-export const mongoPeopleCacheKey = 'kinfolk-mongo-people-v1';
-export function readMongoPeopleCache() {
+export const mongoPeopleCacheKey = (userId) => `kinfolk-mongo-people-v2:${String(userId || 'anonymous')}`;
+export function readMongoPeopleCache(userId) {
   try {
-    const cached = JSON.parse(storageGet(mongoPeopleCacheKey));
+    const cached = JSON.parse(storageGet(mongoPeopleCacheKey(userId)));
     if (!Array.isArray(cached?.people)) return { people: [], hasSnapshot: false };
     return {
       people: cached.people.map((person) => fromApi({ ...person, _id: person._id || person.id })),

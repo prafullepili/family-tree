@@ -26,7 +26,7 @@ npm run dev:server
 npm run dev:client
 ```
 
-The frontend proxy forwards `/api` calls to Express on port 4000. If no MongoDB URI is configured, the app opens in demo mode with sample family records saved in the browser. When a URI is configured, MongoDB is the source of truth; if the database cannot be reached, the app shows an unavailable state instead of loading sample records. People, family links, and manually arranged node positions are stored in MongoDB.
+The frontend proxy forwards `/api` calls to Express on port 4000. MongoDB stores accounts, secure sessions, people, family links, layouts, and manually arranged node positions. If the database cannot be reached, the sign-in page shows the account service as unavailable instead of exposing cached family data.
 
 ## Production
 
@@ -62,4 +62,20 @@ Person records include first, last, and maiden names; gender; birth and death da
 | PATCH | `/api/people/:id` | Update details and relationships |
 | DELETE | `/api/people/:id` | Delete a member and clean up references |
 
-The site currently manages one family tree per deployment. Family image fields accept image URLs; local image uploads and family account/invitation management require a storage and authentication provider.
+Each account has a private family tree. Family image fields currently accept image URLs; local image uploads still require an object-storage provider.
+
+## Authentication
+
+Kinfolk supports account creation and sign-in with either an email/username and password or Google. Passwords are hashed with scrypt. Login sessions use random, server-stored tokens in `HttpOnly` cookies, and state-changing API requests require a per-session CSRF token.
+
+The first account created becomes the archive owner and automatically claims existing family records that predate authentication. Later accounts receive separate private trees. People, layouts, imports, and relationship updates are all scoped to the signed-in account.
+
+To enable Google sign-in:
+
+1. Create a Web application OAuth client in Google Cloud Console.
+2. Add `http://localhost:5173` and each deployed frontend URL to Authorized JavaScript origins.
+3. Set `GOOGLE_CLIENT_ID` in the API environment to the Web client ID.
+
+For a same-origin production deployment, keep `COOKIE_SAME_SITE=lax`. If the static frontend and API are hosted on different sites, set `CLIENT_ORIGIN` to the exact frontend origin (scheme and host, without a path), `COOKIE_SAME_SITE=none`, and `COOKIE_SECURE=true`. Cross-site session cookies are automatically marked `Partitioned` so browsers can keep them isolated to the frontend site. Multiple allowed frontend origins can be comma-separated in `CLIENT_ORIGIN`.
+
+Authentication environment variables are documented in `server/.env.example`. Never expose `MONGODB_URI` through Vite or commit a real `.env` file.

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 const PersonSchema = new mongoose.Schema(
   {
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, trim: true, default: '' },
     maidenName: { type: String, trim: true, default: '' },

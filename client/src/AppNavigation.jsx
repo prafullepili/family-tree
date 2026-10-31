@@ -1,5 +1,8 @@
+import { useEffect, useRef, useState } from 'react';
 import {
+  ChevronDown,
   GitFork,
+  LogOut,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
@@ -214,7 +217,26 @@ export function AppHeader({
   detailsVisible,
   onToggleDetails,
   onAddPerson,
+  authUser,
+  onLogout,
 }) {
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const accountRef = useRef(null);
+  useEffect(() => {
+    if (!accountOpen) return undefined;
+    const close = (event) => {
+      if (!accountRef.current?.contains(event.target)) setAccountOpen(false);
+    };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [accountOpen]);
+  const initials = String(authUser?.displayName || authUser?.username || 'You')
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
   return (
     <header className="simple-topbar">
       <div className="topbar-left">
@@ -267,6 +289,42 @@ export function AppHeader({
           <Plus size={16} />
           <span>Add person</span>
         </button>
+        <div className="account-menu" ref={accountRef}>
+          <button
+            type="button"
+            className={`account-menu-trigger ${accountOpen ? 'is-open' : ''}`}
+            onClick={() => setAccountOpen((open) => !open)}
+            aria-label="Open account menu"
+            aria-haspopup="menu"
+            aria-expanded={accountOpen}
+          >
+            {authUser?.avatarUrl ? <img src={authUser.avatarUrl} alt="" referrerPolicy="no-referrer" /> : <span>{initials}</span>}
+            <ChevronDown size={14} />
+          </button>
+          {accountOpen && (
+            <div className="account-menu-popover" role="menu">
+              <div className="account-menu-user">
+                {authUser?.avatarUrl ? <img src={authUser.avatarUrl} alt="" referrerPolicy="no-referrer" /> : <span>{initials}</span>}
+                <div>
+                  <strong>{authUser?.displayName || authUser?.username}</strong>
+                  <small>{authUser?.email}</small>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={loggingOut}
+                onClick={async () => {
+                  setLoggingOut(true);
+                  await onLogout?.();
+                }}
+              >
+                <LogOut size={15} />
+                {loggingOut ? 'Signing out…' : 'Sign out'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

@@ -13,7 +13,7 @@ import { AppHeader, FamilySidebar } from './AppNavigation.jsx';
 import AppDialogs from './AppDialogs.jsx';
 import PersonDetailsPanel, { PersonModalDialog } from './PersonDetailsPanel.jsx';
 import TreePersonNode from './TreePersonNode.jsx';
-import { apiUrl, loadInitialFamilyData, loadRemoteFamilyData } from './apiClient.js';
+import { apiFetch, apiUrl, loadInitialFamilyData, loadRemoteFamilyData } from './apiClient.js';
 import { FamilyBranchLinks, PersonAvatar } from './TreeRenderComponents.jsx';
 import { stepCanvasZoom } from './zoomMath.js';
 import {
@@ -37,9 +37,10 @@ import {
   year,
 } from './appHelpers.js';
 
-export default function App() {
+export default function App({ authUser, onLogout }) {
   const [isCompactViewport, setIsCompactViewport] = useState(() => window.innerWidth <= 1050);
-  const [initialCache] = useState(readMongoPeopleCache);
+  const cacheKey = mongoPeopleCacheKey(authUser?.id);
+  const [initialCache] = useState(() => readMongoPeopleCache(authUser?.id));
   const [people, setPeople] = useState(() => initialCache.people);
   const [hasMongoSnapshot, setHasMongoSnapshot] = useState(initialCache.hasSnapshot);
   const memberList = useRef(null);
@@ -591,7 +592,7 @@ export default function App() {
           .filter(Boolean)
           .join(','),
       );
-    fetch(apiUrl(`/api/layouts?${layoutQuery}`), { cache: 'no-store' })
+    apiFetch(apiUrl(`/api/layouts?${layoutQuery}`), { cache: 'no-store' })
       .then((response) => {
         if (!response.ok) throw Error();
         return response.json();
@@ -609,17 +610,17 @@ export default function App() {
   useEffect(() => {
     if (!['connected', 'offline'].includes(apiState) || !hasMongoSnapshot) return;
     try {
-      storageSet(mongoPeopleCacheKey, JSON.stringify({ people, updatedAt: Date.now() }));
+      storageSet(cacheKey, JSON.stringify({ people, updatedAt: Date.now() }));
     } catch {
       // The live MongoDB data remains available even if browser storage is full or disabled.
     }
-  }, [people, apiState, hasMongoSnapshot]);
+  }, [people, apiState, hasMongoSnapshot, cacheKey]);
   useEffect(() => {
     let active = true;
     (async () => {
       setIsRefreshing(true);
       try {
-        const result = await loadInitialFamilyData();
+        const result = await loadInitialFamilyData(authUser?.id);
         if (result.mode === 'demo') {
           if (active) {
             setPeople(initialPeople());
@@ -658,7 +659,7 @@ export default function App() {
       try {
         const rows = (await loadRemoteFamilyData()).map(fromApi);
         storageRemove('kinfolk-demo-people');
-        storageSet(mongoPeopleCacheKey, JSON.stringify({ people: rows, updatedAt: Date.now() }));
+        storageSet(cacheKey, JSON.stringify({ people: rows, updatedAt: Date.now() }));
         setPeople(rows);
         setHasMongoSnapshot(true);
         setSelectedId((selectedId) => (rows.some((person) => person.id === selectedId) ? selectedId : ''));
@@ -744,7 +745,7 @@ export default function App() {
     setIsImporting(true);
     try {
       if (apiState === 'connected') {
-        const response = await fetch(apiUrl('/api/people/import'), {
+        const response = await apiFetch(apiUrl('/api/people/import'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ people: pendingImport.people }),
@@ -802,7 +803,7 @@ export default function App() {
     setTimeout(() => setToast(''), 2600);
   }
   async function refreshPeople() {
-    const r = await fetch(apiUrl('/api/people'));
+    const r = await apiFetch(apiUrl('/api/people'));
     if (!r.ok) throw Error('Could not reload your family tree');
     return (await r.json()).map(fromApi);
   }
@@ -839,7 +840,7 @@ export default function App() {
             )
             .map((person) => ({ id: person._id, treeX: person.treeX, treeY: person.treeY }));
           if (positions.length) {
-            const response = await fetch(apiUrl('/api/people/layout/positions'), {
+            const response = await apiFetch(apiUrl('/api/people/layout/positions'), {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ positions }),
@@ -847,7 +848,7 @@ export default function App() {
             if (!response.ok) throw Error('Could not preserve the family positions');
           }
         }
-        const r = await fetch(apiUrl(prior ? `/api/people/${prior._id}` : '/api/people'), {
+        const r = await apiFetch(apiUrl(prior ? `/api/people/${prior._id}` : '/api/people'), {
           method: prior ? 'PATCH' : 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -868,7 +869,7 @@ export default function App() {
             const parentIds = nextChildIds.has(child.id) ? [...new Set([...(child.parentIds || []), saved.id])] : (child.parentIds || []).filter((id) => id !== saved.id);
             const role = childRoleById.get(child.id);
             const requestedGender = role === 'Son' ? 'male' : role === 'Daughter' ? 'female' : null;
-            const response = await fetch(apiUrl(`/api/people/${child._id}`), {
+            const response = await apiFetch(apiUrl(`/api/people/${child._id}`), {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ parentIds, ...(requestedGender ? { gender: requestedGender } : {}) }),
@@ -964,7 +965,7 @@ export default function App() {
         });
       if (apiState === 'connected') {
         const positions = rows.filter((person) => person._id).map((person) => ({ id: person._id, treeX: person.treeX, treeY: person.treeY }));
-        const saved = await fetch(apiUrl('/api/people/layout/positions'), {
+        const saved = await apiFetch(apiUrl('/api/people/layout/positions'), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ positions }),
@@ -972,7 +973,7 @@ export default function App() {
         if (!saved.ok) throw Error('Could not preserve the current tree layout');
         const ids = removedPeople.filter((person) => person._id).map((person) => person._id);
         if (ids.length) {
-          const response = await fetch(apiUrl('/api/people/batch'), {
+          const response = await apiFetch(apiUrl('/api/people/batch'), {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids }),
@@ -1223,7 +1224,7 @@ export default function App() {
             })();
       if (apiState === 'connected') {
         const databasePositions = arrangedPositions.map((position) => ({ ...position, id: people.find((person) => person.id === position.id)?._id })).filter((position) => position.id);
-        const response = await fetch(apiUrl('/api/people/layout/positions'), {
+        const response = await apiFetch(apiUrl('/api/people/layout/positions'), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ positions: databasePositions }),
@@ -1264,7 +1265,7 @@ export default function App() {
         .filter((position) => position?.personId);
       let saved;
       if (apiState === 'connected') {
-        const response = await fetch(apiUrl('/api/layouts'), {
+        const response = await apiFetch(apiUrl('/api/layouts'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, familyId: layoutScopeId, familyName: selectedFamily?.name || 'All families', positions }),
@@ -1320,7 +1321,7 @@ export default function App() {
       const availablePositions = positions.filter((position) => currentIds.has(position.id));
       if (!availablePositions.length) throw Error('No matching people remain in this saved view');
       if (apiState === 'connected') {
-        const response = await fetch(apiUrl('/api/people/layout/positions'), {
+        const response = await apiFetch(apiUrl('/api/people/layout/positions'), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ positions: availablePositions }),
@@ -1351,7 +1352,7 @@ export default function App() {
     setDeletingLayoutId(savedLayout._id);
     try {
       if (apiState === 'connected') {
-        const response = await fetch(apiUrl(`/api/layouts/${savedLayout._id}`), { method: 'DELETE' });
+        const response = await apiFetch(apiUrl(`/api/layouts/${savedLayout._id}`), { method: 'DELETE' });
         if (!response.ok) throw Error((await response.json().catch(() => null))?.error || 'Could not remove this saved view');
       } else {
         let allLayouts = [];
@@ -1496,7 +1497,7 @@ export default function App() {
     pendingPositionSaves.current.clear();
     const message = positionSaveMessage.current;
     try {
-      const response = await fetch(apiUrl('/api/people/layout/positions'), {
+      const response = await apiFetch(apiUrl('/api/people/layout/positions'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ positions }),
@@ -1862,6 +1863,8 @@ export default function App() {
           isRefreshing={isRefreshing}
           onRefresh={refreshFromDatabase}
           detailsVisible={window.innerWidth <= 1050 ? mobileDetailsOpen : detailsOpen}
+          authUser={authUser}
+          onLogout={onLogout}
           onToggleDetails={() => {
             if (window.innerWidth <= 1050) {
               setSidebarOpen(false);
