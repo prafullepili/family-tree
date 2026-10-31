@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ChevronDown,
-  GitFork,
   LogOut,
   Moon,
   PanelLeftClose,
@@ -16,6 +15,7 @@ import {
 } from 'lucide-react';
 import { fullName } from './appHelpers.js';
 import { PersonAvatar } from './TreeRenderComponents.jsx';
+import VanshLinkLogo from './VanshLinkLogo.jsx';
 
 function FamilyFilter({ value, options, onChange, label }) {
   return (
@@ -68,9 +68,9 @@ export function FamilySidebar({
       <aside className="simple-sidebar">
         <div className="simple-brand">
           <div className="simple-brand-mark">
-            <GitFork size={18} />
+            <VanshLinkLogo size={24} />
           </div>
-          <span>kinfolk</span>
+          <span>VanshLink</span>
           <button className="plain-icon hide-sidebar" onClick={onClose} aria-label="Close sidebar">
             <PanelLeftClose size={17} />
           </button>
@@ -249,7 +249,7 @@ export function AppHeader({
           {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
         </button>
         <div className="topbar-title">
-          <span>FAMILY TREE</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><VanshLinkLogo size={18} /> VANSHLINK</span>
           <h1>{treeName}</h1>
         </div>
       </div>

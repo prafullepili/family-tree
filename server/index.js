@@ -361,4 +361,4 @@ if (process.env.MONGODB_URI)
       console.log(`MongoDB connected to ${mongoose.connection.name}`);
     })
     .catch((err) => console.error('MongoDB connection failed:', err.message));
-app.listen(port, () => console.log(`Kinfolk API listening on ${port}`));
+app.listen(port, () => console.log(`VanshLink API listening on ${port}`));

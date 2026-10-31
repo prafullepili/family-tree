@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Eye, EyeOff, GitFork, LockKeyhole, Mail, Moon, ShieldCheck, Sparkles, Sun, UserRound } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, Moon, ShieldCheck, Sparkles, Sun, UserRound } from 'lucide-react';
+import VanshLinkLogo from './VanshLinkLogo.jsx';
 
 function FamilyConstellation() {
   return (
@@ -151,8 +152,8 @@ export default function LoginPage({ error, googleClientId, theme, onThemeChange,
       <section className="auth-shell">
         <aside className="auth-story-panel">
           <div className="auth-brand auth-brand-light">
-            <span><GitFork size={19} /></span>
-            kinfolk
+            <span><VanshLinkLogo size={26} /></span>
+            VanshLink
           </div>
           <div className="auth-story-copy">
             <span className="auth-eyebrow"><Sparkles size={14} /> Your private family archive</span>
@@ -165,13 +166,13 @@ export default function LoginPage({ error, googleClientId, theme, onThemeChange,
 
         <section className={`auth-form-panel ${mode === 'register' ? 'is-register' : ''}`}>
           <div className="auth-mobile-brand auth-brand">
-            <span><GitFork size={18} /></span>
-            kinfolk
+            <span><VanshLinkLogo size={26} /></span>
+            VanshLink
           </div>
           <div className="auth-form-content">
             <div className="auth-form-heading">
               <span>{mode === 'login' ? 'WELCOME BACK' : 'START YOUR ARCHIVE'}</span>
-              <h2>{mode === 'login' ? 'Sign in to your family tree' : 'Create your Kinfolk account'}</h2>
+              <h2>{mode === 'login' ? 'Sign in to your family tree' : 'Create your VanshLink account'}</h2>
               <p>{mode === 'login' ? 'Continue where your family story left off.' : 'Create a secure home for your family history.'}</p>
             </div>
 
@@ -234,7 +235,7 @@ export default function LoginPage({ error, googleClientId, theme, onThemeChange,
             </form>
 
             <p className="auth-mode-switch">
-              {mode === 'login' ? 'New to Kinfolk?' : 'Already have an account?'}{' '}
+              {mode === 'login' ? 'New to VanshLink?' : 'Already have an account?'}{' '}
               <button
                 type="button"
                 onClick={() => {

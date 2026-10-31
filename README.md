@@ -1,4 +1,4 @@
-# Kinfolk family archive
+# VanshLink — Connecting generations
 
 A responsive family history website built as two npm workspace packages:
 
@@ -66,7 +66,7 @@ Each account has a private family tree. Family image fields currently accept ima
 
 ## Authentication
 
-Kinfolk supports account creation and sign-in with either an email/username and password or Google. Passwords are hashed with scrypt. Login sessions use random, server-stored tokens in `HttpOnly` cookies, and state-changing API requests require a per-session CSRF token.
+VanshLink supports account creation and sign-in with either an email/username and password or Google. Passwords are hashed with scrypt. Login sessions use random, server-stored tokens in `HttpOnly` cookies, and state-changing API requests require a per-session CSRF token.
 
 The first account created becomes the archive owner and automatically claims existing family records that predate authentication. Later accounts receive separate private trees. People, layouts, imports, and relationship updates are all scoped to the signed-in account.
 

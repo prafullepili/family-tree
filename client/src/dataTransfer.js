@@ -131,7 +131,7 @@ export async function exportExcelFile(people, columns) {
   const excelModule = await import('exceljs');
   const ExcelJS = excelModule.default || excelModule;
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'Kinfolk';
+  workbook.creator = 'VanshLink';
   const sheet = workbook.addWorksheet('Family Tree', { views: [{ state: 'frozen', ySplit: 1 }] });
   sheet.columns = columns.map((header) => ({ header, key: header, width: Math.min(42, Math.max(13, header.length + 3)) }));
   dataRows(people).forEach((row) => sheet.addRow(row));
