@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import App from './App.jsx';
+import WorkspaceHeaderActions from './WorkspaceHeaderActions.jsx';
 import { apiFetch, apiUrl, setActiveTreeId, resetFamilyDataRequest } from './apiClient.js';
 import './treeWorkspace.css';
 
@@ -73,20 +74,8 @@ export default function TreeWorkspace({ user, onLogout }) {
   const title = { members: 'Members & invitations', activity: 'Activity history', 'recycle-bin': 'Recycle bin', create: 'Create a family tree', join: 'Accept invitation' }[panel];
   return (
     <div className={`tree-workspace ${active?.role === 'viewer' ? 'tree-workspace-viewer' : ''}`}>
-      <nav className="workspace-bar" aria-label="Family tree workspace" inert={panel ? '' : undefined}>
-        <label>Tree <select aria-label="Choose family tree" value={active?.id || ''} onChange={(e) => selectTree(trees.find((t) => t.id === e.target.value))}>
-          {!active && <option value="">Loading trees…</option>}
-          {trees.map((tree) => <option key={tree.id} value={tree.id}>{tree.name}</option>)}
-        </select></label>
-        {active && <span className="workspace-role">{active.role}</span>}
-        <button onClick={() => setPanel('create')}>New tree</button>
-        <button onClick={() => setPanel('join')}>Join tree</button>
-        <button disabled={!active} onClick={() => setPanel('members')}>Members</button>
-        <button disabled={!active} onClick={() => setPanel('activity')}>Activity</button>
-        <button disabled={!active} onClick={() => setPanel('recycle-bin')}>Recycle bin</button>
-      </nav>
       {!active && <div className="workspace-loading">{error || 'Opening your family trees…'}{error && <button onClick={() => loadTrees().catch((e) => setError(e.message))}>Retry</button>}</div>}
-      {active && <div className="workspace-content" inert={panel ? '' : undefined}><App key={`${active.id}:${canvasRevision}`} authUser={{ ...user, treeId: active.id, treeRole: active.role }} onLogout={onLogout} /></div>}
+      {active && <div className="workspace-content" inert={panel ? '' : undefined}><App key={`${active.id}:${canvasRevision}`} authUser={{ ...user, treeId: active.id, treeRole: active.role }} onLogout={onLogout} workspaceActions={<WorkspaceHeaderActions trees={trees} active={active} onSelectTree={selectTree} onOpenPanel={setPanel} />} /></div>}
       {panel && <>
         <button className="workspace-scrim" aria-label="Close tree panel" onClick={() => setPanel('')} />
         <aside ref={panelRef} className="workspace-panel" role="dialog" aria-modal="true" aria-label={title} onKeyDown={(event) => {

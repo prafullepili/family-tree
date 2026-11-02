@@ -37,7 +37,7 @@ import {
   year,
 } from './appHelpers.js';
 
-export default function App({ authUser, onLogout }) {
+export default function App({ authUser, onLogout, workspaceActions }) {
   const [isCompactViewport, setIsCompactViewport] = useState(() => window.innerWidth <= 1050);
   const workspaceKey = `${authUser?.id}:${authUser?.treeId}`;
   const readOnly = authUser?.treeRole === 'viewer';
@@ -1858,6 +1858,7 @@ export default function App({ authUser, onLogout }) {
       )}
       <main className="simple-main">
         <AppHeader
+          workspaceActions={workspaceActions}
           sidebarOpen={sidebarOpen}
           onSidebarOpenChange={(open) => {
             setSidebarOpen(open);

@@ -201,6 +201,7 @@ export function FamilySidebar({
 }
 
 export function AppHeader({
+  workspaceActions,
   sidebarOpen,
   onSidebarOpenChange,
   treeName,
@@ -238,7 +239,7 @@ export function AppHeader({
     .join('')
     .toUpperCase();
   return (
-    <header className="simple-topbar">
+    <header className={`simple-topbar ${workspaceActions ? 'has-workspace-actions' : ''}`}>
       <div className="topbar-left">
         <button
           className="plain-icon open-sidebar"
@@ -253,6 +254,7 @@ export function AppHeader({
           <h1>{treeName}</h1>
         </div>
       </div>
+      {workspaceActions}
       <div className="topbar-actions">
         <label className="header-member-search">
           <FamilyFilter value={memberFamilyFilter} options={memberFamilyOptions} onChange={onMemberFamilyFilterChange} label="Search within family group" />
