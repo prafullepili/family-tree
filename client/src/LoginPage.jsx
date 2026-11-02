@@ -194,14 +194,14 @@ export default function LoginPage({ error, googleClientId, theme, onThemeChange,
                     <span>Your name</span>
                     <span className="auth-input-wrap">
                       <UserRound size={17} />
-                      <input value={values.displayName} onChange={update('displayName')} autoComplete="name" placeholder="Prafull Epili" maxLength={80} required />
+                      <input value={values.displayName} onChange={update('displayName')} autoComplete="name" placeholder="Enter your full name" maxLength={80} required />
                     </span>
                   </label>
                   <label className="auth-field">
                     <span>Username</span>
                     <span className="auth-input-wrap auth-username-wrap">
                       <span className="auth-at">@</span>
-                      <input value={values.username} onChange={update('username')} autoComplete="username" placeholder="prafull.epili" minLength={3} maxLength={30} pattern="[A-Za-z0-9][A-Za-z0-9._-]{1,28}[A-Za-z0-9]" required />
+                      <input value={values.username} onChange={update('username')} autoComplete="username" placeholder="Choose a username" minLength={3} maxLength={30} pattern="[A-Za-z0-9][A-Za-z0-9._-]{1,28}[A-Za-z0-9]" required />
                     </span>
                   </label>
                   <label className="auth-field">
