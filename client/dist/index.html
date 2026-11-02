@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/family-tree/vanshlink.svg" />
-    <meta name="theme-color" content="#f7f8f5" />
+    <meta name="theme-color" content="#1b211e" />
     <title>VanshLink — Connecting generations</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,9 +19,9 @@
       html[data-theme="dark"] #boot-screen { color: #eef2ee; background: #1b211e; }
     </style>
     <script>
-      try { if (localStorage.getItem('kinfolk-theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch {}
+      try { document.documentElement.dataset.theme = localStorage.getItem('kinfolk-theme') === 'light' ? 'light' : 'dark'; } catch {}
     </script>
-    <script type="module" crossorigin src="/family-tree/assets/index-DQTE8lfr.js"></script>
+    <script type="module" crossorigin src="/family-tree/assets/index-Bzr71Qf7.js"></script>
     <link rel="stylesheet" crossorigin href="/family-tree/assets/index-DRWJeMgC.css">
   </head>
   <body>

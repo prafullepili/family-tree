@@ -23,9 +23,9 @@ export default function AuthApp() {
   }
   const [theme, setTheme] = useState(() => {
     try {
-      return localStorage.getItem('kinfolk-theme') === 'dark' ? 'dark' : 'light';
+      return localStorage.getItem('kinfolk-theme') === 'light' ? 'light' : 'dark';
     } catch {
-      return 'light';
+      return 'dark';
     }
   });
 

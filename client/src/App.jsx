@@ -87,7 +87,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
   const movementLocked = readOnly || movementUnlockedSetting;
   const [marqueeRect, setMarqueeRect] = useState(null);
   const [phoneLayoutPreview, setPhoneLayoutPreview] = useState({});
-  const [theme, setTheme] = useState(() => storageGet('kinfolk-theme') || 'light');
+  const [theme, setTheme] = useState(() => storageGet('kinfolk-theme') === 'light' ? 'light' : 'dark');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const canvasHelpRef = useRef(null);
