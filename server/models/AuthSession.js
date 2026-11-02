@@ -8,6 +8,7 @@ const AuthSessionSchema = new mongoose.Schema(
     expiresAt: { type: Date, required: true, index: { expires: 0 } },
     lastSeenAt: { type: Date, default: Date.now },
     userAgent: { type: String, default: '', maxlength: 300 },
+    passwordVersion: { type: Number, default: 0 },
   },
   { timestamps: true },
 );

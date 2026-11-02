@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, Moon, ShieldCheck, Sparkles, Sun, UserRound } from 'lucide-react';
 import VanshLinkLogo from './VanshLinkLogo.jsx';
+import PasswordRecovery from './PasswordRecovery.jsx';
+import { loadGoogleIdentity } from './googleIdentity.js';
 
 function FamilyConstellation() {
   return (
@@ -71,11 +73,15 @@ function PasswordField({ value, onChange, autoComplete }) {
   );
 }
 
-export default function LoginPage({ error, googleClientId, theme, onThemeChange, onLogin, onRegister, onGoogle, onRetry }) {
+export default function LoginPage({ error, googleClientId, theme, onThemeChange, onLogin, onRegister, onGoogle, onRetry, resetToken = '', onResetComplete, onExitRecovery }) {
+  const [recovering, setRecovering] = useState(Boolean(resetToken));
   const [mode, setMode] = useState('login');
   const [values, setValues] = useState({ displayName: '', username: '', email: '', identity: '', password: '' });
   const [pending, setPending] = useState(false);
   const [localError, setLocalError] = useState('');
+  const [googleError, setGoogleError] = useState('');
+  const [googleReady, setGoogleReady] = useState(false);
+  const [googleAttempt, setGoogleAttempt] = useState(0);
   const googleButtonRef = useRef(null);
   const googleHandlerRef = useRef(onGoogle);
   googleHandlerRef.current = onGoogle;
@@ -83,6 +89,8 @@ export default function LoginPage({ error, googleClientId, theme, onThemeChange,
   useEffect(() => {
     if (!googleClientId || !googleButtonRef.current) return undefined;
     let cancelled = false;
+    setGoogleReady(false);
+    setGoogleError('');
     const render = () => {
       if (cancelled || !window.google?.accounts?.id || !googleButtonRef.current) return;
       googleButtonRef.current.replaceChildren();
@@ -108,23 +116,13 @@ export default function LoginPage({ error, googleClientId, theme, onThemeChange,
         text: 'continue_with',
         width: Math.min(380, googleButtonRef.current.clientWidth || 380),
       });
+      setGoogleReady(true);
     };
-    const existing = document.getElementById('google-identity-services');
-    if (existing) render();
-    else {
-      const script = document.createElement('script');
-      script.id = 'google-identity-services';
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.async = true;
-      script.defer = true;
-      script.onload = render;
-      script.onerror = () => setLocalError('Google sign-in could not be loaded. You can still use your password.');
-      document.head.appendChild(script);
-    }
+    loadGoogleIdentity().then(() => { if (!cancelled) render(); }).catch((error) => { if (!cancelled) setGoogleError(error.message); });
     return () => {
       cancelled = true;
     };
-  }, [googleClientId]);
+  }, [googleClientId, recovering, googleAttempt]);
 
   function update(field) {
     return (valueOrEvent) => setValues((current) => ({ ...current, [field]: valueOrEvent?.target ? valueOrEvent.target.value : valueOrEvent }));
@@ -170,13 +168,18 @@ export default function LoginPage({ error, googleClientId, theme, onThemeChange,
             VanshLink
           </div>
           <div className="auth-form-content">
+            {recovering ? <PasswordRecovery token={resetToken} onResetComplete={onResetComplete} onBack={() => { setRecovering(false); onExitRecovery?.(); }} /> : <>
             <div className="auth-form-heading">
               <span>{mode === 'login' ? 'WELCOME BACK' : 'START YOUR ARCHIVE'}</span>
               <h2>{mode === 'login' ? 'Sign in to your family tree' : 'Create your VanshLink account'}</h2>
               <p>{mode === 'login' ? 'Continue where your family story left off.' : 'Create a secure home for your family history.'}</p>
             </div>
 
-            {googleClientId ? <div ref={googleButtonRef} className={`auth-google-button ${pending ? 'is-disabled' : ''}`} aria-label="Google sign in" /> : (
+            {googleClientId ? <>
+              <div ref={googleButtonRef} className={`auth-google-button ${pending ? 'is-disabled' : ''}`} aria-label="Google sign in" />
+              {!googleReady && !googleError && <p role="status">Loading Google sign-in…</p>}
+              {googleError && <div className="auth-error" role="alert"><span>{googleError}</span><button type="button" onClick={() => setGoogleAttempt((value) => value + 1)}>Retry Google sign-in</button></div>}
+            </> : (
               <button type="button" className="auth-google-placeholder" disabled title="Set GOOGLE_CLIENT_ID on the API to enable Google sign-in">
                 <strong>G</strong> Continue with Google
               </button>
@@ -220,6 +223,7 @@ export default function LoginPage({ error, googleClientId, theme, onThemeChange,
                 </label>
               )}
               <PasswordField value={values.password} onChange={update('password')} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+              {mode === 'login' && <button className="auth-forgot-password" type="button" disabled={pending} onClick={() => { setLocalError(''); setRecovering(true); }}>Forgot password?</button>}
 
               {visibleError && (
                 <div className="auth-error" role="alert">
@@ -247,6 +251,7 @@ export default function LoginPage({ error, googleClientId, theme, onThemeChange,
                 {mode === 'login' ? 'Create an account' : 'Sign in instead'}
               </button>
             </p>
+            </>}
           </div>
           <footer className="auth-footer">Secure sessions · Private family records</footer>
         </section>

@@ -14,6 +14,13 @@ export default function AuthApp() {
   const [status, setStatus] = useState('checking');
   const [authError, setAuthError] = useState('');
   const [googleClientId, setGoogleClientId] = useState('');
+  const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('reset-password') || '');
+  function clearResetLink() {
+    setResetToken('');
+    const url = new URL(window.location.href);
+    url.hash = '';
+    window.history.replaceState(null, '', url);
+  }
   const [theme, setTheme] = useState(() => {
     try {
       return localStorage.getItem('kinfolk-theme') === 'dark' ? 'dark' : 'light';
@@ -112,9 +119,17 @@ export default function AuthApp() {
     );
   }
 
-  if (status !== 'signed-in' || !session?.user) {
+  if (resetToken || status !== 'signed-in' || !session?.user) {
     return (
       <LoginPage
+        resetToken={resetToken}
+        onResetComplete={() => {
+          clearSession();
+          const url = new URL(window.location.href);
+          url.hash = '';
+          window.history.replaceState(null, '', url);
+        }}
+        onExitRecovery={clearResetLink}
         error={authError}
         googleClientId={googleClientId}
         theme={theme}

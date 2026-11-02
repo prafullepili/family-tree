@@ -12,6 +12,10 @@ const UserSchema = new mongoose.Schema(
     avatarUrl: { type: String, trim: true, default: '' },
     role: { type: String, enum: ['owner', 'member'], default: 'member' },
     lastLoginAt: { type: Date, default: null },
+    passwordVersion: { type: Number, default: 0 },
+    resetTokenHash: { type: String, select: false },
+    resetTokenExpiresAt: { type: Date, select: false },
+    resetRequestedAt: { type: Date, select: false },
   },
   { timestamps: true },
 );

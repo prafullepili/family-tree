@@ -1,6 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
 
 /* Authentication */
+.auth-forgot-password { justify-self: end; border: 0; padding: 2px 0; background: none; color: var(--auth-accent-dark); font: inherit; font-size: 13px; cursor: pointer; }
+.auth-forgot-password:hover { text-decoration: underline; }
+.auth-recovery-success { padding: 16px; border: 1px solid var(--auth-border); border-radius: 12px; background: var(--auth-field); color: var(--auth-text); line-height: 1.6; font-size: 14px; }
 .auth-page,
 .auth-loading {
   --auth-bg: #f1f3ee;

@@ -1,5 +1,18 @@
 # VanshLink — Connecting generations
 
+### Server structure
+
+- `server/index.js`: process startup and MongoDB connection.
+- `server/app.js`: Express setup and router mounting.
+- `server/routes/`: auth, trees, people, saved views, and health endpoint definitions.
+- `server/controllers/`: request validation and response handling.
+- `server/middleware/`: sessions, CSRF checks, rate limiting, tree permissions, CORS, auditing, and errors.
+- `server/services/`: session creation, legacy-tree migration, activity recording, and relationship synchronization.
+- `server/config/`: environment loading and database index initialization.
+- `server/models/`: MongoDB schemas.
+
+The root `authRoutes.js` and `treeAccess.js` modules retain compatibility exports. Existing API paths and startup commands are unchanged.
+
 A responsive family history website built as two npm workspace packages:
 
 - `client` — React and Vite website
@@ -63,6 +76,20 @@ Person records include first, last, and maiden names; gender; birth and death da
 | DELETE | `/api/people/:id` | Delete a member and clean up references |
 
 Each account starts with an owned family tree and can create additional trees or join shared trees by invitation. Family image fields currently accept image URLs; local image uploads still require an object-storage provider.
+
+### Password recovery
+
+The sign-in page includes **Forgot password?**. Users receive a single-use reset link that expires after 30 minutes. Resetting a password signs out existing sessions. Recovery responses do not disclose whether an email address is registered, and requests are rate limited.
+
+Email delivery uses Resend. Configure these variables on the API server (Render Environment for production):
+
+```env
+PUBLIC_APP_URL=https://prafullepili.github.io/family-tree/
+RESEND_API_KEY=your_resend_api_key
+EMAIL_FROM=VanshLink <accounts@your-verified-domain.com>
+```
+
+Use a sender address on a domain verified with your email provider. Keep these credentials on the server. For local testing, use `PUBLIC_APP_URL=http://localhost:5173/family-tree/`. Recovery reports that it is unavailable if email delivery settings are missing. Reset links put the token in the URL fragment so it is not sent to the static hosting server. Automated tests mock email delivery and use a temporary database; no real reset emails are sent by tests.
 
 ### Shared family trees
 
