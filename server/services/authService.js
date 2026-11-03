@@ -15,6 +15,7 @@ export async function createSession(user, req, res) {
   });
   await AuthSession.create({
     userId: user._id,
+    passwordVersion: user.passwordVersion || 0,
     tokenHash: hashToken(token),
     csrfToken,
     expiresAt: new Date(Date.now() + SESSION_MAX_AGE_MS),

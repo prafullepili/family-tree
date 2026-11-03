@@ -1,4 +1,10 @@
-const API_BASE_URL = String(import.meta.env?.VITE_API_URL || (import.meta.env?.PROD ? 'https://family-tree-t6j3.onrender.com' : '')).replace(/\/$/, '');
+import { resolveApiBaseUrl } from './apiBaseUrl.js';
+
+const API_BASE_URL = resolveApiBaseUrl({
+  hostname: typeof window !== 'undefined' ? window.location?.hostname : '',
+  configuredUrl: import.meta.env?.VITE_API_URL,
+  production: import.meta.env?.PROD,
+});
 
 export const apiUrl = (path) => `${API_BASE_URL}${path}`;
 

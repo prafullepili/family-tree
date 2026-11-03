@@ -348,6 +348,13 @@ client/
     useFamilyLinkGroups.js Categorized person relationships
     useFamilyMemberSearch.js Family filters and member search
     useCanvasFullscreen.js Native fullscreen and mobile fallback
+    createDataTransferActions.js CSV, Excel, and SVG import/export actions
+    createSavedViewActions.js Save, restore, and remove named tree views
+    useTreeCanvasLayout.js Canvas bounds, mobile previews, and layout geometry
+    createCanvasNavigation.js Zoom, fit, and person focus actions
+    createPersonActions.js Person saves, relationship updates, and deletion
+    createPersonNavigation.js Selection, editors, and quick-add shortcuts
+    useDetailsPanelResize.js Details panel width, pointer, and keyboard resizing
     FamilyConstellation.jsx Login-page tree illustration
     PasswordField.jsx     Password input and visibility toggle
     apiClient.js          API, session, and selected-tree request helpers

@@ -1,3 +1,10 @@
+import useDetailsPanelResize from './useDetailsPanelResize.js';
+import createPersonNavigation from './createPersonNavigation.js';
+import createPersonActions from './createPersonActions.js';
+import useTreeCanvasLayout from './useTreeCanvasLayout.js';
+import createCanvasNavigation from './createCanvasNavigation.js';
+import createDataTransferActions from './createDataTransferActions.js';
+import createSavedViewActions from './createSavedViewActions.js';
 import useTreeHighlights from './useTreeHighlights.js';
 import useFamilyLinkGroups from './useFamilyLinkGroups.js';
 import useFamilyMemberSearch from './useFamilyMemberSearch.js';
@@ -9,7 +16,6 @@ import {
 } from 'lucide-react';
 import { initialPeople } from './demoFamily.js';
 import { layoutTree, resolveNodeOverlaps } from './layoutTree.js';
-import { relationshipPlacement } from './relationshipPlacement.js';
 import { CanvasHelp, SelectionToolbar, TreeStatus } from './CanvasSupport.jsx';
 import TreeToolbar from './TreeToolbar.jsx';
 import TreeSettingsControls, { DATA_COLUMNS } from './TreeSettingsControls.jsx';
@@ -19,7 +25,6 @@ import PersonDetailsPanel, { PersonModalDialog } from './PersonDetailsPanel.jsx'
 import TreeNodeLayer from './TreeNodeLayer.jsx';
 import { apiFetch as sharedApiFetch, apiUrl, loadInitialFamilyData, loadRemoteFamilyData } from './apiClient.js';
 import TreeConnections from './TreeConnections.jsx';
-import { stepCanvasZoom } from './zoomMath.js';
 import {
   applyDragPositions,
   compactDashboardPositions,
@@ -107,11 +112,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
   const settingsControlRef = useRef(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
-  const [detailsWidth, setDetailsWidth] = useState(() => {
-    const saved = Number(storageGet('kinfolk-details-width'));
-    return Number.isFinite(saved) && saved >= 286 && saved <= 620 ? saved : 390;
-  });
-  const detailsResize = useRef(null);
+  const { detailsWidth, beginDetailsResize, moveDetailsResize, endDetailsResize, handleDetailsResizeKey } = useDetailsPanelResize();
   const [zoom, setZoom] = useState(() => {
     const saved = Number(storageGet(window.innerWidth <= 1050 ? 'kinfolk-phone-zoom-v1' : 'kinfolk-site-zoom-v1'));
     return Number.isFinite(saved) && saved >= 0.1 && saved <= 2 ? saved : 1;
@@ -158,6 +159,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
   const importFileRef = useRef(null);
   const families = useMemo(() => getFamilyGroups(people), [people]);
   const selectedFamily = selectedFamilyId === '__all__' ? null : families.find((group) => group.id === selectedFamilyId) || [...families].sort((a, b) => b.people.length - a.people.length)[0];
+  const treeName = selectedFamilyId === '__all__' ? 'All families' : selectedFamily?.name || 'Your family';
   const familyPeople = selectedFamilyId === '__all__' ? people : selectedFamily?.people || people;
   const familyPeopleIdentity = familyPeople
     .map((person) => String(person._id || person.id))
@@ -172,44 +174,47 @@ export default function App({ authUser, onLogout, workspaceActions }) {
   const selected = people.find((p) => p.id === selectedId) || null;
   const byId = (id) => people.find((p) => p.id === id);
   const { familyLinkGroups } = useFamilyLinkGroups(people, selected);
-  const layoutPeople = useMemo(() => {
-    if (!isCompactViewport || !Object.keys(phoneLayoutPreview).length) return treePeople;
-    return treePeople.map((person) => {
-      const preview = phoneLayoutPreview[person.id];
-      return preview ? { ...person, treeX: preview.treeX, treeY: preview.treeY } : person;
-    });
-  }, [treePeople, isCompactViewport, phoneLayoutPreview]);
-  const cardWidth = 196;
-  const cardHeight = 76;
-  const layout = useMemo(() => layoutTree(layoutPeople, { nodeWidth: cardWidth, nodeHeight: cardHeight }), [layoutPeople, cardWidth, cardHeight]);
-  const layoutRef = useRef(layout);
-  layoutRef.current = layout;
-  const layoutPositions = [...layout.positions.values()];
-  const minNodeX = layoutPositions.length ? Math.min(...layoutPositions.map((position) => position.x)) : 0;
-  const minNodeY = layoutPositions.length ? Math.min(...layoutPositions.map((position) => position.y)) : 0;
-  const maxNodeX = layoutPositions.length ? Math.max(...layoutPositions.map((position) => position.x + position.w)) : layout.width;
-  const maxNodeY = layoutPositions.length ? Math.max(...layoutPositions.map((position) => position.y + position.h)) : layout.height;
-  const treeBaseWidth = Math.max(800, ...layoutPositions.map((position) => position.automaticX + layout.originX + position.w + 60));
-  const treeBaseHeight = Math.max(300, ...layoutPositions.map((position) => position.automaticY + layout.originY + position.h + 100));
-  // Manual dragging can put nodes above/left of the automatic layout's origin.
-  // Add canvas space for those coordinates so zooming never clips a moved node.
-  const treeBoardOffsetX = Math.max(0, 60 - minNodeX);
-  const treeBoardOffsetY = Math.max(0, 56 - minNodeY);
-  const treePaddingX = treeViewportWidth / 2;
-  const treePaddingY = treeViewportHeight / 2;
-  const maxCanvasZoom = Math.max(0.1, Math.min(2, (treeViewportWidth - 24) / cardWidth));
-  const treeBoardWidth = Math.max(layout.width, maxNodeX) + treeBoardOffsetX;
-  const treeBoardHeight = Math.max(layout.height, maxNodeY) + treeBoardOffsetY;
-  const treeContentWidth = treeBoardWidth * zoom;
-  // Keep the automatic layout's origin fixed as manually moved nodes expand
-  // the canvas. Scroll padding cancels the changing origin so dragging keeps
-  // tracking the pointer at every edge.
-  const treeBoardLeft = treePaddingX + treeBoardOffsetX * zoom + Math.max(0, (treeViewportWidth - treeBaseWidth * zoom) / 2);
-  const treeBoardTop = treePaddingY + treeBoardOffsetY * zoom + Math.max(0, (treeViewportHeight - treeBaseHeight * zoom) / 2);
-  const treeExtraWidth = Math.max(0, (layout.originX - 60 + treeBoardOffsetX) * zoom, treePaddingX * 2 + treeBoardLeft + treeContentWidth - treeViewportWidth);
-  const appliedTreeOffset = useRef({ x: treeBoardOffsetX, y: treeBoardOffsetY });
-  const connectorNodePositions = [...layout.positions.values()];
-  const connectorLabelPositions = [];
+  const {
+    layoutPeople,
+    cardWidth,
+    cardHeight,
+    layout,
+    layoutRef,
+    layoutPositions,
+    minNodeX,
+    minNodeY,
+    maxNodeX,
+    maxNodeY,
+    treeBoardOffsetX,
+    treeBoardOffsetY,
+    treePaddingX,
+    treePaddingY,
+    maxCanvasZoom,
+    treeBoardWidth,
+    treeBoardHeight,
+    treeContentWidth,
+    treeBoardLeft,
+    treeBoardTop,
+    treeExtraWidth,
+    appliedTreeOffset,
+    connectorNodePositions,
+    connectorLabelPositions,
+  } = useTreeCanvasLayout({ treePeople, isCompactViewport, phoneLayoutPreview, treeViewportWidth, treeViewportHeight, zoom });
+  const { focusPersonInTree, zoomAround, zoomTo, stepZoom, fitTreeToView } = createCanvasNavigation({
+    treeScroll,
+    manualZoomTouched,
+    pendingZoom,
+    zoomFrame,
+    zoomValue,
+    pendingZoomAnchor,
+    setZoom,
+    maxCanvasZoom,
+    layoutPositions,
+    minNodeX,
+    maxNodeX,
+    minNodeY,
+    maxNodeY,
+  });
   const { memberFamilyOptions, filtered, sidebarMemberGroups } = useFamilyMemberSearch(familyPeople, query, memberFamilyFilter);
   useEffect(() => {
     setSelectedNodeIds([]);
@@ -222,6 +227,27 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     autoFitSignature.current = '';
   }, [memberFamilyFilter]);
   const selectedDescendants = selected ? descendantIds(people, selected.id) : [];
+  const { saveMember, removePerson } = createPersonActions({
+    readOnly,
+    notify,
+    modal,
+    people,
+    layout,
+    apiState,
+    apiFetch,
+    refreshPeople,
+    setPeople,
+    setSelectedId,
+    setModal,
+    setDetailsOpen,
+    setMobileDetailsOpen,
+    selected,
+    selectedNodeIds,
+    deleteDescendants,
+    selectedDescendants,
+    setSelectedNodeIds,
+    setConfirmDelete,
+  });
   const deleteShortcutState = useRef(null);
   deleteShortcutState.current = { selectedId, selectedNodeIds, confirmDelete, modal, familyPeople: treePeople };
   useEffect(() => {
@@ -268,37 +294,11 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     setZoom(nextZoom);
   }, [isCompactViewport]);
   useEffect(() => {
-    storageSet('kinfolk-details-width', String(detailsWidth));
-  }, [detailsWidth]);
-  useEffect(() => {
     storageRemove('kinfolk-phone-tree-layout-v1');
   }, []);
   useEffect(() => {
     storageSet(isCompactViewport ? 'kinfolk-phone-zoom-v1' : 'kinfolk-site-zoom-v1', String(zoom));
   }, [isCompactViewport, zoom]);
-  function beginDetailsResize(event) {
-    if (window.innerWidth <= 1050) return;
-    event.preventDefault();
-    detailsResize.current = { startX: event.clientX, startWidth: detailsWidth };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-  function moveDetailsResize(event) {
-    if (!detailsResize.current) return;
-    setDetailsWidth(Math.max(286, Math.min(620, detailsResize.current.startWidth + detailsResize.current.startX - event.clientX)));
-  }
-  function endDetailsResize() {
-    detailsResize.current = null;
-  }
-  function handleDetailsResizeKey(event) {
-    const delta = event.key === 'ArrowLeft' ? 16 : event.key === 'ArrowRight' ? -16 : 0;
-    if (delta) {
-      event.preventDefault();
-      setDetailsWidth((width) => Math.max(286, Math.min(620, width + delta)));
-    } else if (event.key === 'Home' || event.key === 'End') {
-      event.preventDefault();
-      setDetailsWidth(event.key === 'Home' ? 286 : 620);
-    }
-  }
   useEffect(() => {
     storageSet('kinfolk-visible-link-types-v1', JSON.stringify(visibleLinkTypes));
     storageRemove('kinfolk-link-style');
@@ -594,113 +594,30 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     }
   }
   refreshDataRef.current = refreshFromDatabase;
-  function updateExportColumns(nextColumns) {
-    const ordered = DATA_COLUMNS.filter((column) => nextColumns.includes(column));
-    setExportColumns(ordered);
-    storageSet('kinfolk-export-columns-v2', JSON.stringify(ordered));
-  }
-  async function exportCsv() {
-    if (!exportColumns.length) {
-      notify('Select at least one field to export');
-      return;
-    }
-    try {
-      const { exportCsvFile } = await import('./dataTransfer.js');
-      exportCsvFile(people, exportColumns);
-      setSettingsOpen(false);
-      notify(`Exported ${people.length} people as CSV`);
-    } catch {
-      notify('Could not create the CSV file');
-    }
-  }
-  async function exportExcel() {
-    if (!exportColumns.length) {
-      notify('Select at least one field to export');
-      return;
-    }
-    try {
-      const { exportExcelFile } = await import('./dataTransfer.js');
-      await exportExcelFile(people, exportColumns);
-      setSettingsOpen(false);
-      notify(`Exported ${people.length} people as Excel`);
-    } catch {
-      notify('Could not create the Excel file');
-    }
-  }
-  async function exportSvg() {
-    try {
-      const board = treeScroll.current?.querySelector('.tree-board');
-      const { exportTreeSvg } = await import('./svgExport.js');
-      const result = exportTreeSvg({ board, people: treePeople, treeName, theme, deceasedRibbon });
-      setSettingsOpen(false);
-      notify(`Exported the full tree as SVG · ${result.peopleCount} people`);
-    } catch (error) {
-      notify(error.message || 'Could not create the SVG image');
-    }
-  }
-  async function handleImportFile(event) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    try {
-      const { readImportFile } = await import('./dataTransfer.js');
-      const importedPeople = await readImportFile(file);
-      if (!importedPeople.length) throw Error('No people with a first name were found');
-      setPendingImport({ filename: file.name, people: importedPeople });
-      setSettingsOpen(false);
-    } catch (error) {
-      notify(error.message || 'Could not read this import file');
-    }
-  }
-  async function confirmDataImport() {
-    if (readOnly) return notify('This tree is read-only.');
-    if (!pendingImport || isImporting) return;
-    setIsImporting(true);
-    try {
-      if (apiState === 'connected') {
-        const response = await apiFetch(apiUrl('/api/people/import'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ people: pendingImport.people }),
-        });
-        const result = await response.json().catch(() => null);
-        if (!response.ok) throw Error(result?.error || 'Could not import the family data');
-        const rows = await refreshPeople();
-        setPeople(rows);
-      } else {
-        const existingIds = new Set(people.map((person) => person.id));
-        const idMap = new Map(pendingImport.people.map((person, index) => [person.sourceId, existingIds.has(person.sourceId) ? person.sourceId : `local-import-${Date.now()}-${index}`]));
-        const imported = pendingImport.people.map((person, index) => {
-          const remap = (id) => idMap.get(String(id)) || (existingIds.has(String(id)) ? String(id) : null);
-          return {
-            ...person,
-            id: idMap.get(person.sourceId),
-            _id: null,
-            parentIds: person.parentIds.map(remap).filter(Boolean).slice(0, 2),
-            partnerIds: person.partnerIds.map(remap).filter(Boolean),
-            siblingIds: person.siblingIds.map(remap).filter(Boolean),
-            partnerRelationships: person.partnerRelationships.map((link) => ({ ...link, partnerId: remap(link.partnerId) })).filter((link) => link.partnerId),
-            relationshipLinks: person.relationshipLinks.map((link) => ({ ...link, personId: remap(link.personId) })).filter((link) => link.personId && link.label),
-            treeX: Number.isFinite(person.treeX) ? person.treeX : null,
-            treeY: Number.isFinite(person.treeY) ? person.treeY : null,
-            color: ['sage', 'rose', 'blue', 'peach', 'lavender', 'yellow', 'mint', 'pink'][(people.length + index) % 8],
-          };
-        });
-        const importedById = new Map(imported.map((person) => [person.id, person]));
-        setPeople((current) => [...current.map((person) => importedById.get(person.id) || person), ...imported.filter((person) => !existingIds.has(person.id))]);
-      }
-      const count = pendingImport.people.length;
-      setPendingImport(null);
-      setSelectedId('');
-      manualZoomTouched.current = false;
-      autoFitSignature.current = '';
-      notify(`Imported ${count} ${count === 1 ? 'person' : 'people'}`);
-    } catch (error) {
-      notify(error.message || 'Could not import the family data');
-    } finally {
-      setIsImporting(false);
-    }
-  }
+  const { updateExportColumns, exportCsv, exportExcel, exportSvg, handleImportFile, confirmDataImport } = createDataTransferActions({
+    setExportColumns,
+    exportColumns,
+    notify,
+    people,
+    setSettingsOpen,
+    treeScroll,
+    treePeople,
+    treeName,
+    theme,
+    deceasedRibbon,
+    setPendingImport,
+    readOnly,
+    pendingImport,
+    isImporting,
+    setIsImporting,
+    apiState,
+    apiFetch,
+    refreshPeople,
+    setPeople,
+    setSelectedId,
+    manualZoomTouched,
+    autoFitSignature,
+  });
   useEffect(() => {
     const handleRefreshShortcut = (event) => {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'r') return;
@@ -719,191 +636,6 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     const r = await apiFetch(apiUrl('/api/people'));
     if (!r.ok) throw Error('Could not reload your family tree');
     return (await r.json()).map(fromApi);
-  }
-  async function saveMember(values) {
-    if (readOnly) return notify('This tree is read-only.');
-    const prior = modal.person;
-    const { childIds = [], childRelationships = [], ...memberValues } = values;
-    const childRoleById = new Map(childRelationships.map((link) => [link.personId, link.role]));
-    const currentPositions = new Map([...layoutTree(people).positions, ...layout.positions]);
-    const placement = relationshipPlacement(people, values, prior, currentPositions);
-    const anchoredPeople = placement
-      ? people.map((person) => {
-          const position = currentPositions.get(person.id);
-          return position ? { ...person, treeX: position.rawX, treeY: position.rawY } : person;
-        })
-      : people;
-    const payload = {
-      ...memberValues,
-      ...placement,
-      parentIds: (values.parentIds || []).filter((id) => people.some((p) => p.id === id && p._id)),
-      partnerIds: (values.partnerIds || []).filter((id) => people.some((p) => p.id === id && p._id)),
-      siblingIds: (values.siblingIds || []).filter((id) => people.some((p) => p.id === id && p._id)),
-      partnerRelationships: (values.partnerRelationships || []).filter((link) => (values.partnerIds || []).includes(link.partnerId) && people.some((p) => p.id === link.partnerId && p._id)),
-      relationshipLinks: (values.relationshipLinks || []).filter((link) => link.label.trim() && people.some((p) => p.id === link.personId && p._id)),
-    };
-    if (apiState === 'connected') {
-      try {
-        if (placement) {
-          const positions = anchoredPeople
-            .filter(
-              (person) =>
-                person._id &&
-                person.id !== prior?.id &&
-                (!Number.isFinite(people.find((item) => item.id === person.id)?.treeX) || !Number.isFinite(people.find((item) => item.id === person.id)?.treeY)),
-            )
-            .map((person) => ({ id: person._id, treeX: person.treeX, treeY: person.treeY }));
-          if (positions.length) {
-            const response = await apiFetch(apiUrl('/api/people/layout/positions'), {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ positions }),
-            });
-            if (!response.ok) throw Error('Could not preserve the family positions');
-          }
-        }
-        const r = await apiFetch(apiUrl(prior ? `/api/people/${prior._id}` : '/api/people'), {
-          method: prior ? 'PATCH' : 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        const data = await r.json();
-        if (!r.ok) throw Error(data.error || 'Could not save this person');
-        const saved = fromApi(data);
-        const nextChildIds = new Set(childIds.filter((id) => people.some((person) => person.id === id && person._id)));
-        const currentChildren = prior ? people.filter((person) => (person.parentIds || []).includes(prior.id)) : [];
-        const childUpdates = [...new Map([...currentChildren, ...people.filter((person) => nextChildIds.has(person.id))].map((person) => [person.id, person])).values()]
-          .filter((child) => {
-            const role = childRoleById.get(child.id);
-            const requestedGender = role === 'Son' ? 'male' : role === 'Daughter' ? 'female' : null;
-            const linkChanged = currentChildren.some((person) => person.id === child.id) !== nextChildIds.has(child.id);
-            return child._id && (linkChanged || (requestedGender && child.gender !== requestedGender));
-          })
-          .map(async (child) => {
-            const parentIds = nextChildIds.has(child.id) ? [...new Set([...(child.parentIds || []), saved.id])] : (child.parentIds || []).filter((id) => id !== saved.id);
-            const role = childRoleById.get(child.id);
-            const requestedGender = role === 'Son' ? 'male' : role === 'Daughter' ? 'female' : null;
-            const response = await apiFetch(apiUrl(`/api/people/${child._id}`), {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ parentIds, ...(requestedGender ? { gender: requestedGender } : {}) }),
-            });
-            if (!response.ok) throw Error('Person saved, but a child link could not be updated');
-          });
-        await Promise.all(childUpdates);
-        const rows = await refreshPeople();
-        setPeople(rows);
-        setSelectedId(saved.id);
-        setModal(null);
-        setDetailsOpen(false);
-        setMobileDetailsOpen(false);
-        notify(prior ? 'Person updated' : 'Person added to the tree');
-      } catch (e) {
-        notify(e.message);
-      }
-      return;
-    }
-    const id = prior?.id || `local-${Date.now()}`;
-    const newPerson = {
-      ...prior,
-      ...values,
-      ...placement,
-      id,
-      _id: null,
-      color: prior?.color || ['sage', 'rose', 'blue', 'peach', 'lavender', 'yellow', 'mint', 'pink'][people.length % 8],
-    };
-    let rows = prior ? anchoredPeople.map((p) => (p.id === id ? newPerson : p)) : [...anchoredPeople, newPerson];
-    const currentChildren = new Set(prior ? people.filter((person) => (person.parentIds || []).includes(prior.id)).map((person) => person.id) : []);
-    const nextChildren = new Set(childIds);
-    const currentPartners = new Set(prior?.partnerIds || []);
-    const nextPartners = new Set(values.partnerIds || []);
-    const currentSiblings = new Set(prior?.siblingIds || []);
-    const nextSiblings = new Set(values.siblingIds || []);
-    const nextCustom = new Map((values.relationshipLinks || []).map((link) => [link.personId, link.label.trim()]));
-    rows = rows.map((p) => {
-      if (p.id === id) return p;
-      let updated = p;
-      if (currentChildren.has(p.id) || nextChildren.has(p.id)) {
-        const childRole = childRoleById.get(p.id);
-        const requestedGender = childRole === 'Son' ? 'male' : childRole === 'Daughter' ? 'female' : null;
-        updated = {
-          ...updated,
-          parentIds: nextChildren.has(p.id) ? [...new Set([...(updated.parentIds || []), id])] : (updated.parentIds || []).filter((parentId) => parentId !== id),
-          ...(requestedGender ? { gender: requestedGender } : {}),
-        };
-      }
-      const next = nextPartners.has(p.id);
-      const relationship = (values.partnerRelationships || []).find((link) => link.partnerId === p.id)?.label;
-      const partnerRelationships = (updated.partnerRelationships || []).filter((link) => link.partnerId !== id);
-      updated = {
-        ...updated,
-        partnerIds: next ? [...new Set([...(updated.partnerIds || []), id])] : currentPartners.has(p.id) ? (updated.partnerIds || []).filter((x) => x !== id) : updated.partnerIds || [],
-        partnerRelationships: next ? (relationship ? [...partnerRelationships, { partnerId: id, label: relationship }] : partnerRelationships) : partnerRelationships,
-        siblingIds: nextSiblings.has(p.id)
-          ? [...new Set([...(updated.siblingIds || []), id])]
-          : currentSiblings.has(p.id)
-            ? (updated.siblingIds || []).filter((x) => x !== id)
-            : updated.siblingIds || [],
-        relationshipLinks: (updated.relationshipLinks || []).filter((link) => link.personId !== id),
-      };
-      if (nextCustom.has(p.id)) updated.relationshipLinks = [...updated.relationshipLinks, { personId: id, label: nextCustom.get(p.id) }];
-      return updated;
-    });
-    setPeople(rows);
-    setSelectedId(id);
-    setModal(null);
-    setDetailsOpen(false);
-    setMobileDetailsOpen(false);
-    notify(prior ? 'Person updated for this browser' : 'Person added for this browser');
-  }
-  async function removePerson() {
-    if (readOnly) return notify('This tree is read-only.');
-    if (!selected) return;
-    const isBulkSelection = selectedNodeIds.length > 1;
-    try {
-      const removalIds = new Set(isBulkSelection ? selectedNodeIds : [selected.id, ...(deleteDescendants ? selectedDescendants : [])]);
-      const removedPeople = people.filter((person) => removalIds.has(person.id));
-      const rows = people
-        .filter((person) => !removalIds.has(person.id))
-        .map((person) => {
-          const position = layout.positions.get(person.id);
-          return {
-            ...person,
-            parentIds: (person.parentIds || []).filter((id) => !removalIds.has(id)),
-            partnerIds: (person.partnerIds || []).filter((id) => !removalIds.has(id)),
-            siblingIds: (person.siblingIds || []).filter((id) => !removalIds.has(id)),
-            partnerRelationships: (person.partnerRelationships || []).filter((link) => !removalIds.has(link.partnerId)),
-            relationshipLinks: (person.relationshipLinks || []).filter((link) => !removalIds.has(link.personId)),
-            treeX: position?.rawX ?? person.treeX,
-            treeY: position?.rawY ?? person.treeY,
-          };
-        });
-      if (apiState === 'connected') {
-        const positions = rows.filter((person) => person._id).map((person) => ({ id: person._id, treeX: person.treeX, treeY: person.treeY }));
-        const saved = await apiFetch(apiUrl('/api/people/layout/positions'), {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ positions }),
-        });
-        if (!saved.ok) throw Error('Could not preserve the current tree layout');
-        const ids = removedPeople.filter((person) => person._id).map((person) => person._id);
-        if (ids.length) {
-          const response = await apiFetch(apiUrl('/api/people/batch'), {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids }),
-          });
-          if (!response.ok) throw Error('Could not delete the selected people');
-        }
-      }
-      setPeople(rows);
-      setSelectedId(rows[0]?.id || '');
-      setSelectedNodeIds([]);
-      setConfirmDelete(false);
-      notify(`Removed ${removedPeople.length} ${removedPeople.length === 1 ? 'person' : 'people'}; others stayed in place`);
-    } catch (error) {
-      notify(error.message);
-    }
   }
   useEffect(() => {
     if (!confirmDelete || !selected) return;
@@ -1001,80 +733,6 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     document.addEventListener('pointerdown', closeHelpOutside);
     return () => document.removeEventListener('pointerdown', closeHelpOutside);
   }, []);
-  function focusPersonInTree(id) {
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        const viewport = treeScroll.current;
-        if (!viewport) return;
-        const node = [...viewport.querySelectorAll('.tree-person')].find((item) => item.dataset.personId === id);
-        if (!node) return;
-        const nodeRect = node.getBoundingClientRect();
-        const viewportRect = viewport.getBoundingClientRect();
-        viewport.scrollTo({
-          left: viewport.scrollLeft + nodeRect.left + nodeRect.width / 2 - viewportRect.left - viewport.clientWidth / 2,
-          top: viewport.scrollTop + nodeRect.top + nodeRect.height / 2 - viewportRect.top - viewport.clientHeight / 2,
-          behavior: 'smooth',
-        });
-      }),
-    );
-  }
-  function zoomAround(clientX, clientY, nextZoom) {
-    manualZoomTouched.current = true;
-    pendingZoom.current = { clientX, clientY, nextZoom };
-    if (zoomFrame.current) return;
-    zoomFrame.current = requestAnimationFrame(() => {
-      zoomFrame.current = 0;
-      const request = pendingZoom.current;
-      pendingZoom.current = null;
-      if (!request || Math.abs(request.nextZoom - zoomValue.current) < 0.0001) return;
-      const viewport = treeScroll.current;
-      const board = viewport?.querySelector('.tree-board');
-      if (viewport && board) {
-        const boardRect = board.getBoundingClientRect();
-        pendingZoomAnchor.current = {
-          x: (request.clientX - boardRect.left) / zoomValue.current,
-          y: (request.clientY - boardRect.top) / zoomValue.current,
-          clientX: request.clientX,
-          clientY: request.clientY,
-        };
-      }
-      setZoom(request.nextZoom);
-    });
-  }
-  function zoomTo(nextZoom) {
-    nextZoom = Math.max(0.1, Math.min(maxCanvasZoom, nextZoom));
-    const viewport = treeScroll.current;
-    if (!viewport) {
-      setZoom(nextZoom);
-      return;
-    }
-    const rect = viewport.getBoundingClientRect();
-    zoomAround(rect.left + viewport.clientWidth / 2, rect.top + viewport.clientHeight / 2, nextZoom);
-  }
-  function stepZoom(direction) {
-    const currentZoom = pendingZoom.current?.nextZoom ?? zoomValue.current;
-    zoomTo(stepCanvasZoom(currentZoom, direction, maxCanvasZoom));
-  }
-  function fitTreeToView() {
-    manualZoomTouched.current = true;
-    const viewport = treeScroll.current;
-    if (!viewport) return;
-    const fittedZoom = Math.min(1, maxCanvasZoom);
-    zoomValue.current = fittedZoom;
-    setZoom(fittedZoom);
-    requestAnimationFrame(() => {
-      const board = viewport.querySelector('.tree-board');
-      const boardRect = board?.getBoundingClientRect();
-      const viewportRect = viewport.getBoundingClientRect();
-      if (!boardRect || !layoutPositions.length) return;
-      const centerX = (minNodeX + maxNodeX) / 2;
-      const centerY = (minNodeY + maxNodeY) / 2;
-      const targetX = viewportRect.left + viewport.clientWidth / 2;
-      const targetY = viewportRect.top + viewport.clientHeight / 2;
-      viewport.scrollLeft = Math.max(0, Math.min(viewport.scrollWidth - viewport.clientWidth, viewport.scrollLeft + boardRect.left + centerX * fittedZoom - targetX));
-      viewport.scrollTop = Math.max(0, Math.min(viewport.scrollHeight - viewport.clientHeight, viewport.scrollTop + boardRect.top + centerY * fittedZoom - targetY));
-    });
-  }
   async function arrangeFamily() {
     if (readOnly) return notify('This tree is read-only.');
     if (!treePeople.length || isArranging) return;
@@ -1118,132 +776,33 @@ export default function App({ authUser, onLogout, workspaceActions }) {
       setIsArranging(false);
     }
   }
-  async function saveNamedLayout(event) {
-    if (readOnly) { event?.preventDefault(); return notify('This tree is read-only.'); }
-    event.preventDefault();
-    const name = layoutName.trim();
-    if (!name || !treePeople.length || isSavingLayout) return;
-    setIsSavingLayout(true);
-    try {
-      const positions = treePeople
-        .map((person) => {
-          const position = layout.positions.get(person.id);
-          if (!position) return null;
-          return { personId: apiState === 'connected' ? person._id : person.id, treeX: position.rawX, treeY: position.rawY };
-        })
-        .filter((position) => position?.personId);
-      let saved;
-      if (apiState === 'connected') {
-        const response = await apiFetch(apiUrl('/api/layouts'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, familyId: layoutScopeId, familyName: selectedFamily?.name || 'All families', positions }),
-        });
-        if (!response.ok) throw Error((await response.json().catch(() => null))?.error || 'Could not save this tree view');
-        saved = await response.json();
-      } else {
-        const allLayouts = (() => {
-          try {
-            const parsed = JSON.parse(storageGet('kinfolk-saved-layouts-v1') || '[]');
-            return Array.isArray(parsed) ? parsed : [];
-          } catch {
-            return [];
-          }
-        })();
-        const normalizedName = name.toLocaleLowerCase();
-        const currentPersonIds = new Set(positions.map((position) => String(position.personId)));
-        const existing = allLayouts.find(
-          (item) => item.normalizedName === normalizedName && (item.familyId === layoutScopeId || (item.positions || []).some((position) => currentPersonIds.has(String(position.personId)))),
-        );
-        saved = {
-          _id: existing?._id || `local-${Date.now()}`,
-          name,
-          normalizedName,
-          familyId: layoutScopeId,
-          positions,
-          updatedAt: new Date().toISOString(),
-        };
-        const next = [saved, ...allLayouts.filter((item) => item._id !== saved._id)];
-        storageSet('kinfolk-saved-layouts-v1', JSON.stringify(next));
-      }
-      setSavedLayouts((current) => [saved, ...current.filter((item) => item._id !== saved._id && item.normalizedName !== saved.normalizedName)]);
-      setLayoutName('');
-      notify(`Saved “${name}”`);
-    } catch (error) {
-      notify(error.message || 'Could not save this tree view');
-    } finally {
-      setIsSavingLayout(false);
-    }
-  }
-  async function applyNamedLayout(savedLayout) {
-    if (readOnly) return notify('This tree is read-only.');
-    if (applyingLayoutId) return;
-    setApplyingLayoutId(savedLayout._id);
-    try {
-      const positions = (savedLayout.positions || [])
-        .map((position) => ({
-          id: String(position.personId),
-          treeX: Number(position.treeX),
-          treeY: Number(position.treeY),
-        }))
-        .filter((position) => Number.isFinite(position.treeX) && Number.isFinite(position.treeY));
-      const currentIds = new Set(people.map((person) => String(person._id || person.id)));
-      const availablePositions = positions.filter((position) => currentIds.has(position.id));
-      if (!availablePositions.length) throw Error('No matching people remain in this saved view');
-      if (apiState === 'connected') {
-        const response = await apiFetch(apiUrl('/api/people/layout/positions'), {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ positions: availablePositions }),
-        });
-        if (!response.ok) throw Error('Could not restore this tree view');
-      }
-      const byPersonId = new Map(availablePositions.map((position) => [position.id, position]));
-      setPeople((current) =>
-        current.map((person) => {
-          const position = byPersonId.get(String(person._id || person.id));
-          return position ? { ...person, treeX: position.treeX, treeY: position.treeY } : person;
-        }),
-      );
-      setPhoneLayoutPreview({});
-      setSelectedNodeIds([]);
-      setSavedLayoutsOpen(false);
-      manualZoomTouched.current = false;
-      autoFitSignature.current = '';
-      notify(`Restored “${savedLayout.name}”`);
-    } catch (error) {
-      notify(error.message || 'Could not restore this tree view');
-    } finally {
-      setApplyingLayoutId('');
-    }
-  }
-  async function removeNamedLayout(savedLayout) {
-    if (readOnly) return notify('This tree is read-only.');
-    if (deletingLayoutId) return;
-    setDeletingLayoutId(savedLayout._id);
-    try {
-      if (apiState === 'connected') {
-        const response = await apiFetch(apiUrl(`/api/layouts/${savedLayout._id}`), { method: 'DELETE' });
-        if (!response.ok) throw Error((await response.json().catch(() => null))?.error || 'Could not remove this saved view');
-      } else {
-        let allLayouts = [];
-        try {
-          const parsed = JSON.parse(storageGet('kinfolk-saved-layouts-v1') || '[]');
-          if (Array.isArray(parsed)) allLayouts = parsed;
-        } catch {
-          // Replace unreadable local layout data with the remaining valid views.
-        }
-        storageSet('kinfolk-saved-layouts-v1', JSON.stringify(allLayouts.filter((item) => item._id !== savedLayout._id)));
-      }
-      setSavedLayouts((current) => current.filter((item) => item._id !== savedLayout._id));
-      setConfirmLayoutDeleteId('');
-      notify(`Removed “${savedLayout.name}”`);
-    } catch (error) {
-      notify(error.message || 'Could not remove this saved view');
-    } finally {
-      setDeletingLayoutId('');
-    }
-  }
+  const { saveNamedLayout, applyNamedLayout, removeNamedLayout } = createSavedViewActions({
+    readOnly,
+    notify,
+    layoutName,
+    treePeople,
+    isSavingLayout,
+    setIsSavingLayout,
+    layout,
+    apiState,
+    apiFetch,
+    layoutScopeId,
+    selectedFamily,
+    setSavedLayouts,
+    setLayoutName,
+    applyingLayoutId,
+    setApplyingLayoutId,
+    people,
+    setPeople,
+    setPhoneLayoutPreview,
+    setSelectedNodeIds,
+    setSavedLayoutsOpen,
+    manualZoomTouched,
+    autoFitSignature,
+    deletingLayoutId,
+    setDeletingLayoutId,
+    setConfirmLayoutDeleteId,
+  });
   function handleTouchStart(e) {
     if (e.touches.length !== 2) return;
     e.preventDefault();
@@ -1266,102 +825,20 @@ export default function App({ authUser, onLogout, workspaceActions }) {
   function handleTouchEnd(e) {
     if (e.touches.length < 2) pinch.current = null;
   }
-  function selectPerson(personId) {
-    setSelectedId(personId);
-    setSelectedNodeIds([]);
-  }
-  function openAddPersonForm() {
-    if (readOnly) return notify('This tree is read-only.');
-    setModal({ inline: true });
-    setDetailsOpen(true);
-    if (window.innerWidth <= 1050) {
-      setSidebarOpen(false);
-      setMobileDetailsOpen(true);
-    }
-  }
-  function openQuickAdd(person, kind) {
-    if (readOnly) return notify('This tree is read-only.');
-    const childRole = person.gender === 'male' ? 'Son' : person.gender === 'female' ? 'Daughter' : 'Child';
-    const parentRole = person.gender === 'male' ? 'Father' : person.gender === 'female' ? 'Mother' : 'Parent';
-    const partnerRole = person.gender === 'male' ? 'Husband' : person.gender === 'female' ? 'Wife' : 'Partner';
-    const presets = {
-      father: { gender: 'male', lastName: person.lastName || '', role: childRole },
-      mother: { gender: 'female', lastName: person.lastName || '', role: childRole },
-      brother: { gender: 'male', lastName: person.lastName || '', role: 'Sibling' },
-      sister: { gender: 'female', lastName: person.lastName || '', role: 'Sibling' },
-      son: { gender: 'male', lastName: person.lastName || '', role: parentRole },
-      daughter: { gender: 'female', lastName: person.lastName || '', role: parentRole },
-      partner: {
-        gender: person.gender === 'male' ? 'female' : person.gender === 'female' ? 'male' : 'unspecified',
-        lastName: '',
-        role: partnerRole,
-      },
-    };
-    const preset = presets[kind];
-    const initialRelationships = [];
-    const addInitialRelationship = (personId, role) => {
-      if (!personId || initialRelationships.some((link) => link.personId === personId)) return;
-      initialRelationships.push({ personId, role, customLabel: '' });
-    };
-    addInitialRelationship(person.id, preset.role);
-    if (kind === 'son' || kind === 'daughter') {
-      const otherParent = (person.partnerIds || []).map((id) => people.find((candidate) => candidate.id === id)).find(Boolean);
-      if (otherParent) {
-        addInitialRelationship(otherParent.id, otherParent.gender === 'male' ? 'Father' : otherParent.gender === 'female' ? 'Mother' : 'Parent');
-      }
-      const parentIds = new Set([person.id, otherParent?.id].filter(Boolean));
-      people
-        .filter((candidate) => candidate.id !== person.id && (candidate.parentIds || []).some((parentId) => parentIds.has(parentId)))
-        .forEach((sibling) => addInitialRelationship(sibling.id, sibling.gender === 'male' ? 'Brother' : sibling.gender === 'female' ? 'Sister' : 'Sibling'));
-    }
-    if (kind === 'brother' || kind === 'sister') {
-      (person.parentIds || [])
-        .map((id) => people.find((candidate) => candidate.id === id))
-        .filter(Boolean)
-        .forEach((parent) => addInitialRelationship(parent.id, parent.gender === 'male' ? 'Father' : parent.gender === 'female' ? 'Mother' : 'Parent'));
-      const sharedParentIds = new Set(person.parentIds || []);
-      people
-        .filter((candidate) => candidate.id !== person.id && ((person.siblingIds || []).includes(candidate.id) || (candidate.parentIds || []).some((parentId) => sharedParentIds.has(parentId))))
-        .forEach((sibling) => addInitialRelationship(sibling.id, sibling.gender === 'male' ? 'Brother' : sibling.gender === 'female' ? 'Sister' : 'Sibling'));
-    }
-    setQuickAddForId('');
-    setSelectedId(person.id);
-    setSelectedNodeIds([]);
-    setModal({
-      inline: true,
-      defaults: { gender: preset.gender, lastName: preset.lastName },
-      initialRelationships,
-    });
-    setDetailsOpen(true);
-    if (window.innerWidth <= 1050) {
-      setSidebarOpen(false);
-      setMobileDetailsOpen(true);
-    }
-  }
-  function openPersonDetails(personId) {
-    selectPerson(personId);
-    setDetailsOpen(true);
-    if (window.innerWidth <= 1050) {
-      setSidebarOpen(false);
-      setMobileDetailsOpen(true);
-    }
-  }
-  function openPersonEditor(person) {
-    if (readOnly) return;
-    openPersonDetails(person.id);
-    setModal({ person, inline: true });
-  }
-  function openLinkEditor() {
-    if (readOnly) return;
-    if (selected) setModal({ person: selected, inline: true, focusLinks: true });
-  }
-  function clearSelection() {
-    setSelectedId('');
-    setSelectedNodeIds([]);
-    setHighlightedNodeId('');
-    setDetailsOpen(false);
-    setMobileDetailsOpen(false);
-  }
+  const { selectPerson, openAddPersonForm, openQuickAdd, openPersonDetails, openPersonEditor, openLinkEditor, clearSelection } = createPersonNavigation({
+    setSelectedId,
+    setSelectedNodeIds,
+    readOnly,
+    notify,
+    setModal,
+    setDetailsOpen,
+    setSidebarOpen,
+    setMobileDetailsOpen,
+    people,
+    setQuickAddForId,
+    selected,
+    setHighlightedNodeId,
+  });
   async function flushPositionSaves({ silent = false, keepalive = false } = {}) {
     if (readOnly) return;
     if (positionSaveTimer.current) {
@@ -1652,7 +1129,6 @@ export default function App({ authUser, onLogout, workspaceActions }) {
       if (pendingPositionSaves.current.size) flushPositionSaves({ silent: true, keepalive: true });
     };
   }, []);
-  const treeName = selectedFamilyId === '__all__' ? 'All families' : selectedFamily?.name || 'Your family';
   return (
     <div
       className={`family-app theme-${theme} tree-style-${treeVisualStyle} link-style-smooth deceased-ribbon-${deceasedRibbon} ${activeLinkNodeId ? 'has-link-focus' : ''} ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'} ${detailsOpen ? 'details-open' : 'details-closed'} ${modal?.inline ? 'editing-person' : ''}`}
