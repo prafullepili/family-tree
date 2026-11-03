@@ -1,3 +1,7 @@
+import useTreeHighlights from './useTreeHighlights.js';
+import useFamilyLinkGroups from './useFamilyLinkGroups.js';
+import useFamilyMemberSearch from './useFamilyMemberSearch.js';
+import useCanvasFullscreen from './useCanvasFullscreen.js';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Minimize2,
@@ -12,25 +16,19 @@ import TreeSettingsControls, { DATA_COLUMNS } from './TreeSettingsControls.jsx';
 import { AppHeader, FamilySidebar } from './AppNavigation.jsx';
 import AppDialogs from './AppDialogs.jsx';
 import PersonDetailsPanel, { PersonModalDialog } from './PersonDetailsPanel.jsx';
-import TreePersonNode from './TreePersonNode.jsx';
+import TreeNodeLayer from './TreeNodeLayer.jsx';
 import { apiFetch as sharedApiFetch, apiUrl, loadInitialFamilyData, loadRemoteFamilyData } from './apiClient.js';
-import { FamilyBranchLinks, PersonAvatar } from './TreeRenderComponents.jsx';
+import TreeConnections from './TreeConnections.jsx';
 import { stepCanvasZoom } from './zoomMath.js';
 import {
   applyDragPositions,
   compactDashboardPositions,
   descendantIds,
-  familyColorMap,
   fromApi,
   fullName,
   getFamilyGroups,
-  linkLabelPoint,
   mongoPeopleCacheKey,
-  partnerDisplayLabel,
-  partnerRelationship,
   readMongoPeopleCache,
-  relationshipLabel,
-  relationshipPath,
   storageGet,
   storageRemove,
   storageSet,
@@ -92,8 +90,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
   const [helpOpen, setHelpOpen] = useState(false);
   const canvasHelpRef = useRef(null);
   const canvasRef = useRef(null);
-  const [isCanvasFullscreen, setIsCanvasFullscreen] = useState(false);
-  const [fullscreenFallback, setFullscreenFallback] = useState(false);
+  const { isCanvasFullscreen, fullscreenFallback, toggleCanvasFullscreen } = useCanvasFullscreen(canvasRef);
   const [treeStyleMenuOpen, setTreeStyleMenuOpen] = useState(false);
   const treeStyleControlRef = useRef(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -171,73 +168,10 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     () => (memberFamilyFilter === '__all__' ? familyPeople : familyPeople.filter((person) => (person.lastName?.trim().toLocaleLowerCase() || '__other__') === memberFamilyFilter)),
     [familyPeople, memberFamilyFilter],
   );
-  const activeLinkNodeId = treePeople.some((person) => person.id === (highlightedNodeId || selectedId)) ? highlightedNodeId || selectedId : '';
-  const highlightedAncestorIds = useMemo(() => {
-    const byId = new Map(treePeople.map((person) => [person.id, person]));
-    const ids = new Set();
-    const visit = (id) => {
-      if (!id || ids.has(id) || !byId.has(id)) return;
-      ids.add(id);
-      (byId.get(id).parentIds || []).forEach(visit);
-    };
-    visit(activeLinkNodeId);
-    return ids;
-  }, [activeLinkNodeId, treePeople]);
-  const highlightedNetworkIds = useMemo(() => {
-    const ids = new Set(highlightedAncestorIds);
-    if (!activeLinkNodeId) return ids;
-    treePeople.forEach((person) => {
-      const references = [...(person.parentIds || []), ...(person.partnerIds || []), ...(person.siblingIds || []), ...(person.relationshipLinks || []).map((link) => link.personId)];
-      if (person.id === activeLinkNodeId) references.forEach((id) => ids.add(id));
-      if (references.includes(activeLinkNodeId)) ids.add(person.id);
-    });
-    ids.add(activeLinkNodeId);
-    return ids;
-  }, [activeLinkNodeId, treePeople, highlightedAncestorIds]);
-  const familyColorFocusId = treePeople.some((person) => person.id === selectedId) ? selectedId : null;
-  const familyColors = useMemo(() => familyColorMap(treePeople, familyColorFocusId), [treePeople, familyColorFocusId]);
+  const { activeLinkNodeId, highlightedAncestorIds, highlightedNetworkIds, familyColors } = useTreeHighlights(treePeople, highlightedNodeId, selectedId);
   const selected = people.find((p) => p.id === selectedId) || null;
   const byId = (id) => people.find((p) => p.id === id);
-  const familyLinkGroups = useMemo(() => {
-    if (!selected) return [];
-    const peopleById = new Map(people.map((person) => [person.id, person]));
-    const seen = new Set();
-    const makeGroup = (key, label, links) => ({
-      key,
-      label,
-      links: links.filter((link) => {
-        if (!peopleById.has(link.id) || seen.has(link.id)) return false;
-        seen.add(link.id);
-        return true;
-      }),
-    });
-    const siblings = people
-      .filter((person) => person.id !== selected.id && ((person.siblingIds || []).includes(selected.id) || (person.parentIds || []).some((parentId) => (selected.parentIds || []).includes(parentId))))
-      .map((person) => ({ id: person.id, role: 'Sibling' }));
-    return [
-      makeGroup(
-        'parents',
-        'Parents',
-        (selected.parentIds || []).map((id) => ({ id, role: 'Parent' })),
-      ),
-      makeGroup(
-        'partners',
-        'Partners',
-        (selected.partnerIds || []).map((id) => ({ id, role: 'Partner', label: partnerDisplayLabel(selected, peopleById.get(id)) })),
-      ),
-      makeGroup(
-        'children',
-        'Children',
-        people.filter((person) => (person.parentIds || []).includes(selected.id)).map((person) => ({ id: person.id, role: 'Child' })),
-      ),
-      makeGroup('siblings', 'Siblings', siblings),
-      makeGroup(
-        'other',
-        'Other relationships',
-        (selected.relationshipLinks || []).map((link) => ({ id: link.personId, role: link.label || 'Related' })),
-      ),
-    ].filter((group) => group.links.length);
-  }, [people, selected]);
+  const { familyLinkGroups } = useFamilyLinkGroups(people, selected);
   const layoutPeople = useMemo(() => {
     if (!isCompactViewport || !Object.keys(phoneLayoutPreview).length) return treePeople;
     return treePeople.map((person) => {
@@ -276,37 +210,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
   const appliedTreeOffset = useRef({ x: treeBoardOffsetX, y: treeBoardOffsetY });
   const connectorNodePositions = [...layout.positions.values()];
   const connectorLabelPositions = [];
-  const memberFamilyOptions = useMemo(() => {
-    const groups = new Map();
-    familyPeople.forEach((person) => {
-      const surname = person.lastName?.trim();
-      const key = surname?.toLocaleLowerCase() || '__other__';
-      if (!groups.has(key)) groups.set(key, { key, name: surname ? `${surname} family` : 'Other family members', count: 0 });
-      groups.get(key).count += 1;
-    });
-    return [...groups.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-  }, [familyPeople]);
-  const filtered = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase();
-    return familyPeople.filter((person) => {
-      const surnameKey = person.lastName?.trim().toLocaleLowerCase() || '__other__';
-      const matchesGroup = memberFamilyFilter === '__all__' || surnameKey === memberFamilyFilter;
-      const matchesName = !normalizedQuery || fullName(person).toLocaleLowerCase().includes(normalizedQuery);
-      return matchesGroup && matchesName;
-    });
-  }, [query, familyPeople, memberFamilyFilter]);
-  const sidebarMemberGroups = useMemo(() => {
-    const groups = new Map();
-    filtered.forEach((person) => {
-      const surname = person.lastName?.trim();
-      const key = surname?.toLocaleLowerCase() || '__other__';
-      if (!groups.has(key)) groups.set(key, { name: surname ? `${surname} family` : 'Other family members', people: [] });
-      groups.get(key).people.push(person);
-    });
-    return [...groups.values()]
-      .map((group) => ({ ...group, people: [...group.people].sort((a, b) => fullName(a).localeCompare(fullName(b))) }))
-      .sort((a, b) => b.people.length - a.people.length || a.name.localeCompare(b.name));
-  }, [filtered]);
+  const { memberFamilyOptions, filtered, sidebarMemberGroups } = useFamilyMemberSearch(familyPeople, query, memberFamilyFilter);
   useEffect(() => {
     setSelectedNodeIds([]);
     setHighlightedNodeId('');
@@ -1097,55 +1001,6 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     document.addEventListener('pointerdown', closeHelpOutside);
     return () => document.removeEventListener('pointerdown', closeHelpOutside);
   }, []);
-  useEffect(() => {
-    const syncFullscreenState = () => {
-      const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
-      if (fullscreenElement) {
-        setIsCanvasFullscreen(fullscreenElement === canvasRef.current);
-        setFullscreenFallback(false);
-      } else if (!fullscreenFallback) setIsCanvasFullscreen(false);
-    };
-    const closeFallbackOnEscape = (event) => {
-      if (event.key === 'Escape' && fullscreenFallback) {
-        setFullscreenFallback(false);
-        setIsCanvasFullscreen(false);
-      }
-    };
-    document.addEventListener('fullscreenchange', syncFullscreenState);
-    document.addEventListener('webkitfullscreenchange', syncFullscreenState);
-    window.addEventListener('keydown', closeFallbackOnEscape);
-    return () => {
-      document.removeEventListener('fullscreenchange', syncFullscreenState);
-      document.removeEventListener('webkitfullscreenchange', syncFullscreenState);
-      window.removeEventListener('keydown', closeFallbackOnEscape);
-    };
-  }, [fullscreenFallback]);
-  async function toggleCanvasFullscreen() {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    if (fullscreenFallback) {
-      setFullscreenFallback(false);
-      setIsCanvasFullscreen(false);
-      return;
-    }
-    const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
-    if (fullscreenElement) {
-      const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen;
-      if (exitFullscreen) await exitFullscreen.call(document);
-      return;
-    }
-    const requestFullscreen = canvas.requestFullscreen || canvas.webkitRequestFullscreen;
-    if (requestFullscreen) {
-      try {
-        await requestFullscreen.call(canvas);
-        return;
-      } catch {
-        // Browsers may block the native API; the fixed canvas fallback still provides the mode.
-      }
-    }
-    setFullscreenFallback(true);
-    setIsCanvasFullscreen(true);
-  }
   function focusPersonInTree(id) {
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
@@ -1945,161 +1800,48 @@ export default function App({ authUser, onLogout, workspaceActions }) {
                   transformOrigin: 'top left',
                 }}
               >
-                <svg className="connector-svg" width={treeBoardWidth} height={treeBoardHeight} aria-label="Family relationships">
-                  <defs>
-                    <marker id="family-link-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
-                      <path d="M0 0 L8 4 L0 8 Z" fill="var(--line)" />
-                    </marker>
-                    <marker id="partner-link-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
-                      <path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" />
-                    </marker>
-                    <marker id="family-link-highlight-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
-                      <path d="M0 0 L8 4 L0 8 Z" fill="#f0a928" />
-                    </marker>
-                    <marker id="partner-link-highlight-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
-                      <path d="M0 0 L8 4 L0 8 Z" fill="#f0a928" />
-                    </marker>
-                    <marker id="smooth-link-dot" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse">
-                      <circle cx="4" cy="4" r="2.4" />
-                    </marker>
-                    <marker id="smooth-link-highlight-dot" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse">
-                      <circle cx="4" cy="4" r="3" fill="#f0a928" />
-                    </marker>
-                  </defs>
-                  {visibleLinkTypes.parent && (
-                    <FamilyBranchLinks
-                      branches={layout.familyBranches}
-                      people={treePeople}
-                      curved
-                      endpointDots
-                      highlightedLink={highlightedLink}
-                      highlightedNodeId={activeLinkNodeId}
-                      highlightedAncestorIds={highlightedAncestorIds}
-                      onHighlight={setHighlightedLink}
-                    />
-                  )}
-                  {layout.edges
-                    .filter((edge) => edge.kind !== 'parent' && visibleLinkTypes[edge.kind] !== false)
-                    .map((edge, i) => {
-                      const d = relationshipPath(edge);
-                      const from = byId(edge.fromId),
-                        to = byId(edge.toId);
-                      const relation =
-                        edge.kind === 'parent'
-                          ? relationshipLabel('Parent', from, to)
-                          : edge.kind === 'sibling'
-                            ? 'Sibling'
-                            : edge.kind === 'custom'
-                              ? edge.label
-                              : relationshipLabel('Partner', from, to) || 'Partner';
-                      const reverseRelation =
-                        edge.kind === 'parent'
-                          ? relationshipLabel('Child', to, from)
-                          : edge.kind === 'sibling'
-                            ? 'Sibling'
-                            : edge.kind === 'custom'
-                              ? edge.label
-                              : relationshipLabel('Partner', to, from) || 'Partner';
-                      const description = `${fullName(from)} · ${relation} · ${fullName(to)}`;
-                      const linkId = `${edge.kind}-${edge.fromId}-${edge.toId}`;
-                      const nodeRelated =
-                        activeLinkNodeId === edge.fromId ||
-                        activeLinkNodeId === edge.toId ||
-                        ((edge.kind === 'parent' || edge.kind === 'partner') && highlightedAncestorIds.has(edge.fromId) && highlightedAncestorIds.has(edge.toId));
-                      const linkHighlighted = highlightedLink?.key === linkId;
-                      const storedPartnerRelation = edge.kind === 'partner' ? partnerRelationship(from, to?.id) || partnerRelationship(to, from?.id) : '';
-                      const genderedPartnerPair = (from?.gender === 'male' && to?.gender === 'female') || (from?.gender === 'female' && to?.gender === 'male');
-                      const usesDefaultPartnerRole = ['', 'Husband', 'Wife', 'Spouse'].includes(storedPartnerRelation);
-                      const visibleRelation =
-                        edge.kind === 'custom'
-                          ? edge.label
-                          : edge.kind === 'sibling'
-                            ? 'Sibling'
-                            : edge.kind === 'partner' && genderedPartnerPair && usesDefaultPartnerRole
-                              ? 'Husband · Wife'
-                              : storedPartnerRelation || `${relation} · ${reverseRelation}`;
-                      const relationLabelPoint = linkLabelPoint(edge, visibleRelation, connectorNodePositions, connectorLabelPositions, false);
-                      return (
-                        <g key={`${linkId}-${i}`} className={`relationship-link ${linkHighlighted ? 'is-highlighted' : ''} ${nodeRelated ? 'is-node-related' : ''}`}>
-                          <path
-                            className="connector-hit"
-                            d={d}
-                            tabIndex="0"
-                            aria-label={description}
-                            onPointerEnter={() => setHighlightedLink({ key: linkId, ids: [edge.fromId, edge.toId] })}
-                            onPointerLeave={() => setHighlightedLink(null)}
-                            onFocus={() => setHighlightedLink({ key: linkId, ids: [edge.fromId, edge.toId] })}
-                            onBlur={() => setHighlightedLink(null)}
-                          />
-                          <path
-                            className={`connector ${edge.kind}`}
-                            d={d}
-                            markerStart={`url(#${linkHighlighted || nodeRelated ? 'smooth-link-highlight-dot' : 'smooth-link-dot'})`}
-                            markerEnd={`url(#${linkHighlighted || nodeRelated ? 'smooth-link-highlight-dot' : 'smooth-link-dot'})`}
-                          />
-                          <text className="connector-relation" x={relationLabelPoint.x} y={relationLabelPoint.y} textAnchor="middle" dominantBaseline="central">
-                            <title>
-                              {fullName(from)} · {visibleRelation} · {fullName(to)}
-                            </title>
-                            {visibleRelation}
-                          </text>
-                        </g>
-                      );
-                    })}
-                </svg>
-                {treePeople.map((person) => {
-                  const pos = layout.positions.get(person.id);
-                  const isDetailsVisible = detailsOpen && selectedId === person.id;
-                  return (
-                    <TreePersonNode
-                      key={person.id}
-                      person={person}
-                      position={pos}
-                      detailsVisible={isDetailsVisible}
-                      linkHighlighted={highlightedLink?.ids?.includes(person.id)}
-                      networkHighlighted={highlightedNetworkIds.has(person.id)}
-                      selected={selectedId === person.id || selectedNodeIds.includes(person.id)}
-                      familyColorIndex={familyColorsEnabled && familyColors.has(person.id) ? familyColors.get(person.id) : null}
-                      quickAddOpen={quickAddForId === person.id}
-                      aboutOpen={aboutTooltipId === person.id}
-                      aboutDismissed={dismissedAboutTooltipId === person.id}
-                      onHoverStart={() => setHighlightedNodeId(person.id)}
-                      onHoverEnd={() => setHighlightedNodeId((current) => (current === person.id ? '' : current))}
-                      onTouchDragStart={(event) => startDrag(event, person, pos)}
-                      onTouchPointerUp={() => {
-                        if (drag.current?.id === person.id && !drag.current.moved) {
-                          setHighlightedNodeId((current) => (current === person.id ? '' : person.id));
-                        }
-                      }}
-                      onMouseDragStart={(event) => startDrag(event, person, pos)}
-                      onOpenFromKeyboard={() => openPersonDetails(person.id)}
-                      onToggleQuickAdd={() => setQuickAddForId((current) => (current === person.id ? '' : person.id))}
-                      onQuickAdd={(kind) => openQuickAdd(person, kind)}
-                      onEdit={() => openPersonEditor(person)}
-                      onToggleDetails={() => {
-                        if (isDetailsVisible) {
-                          setDetailsOpen(false);
-                          setMobileDetailsOpen(false);
-                        } else openPersonDetails(person.id);
-                      }}
-                      onRestoreAboutHover={() => setDismissedAboutTooltipId('')}
-                      onToggleAbout={() => {
-                        if (aboutTooltipId === person.id) {
-                          setDismissedAboutTooltipId(person.id);
-                          setAboutTooltipId('');
-                        } else {
-                          setDismissedAboutTooltipId('');
-                          setAboutTooltipId(person.id);
-                        }
-                      }}
-                      onDelete={() => {
-                        setSelectedId(person.id);
-                        setSelectedNodeIds([]);
-                        setConfirmDelete(true);
-                      }}
-                    />
-                  );
-                })}
+                <TreeConnections
+                  layout={layout}
+                  treePeople={treePeople}
+                  visibleLinkTypes={visibleLinkTypes}
+                  highlightedLink={highlightedLink}
+                  activeLinkNodeId={activeLinkNodeId}
+                  highlightedAncestorIds={highlightedAncestorIds}
+                  onHighlight={setHighlightedLink}
+                  byId={byId}
+                  connectorNodePositions={connectorNodePositions}
+                  connectorLabelPositions={connectorLabelPositions}
+                  treeBoardWidth={treeBoardWidth}
+                  treeBoardHeight={treeBoardHeight}
+                />
+                <TreeNodeLayer
+                  treePeople={treePeople}
+                  layout={layout}
+                  detailsOpen={detailsOpen}
+                  selectedId={selectedId}
+                  selectedNodeIds={selectedNodeIds}
+                  highlightedLink={highlightedLink}
+                  highlightedNetworkIds={highlightedNetworkIds}
+                  familyColorsEnabled={familyColorsEnabled}
+                  familyColors={familyColors}
+                  quickAddForId={quickAddForId}
+                  aboutTooltipId={aboutTooltipId}
+                  dismissedAboutTooltipId={dismissedAboutTooltipId}
+                  setHighlightedNodeId={setHighlightedNodeId}
+                  startDrag={startDrag}
+                  drag={drag}
+                  openPersonDetails={openPersonDetails}
+                  setQuickAddForId={setQuickAddForId}
+                  openQuickAdd={openQuickAdd}
+                  openPersonEditor={openPersonEditor}
+                  setDetailsOpen={setDetailsOpen}
+                  setMobileDetailsOpen={setMobileDetailsOpen}
+                  setDismissedAboutTooltipId={setDismissedAboutTooltipId}
+                  setAboutTooltipId={setAboutTooltipId}
+                  setSelectedId={setSelectedId}
+                  setSelectedNodeIds={setSelectedNodeIds}
+                  setConfirmDelete={setConfirmDelete}
+                />
               </div>
             </div>
             {marqueeRect && <div className="marquee-selection" style={{ left: marqueeRect.left, top: marqueeRect.top, width: marqueeRect.width, height: marqueeRect.height }} aria-hidden="true" />}

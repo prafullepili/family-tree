@@ -339,6 +339,17 @@ client/
     PasswordRecovery.jsx  Forgot/reset password screens
     TreeWorkspace.jsx     Tree selection and collaboration panels
     App.jsx               Interactive family tree workspace
+    AppHeader.jsx         Header, search, and account controls
+    FamilySidebar.jsx     Family groups and member navigation
+    FamilyFilter.jsx      Shared family-group selector
+    TreeConnections.jsx   Relationship SVG and link interactions
+    TreeNodeLayer.jsx     Node rendering and interaction callbacks
+    useTreeHighlights.js  Ancestor and relationship highlighting
+    useFamilyLinkGroups.js Categorized person relationships
+    useFamilyMemberSearch.js Family filters and member search
+    useCanvasFullscreen.js Native fullscreen and mobile fallback
+    FamilyConstellation.jsx Login-page tree illustration
+    PasswordField.jsx     Password input and visibility toggle
     apiClient.js          API, session, and selected-tree request helpers
     googleIdentity.js     Shared Google script loader
     ...                   Canvas, person, settings, layout, and export modules
