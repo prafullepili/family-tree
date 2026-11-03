@@ -1,18 +1,10 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { performance } from 'node:perf_hooks';
-import { isValidEmail, sessionCookie } from '../authSecurity.js';
-import { applyPasswordReset, passwordResetConfigured, requestPasswordReset } from '../services/passwordResetService.js';
+import { sessionCookie } from '../authSecurity.js';
+import { applyPasswordReset } from '../services/passwordResetService.js';
 
-export async function forgotPassword(req, res, next) {
-  try {
-    if (!passwordResetConfigured()) return res.status(503).json({ error: 'Password recovery is not available yet. Please contact the site owner or use Google sign-in if your account is linked.' });
-    const email = String(req.body?.email || '').trim();
-    if (!isValidEmail(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
-    // Delivery runs separately so provider latency does not disclose account existence.
-    requestPasswordReset(email).catch(() => console.error('Password reset request could not be processed.'));
-    await delay(300);
-    res.json({ message: 'If an account exists for this email, a password reset link will arrive shortly. Check your inbox and spam folder.' });
-  } catch (error) { next(error); }
+export function forgotPassword(_req, res) {
+  res.status(503).json({ error: 'Password recovery email is not available. Please contact the site owner or use Google sign-in if your account is linked.' });
 }
 
 export async function resetPassword(req, res, next) {

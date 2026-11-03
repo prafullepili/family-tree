@@ -4,26 +4,14 @@ import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 
 process.env.NODE_ENV = 'test';
-process.env.RESEND_API_KEY = 'test-key';
-process.env.EMAIL_FROM = 'VanshLink <accounts@example.com>';
-process.env.PUBLIC_APP_URL = 'https://example.com/family-tree/';
 const { app, initializeDatabase } = await import('./index.js');
 const { default: User } = await import('./models/User.js');
 const { default: AuthSession } = await import('./models/AuthSession.js');
 const { hashToken, randomToken } = await import('./authSecurity.js');
 
-test('password recovery delivers private expiring links and invalidates passwords and sessions', { timeout: 900000 }, async (t) => {
+test('recovery is unavailable while existing tokens still expire and invalidate sessions', { timeout: 900000 }, async (t) => {
   const mongo = await MongoMemoryServer.create({ instance: { launchTimeout: 60000 } });
   let server;
-  const realFetch = globalThis.fetch;
-  const emails = [];
-  t.mock.method(globalThis, 'fetch', async (url, options) => {
-    if (url === 'https://api.resend.com/emails') {
-      emails.push(JSON.parse(options.body));
-      return new Response('{}', { status: 200 });
-    }
-    return realFetch(url, options);
-  });
   try {
     await mongoose.connect(mongo.getUri(), { dbName: 'familytree' });
     await initializeDatabase();
@@ -39,22 +27,13 @@ test('password recovery delivers private expiring links and invalidates password
     const staleSession = (await AuthSession.findOne().lean());
     const request = await post('/forgot-password', { email: 'reset@example.com' });
     const unknown = await post('/forgot-password', { email: 'unknown@example.com' });
-    assert.equal(request.status, 200);
+    assert.equal(request.status, 503);
     assert.deepEqual(request.body, unknown.body);
-    assert.equal(emails.length, 1);
-    const link = new URL(emails[0].text.match(/https:\/\/\S+/)[0]);
-    assert.equal(link.pathname, '/family-tree/');
-    assert.equal(link.search, '');
-    const token = new URLSearchParams(link.hash.slice(1)).get('reset-password');
-    assert.ok(token);
-    assert.equal(JSON.stringify(request.body).includes(token), false);
-    const user = await User.findOne().select('+resetTokenHash +resetTokenExpiresAt');
-    assert.equal(user.resetTokenHash, hashToken(token));
-    assert.notEqual(user.resetTokenHash, token);
-    assert.ok(user.resetTokenExpiresAt > new Date());
-    const throttled = await post('/forgot-password', { email: 'reset@example.com' });
-    assert.equal(throttled.status, 200);
-    assert.equal(emails.length, 1);
+    assert.equal(await User.countDocuments({ resetTokenHash: { $exists: true } }), 0);
+    // Tokens already issued before email removal remain usable until expiration.
+    const token = randomToken();
+    const user = await User.findOne();
+    await User.updateOne({ _id: user._id }, { $set: { resetTokenHash: hashToken(token), resetTokenExpiresAt: new Date(Date.now() + 1800000) } });
     assert.equal((await post('/reset-password', { token, password: 'short' })).status, 400);
     assert.equal((await post('/reset-password', { token: randomToken(), password: 'NewPassword123' })).status, 400);
     const outcomes = await Promise.all([

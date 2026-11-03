@@ -25,7 +25,7 @@ VanshLink is a responsive family-history application for building, exploring, an
 ### Accounts and collaboration
 
 - Sign in using email/username and password or Google.
-- Recover a forgotten password through an emailed reset link.
+- Existing password-reset links remain usable until they expire; new recovery emails are currently unavailable.
 - Create multiple trees and switch between owned and invited trees.
 - Manage members, invitation links, activity history, and deleted people.
 - Use the header's **Tree actions** menu for New tree, Join tree, Members & invitations, Activity history, and Recycle bin.
@@ -42,7 +42,7 @@ VanshLink is a responsive family-history application for building, exploring, an
 - React 18, Vite, and Lucide icons.
 - D3 shape utilities for relationship paths; ExcelJS for spreadsheet handling.
 - Express, Mongoose, and MongoDB.
-- Google Identity Services for Google sign-in; Resend for password-recovery emails.
+- Google Identity Services for Google sign-in. No email delivery provider is configured.
 - Node.js **20.19 or later**; the deployment workflow uses Node.js 22.
 - npm and an accessible MongoDB instance.
 
@@ -71,7 +71,20 @@ npm run dev
 
 Open **http://localhost:5173/family-tree/**.
 
-The API defaults to **http://localhost:4000**. Vite proxies `/api` requests to that port. If you change the local API port, update the proxy target in `client/vite.config.js` too.
+The API defaults to **http://localhost:4000**. Vite proxies `/api` requests to `http://127.0.0.1:4000`. If you change the local API port, update the proxy target in `client/vite.config.js` too.
+
+Wait for the API listening and MongoDB connected messages before signing in. The API runs in watch mode and restarts when its source changes; a request during a restart can temporarily return `503`.
+
+For local HTTP development, use these server settings:
+
+```env
+CLIENT_ORIGIN=http://localhost:5173
+COOKIE_SAME_SITE=lax
+COOKIE_SECURE=false
+PUBLIC_APP_URL=http://localhost:5173/family-tree/
+```
+
+Use the same browser hostname throughout a session. Cookies for `localhost` are separate from cookies for `127.0.0.1` or a LAN address.
 
 To run each package separately:
 
@@ -80,7 +93,7 @@ npm run dev:server
 npm run dev:client
 ```
 
-Authentication requires MongoDB. Google sign-in and password-recovery email delivery are optional integrations with additional settings.
+Authentication requires MongoDB. Google sign-in is optional and requires a Google client ID. Password-recovery email delivery is currently disabled.
 
 ## Environment configuration
 
@@ -98,9 +111,7 @@ Copy `server/.env.example` into `server/.env` for local development. On a hosted
 | `COOKIE_SECURE` | Set to `true` for HTTPS deployments. Production cookies are always marked Secure. |
 | `TRUST_PROXY_HOPS` | Number of trusted reverse-proxy hops. Defaults to `1` in production and `0` otherwise; the example file explicitly sets `0`, so override it on Render. |
 | `GOOGLE_CLIENT_ID` | Google Web application client ID; enables the Google sign-in button. |
-| `PUBLIC_APP_URL` | Full frontend URL, including its base path, used to build password-reset links. |
-| `RESEND_API_KEY` | Server-side Resend API key for account emails. |
-| `EMAIL_FROM` | Sender address accepted by your Resend configuration. |
+| `PUBLIC_APP_URL` | Frontend URL retained for deployment configuration; email recovery is currently disabled. |
 
 Development origins on localhost and supported private-network addresses using port 5173 are also allowed when the API is not running in production.
 
@@ -114,7 +125,11 @@ Never commit real environment files, database credentials, or email API keys.
 VITE_API_URL=https://family-tree-t6j3.onrender.com
 ```
 
-The current production fallback is that Render origin. Development uses the Vite proxy when this variable is unset. Rebuild the frontend after changing the API URL.
+`client/.env.production` currently supplies that Render origin, which is also the production fallback. Rebuild the frontend after changing the API URL.
+
+On `localhost`, `127.0.0.1`, or the IPv6 loopback host, `apiBaseUrl.js` uses same-origin `/api` requests even for a production build configured with a remote API. With Vite on port 5173, those requests reach the local Express server through the proxy. With Express serving the built client on port 4000, they reach that same Express server directly. Other hosts use the configured API URL, or the production fallback when none is configured.
+
+When testing locally, Network requests should show `http://localhost:5173/api/...` (or port 4000 when Express serves the page), rather than the Render origin. A successful login returns an account and CSRF token; subsequent requests still need the session cookie. The JSON response alone does not authenticate later requests.
 
 Only public configuration belongs in `VITE_` variables. Database and email credentials must stay on the API server.
 
@@ -143,6 +158,8 @@ Startup initializes model indexes and replaces legacy saved-layout indexes where
 
 Passwords are hashed with scrypt. Sessions use random tokens stored as hashes on the server and delivered through HttpOnly cookies. Authenticated state-changing requests require the session's `X-CSRF-Token`.
 
+New sessions retain the account's current password version. Password recovery increments that version and invalidates older sessions; signing in afterward creates a valid session using the updated version. The client also ignores stale startup session-check responses after a newer sign-in.
+
 ### Google sign-in
 
 Create a **Web application** OAuth client in Google Cloud and add the frontend origins under **Authorized JavaScript origins**:
@@ -163,25 +180,9 @@ The Google script loader shares pending loads across component mounts and offers
 
 ### Password recovery
 
-Select **Forgot password?** on the sign-in page and enter the account email.
+Password-recovery email delivery is currently disabled. **Forgot password?** returns an explicit unavailable message rather than promising an email. Use Google sign-in for a linked account, or contact the site owner.
 
-- Reset links expire after **30 minutes** and can be used once.
-- Only a hash of the reset token is stored.
-- Request responses do not disclose whether an email is registered.
-- Requests are limited by IP and have a per-account cooldown.
-- Resetting a password invalidates existing sessions and requires signing in again.
-- Tokens travel in the URL fragment, keeping them out of static-host request paths.
-- A password-change notification is also attempted.
-
-Configure Resend delivery on the API:
-
-```env
-PUBLIC_APP_URL=https://prafullepili.github.io/family-tree/
-RESEND_API_KEY=your_resend_api_key
-EMAIL_FROM=VanshLink <accounts@your-verified-domain.com>
-```
-
-Use a sender authorized by your email provider. For local links, use `PUBLIC_APP_URL=http://localhost:5173/family-tree/`. Production reset links require HTTPS. Without valid delivery settings, the recovery endpoint reports that recovery is unavailable.
+Previously issued reset links remain valid until their original expiration. Reset tokens are stored as hashes, expire after 30 minutes, and can be used once. Completing a valid reset changes the password version and invalidates existing sessions. No password-change notification email is sent.
 
 ## Shared trees and roles
 
@@ -206,7 +207,7 @@ Open **Tree actions → Members & invitations**, enter an email, and choose Edit
 
 Invitation links expire after **seven days**, are stored as hashes, and can be accepted once by an account with the invited email. Pending invitations can be revoked. **Join tree** also accepts a pasted invitation link or code.
 
-Invitation email delivery is currently manual; Resend integration sends password-recovery/account emails only.
+Invitation links are shared manually; the application does not send account or invitation emails.
 
 ### Activity and recycle bin
 
@@ -250,7 +251,7 @@ Authenticated routes use the session cookie. State-changing authenticated routes
 | POST | `/api/auth/google` | Verify a Google credential and sign in |
 | GET | `/api/auth/me` | Current account and CSRF token |
 | POST | `/api/auth/logout` | End the current session |
-| POST | `/api/auth/forgot-password` | Request a reset email using `email` |
+| POST | `/api/auth/forgot-password` | Returns 503: recovery email is unavailable |
 | POST | `/api/auth/reset-password` | Set a password using `token` and `password` |
 
 Registration, login, Google sign-in, and password recovery are pre-authentication endpoints. Reset requests are authorized by the reset token rather than an existing session.
@@ -289,7 +290,7 @@ Registration, login, Google sign-in, and password recovery are pre-authenticatio
 
 The current frontend is served at **https://prafullepili.github.io/family-tree/**. Vite's base path is `/family-tree/`.
 
-The workflow in `.github/workflows/deploy.yml` builds the client with Node.js 22 and deploys `client/dist` to GitHub Pages on pushes to `main` or manual dispatch. It currently uses the production API fallback in `apiClient.js`; configure a build-time `VITE_API_URL` if deploying against a different API.
+The workflow in `.github/workflows/deploy.yml` builds the client with Node.js 22 and deploys `client/dist` to GitHub Pages on pushes to `main` or manual dispatch. The build reads `client/.env.production`; set its public `VITE_API_URL` or supply a build-time override when deploying against a different API. Pushing the frontend does not itself deploy the Express API; deploy the backend changes through its hosting service too.
 
 For a Render service using the repository root:
 
@@ -310,7 +311,7 @@ TRUST_PROXY_HOPS=1
 PUBLIC_APP_URL=https://prafullepili.github.io/family-tree/
 ```
 
-Add the Google and Resend variables when enabling those integrations. Render supplies `PORT`; a custom value is not required.
+Set `GOOGLE_CLIENT_ID` to enable Google sign-in. Render supplies `PORT`; a custom value is not required.
 
 CORS uses the frontend **origin**, not its full page URL. `CLIENT_ORIGIN=https://prafullepili.github.io/family-tree/` is incorrect. Cross-site session cookies are marked Secure and Partitioned by the current server.
 
@@ -358,6 +359,7 @@ client/
     FamilyConstellation.jsx Login-page tree illustration
     PasswordField.jsx     Password input and visibility toggle
     apiClient.js          API, session, and selected-tree request helpers
+    apiBaseUrl.js         Local versus deployed API origin selection
     googleIdentity.js     Shared Google script loader
     ...                   Canvas, person, settings, layout, and export modules
   vite.config.js          Base path and local API proxy
@@ -369,7 +371,7 @@ server/
   routes/                 Endpoint declarations
   controllers/            Request validation and response handling
   middleware/             Sessions, CSRF, permissions, CORS, limits, audit, errors
-  services/               Sessions, recovery email, migration, relationship logic
+  services/               Sessions, reset-token validation, migration, relationship logic
   models/                 MongoDB schemas
   authSecurity.js         Password hashing, cookie, token, and identity utilities
   authRoutes.js           Compatibility exports
@@ -390,20 +392,24 @@ server/
 | `npm run test --workspace client` | Run client tests |
 | `npm run test --workspace server` | Run API/security integration tests |
 
-Integration tests start temporary MongoDB instances and mock recovery email delivery. They do not use the live database or send real emails. The first run downloads a MongoDB binary and may take longer.
+Integration tests start temporary MongoDB instances. They do not use the live database or send emails. The first run downloads a MongoDB binary and may take longer.
 
-Coverage includes family-data loading, placement, zoom math, Google script loading/retry, password hashing, sessions, role enforcement, tree isolation, legacy migration, invitations, saved-view isolation, recycle-bin restore, and password-reset expiration/single use/session invalidation.
+Coverage includes local/deployed API routing, family-data loading, placement, zoom math, Google script loading/retry, password hashing, session password-version preservation, role enforcement, tree isolation, legacy migration, invitations, saved-view isolation, recycle-bin restore, and password-reset expiration/single use/session invalidation.
 
 ## Troubleshooting
 
 | Symptom | Check |
 | --- | --- |
 | CORS error on GitHub Pages | Exact `CLIENT_ORIGIN`, API availability, and credentialed-cookie settings |
+| Local API is starting or restarting | Wait for the API listening and MongoDB connected messages; retry after the watcher restarts |
+| Local page requests Render instead of the local API | Rebuild/reload the current client and use the local development URL; loopback hosts now use same-origin API requests |
+| `/api/auth/me` returns 401 before login | Expected when no valid session exists; check the login POST response separately |
+| Login returns 200 but trees return 401 | Verify both requests use the same API, the browser accepts and sends the session cookie, and the deployed backend includes the password-version fix |
+| Email/username or password is incorrect | Use the account's current password after a reset, or Google sign-in if linked; session routing cannot correct a wrong password |
 | Sign-in does not persist across sites | `COOKIE_SAME_SITE=none`, HTTPS, browser cookie policy, and `COOKIE_SECURE=true` |
 | Google button stays loading or fails | Retry, browser/network blocking, `GOOGLE_CLIENT_ID`, and authorized JavaScript origins |
 | Only one Google account appears on the button | The personalized button is a preview; click it to open Google's selection flow |
-| Password recovery is unavailable | `PUBLIC_APP_URL`, `RESEND_API_KEY`, and `EMAIL_FROM` |
-| Reset email never arrives | Spam folder, API logs, sender authorization, and email provider configuration |
+| Password recovery is unavailable | Email delivery is disabled; use linked Google sign-in or contact the site owner |
 | Reset link is expired or already used | Request a new reset link |
 | Read-only MongoDB user cannot log in | The API database user needs write access for sessions and account updates |
 | Address already in use on port 4000 | Stop the process already listening there, or change the local API port and Vite proxy |
