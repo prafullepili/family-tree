@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import TreeWorkspace from './TreeWorkspace.jsx';
 import LoginPage from './LoginPage.jsx';
 import { apiUrl, resetFamilyDataRequest, setAuthCsrfToken } from './apiClient.js';
@@ -10,6 +10,7 @@ async function readJson(response) {
 }
 
 export default function AuthApp() {
+  const authRequestVersion = useRef(0);
   const [session, setSession] = useState(null);
   const [status, setStatus] = useState('checking');
   const [authError, setAuthError] = useState('');
@@ -43,6 +44,7 @@ export default function AuthApp() {
   }, [theme]);
 
   const clearSession = useCallback((message = '') => {
+    authRequestVersion.current += 1;
     setAuthCsrfToken('');
     resetFamilyDataRequest();
     setSession(null);
@@ -51,6 +53,7 @@ export default function AuthApp() {
   }, []);
 
   const acceptSession = useCallback((payload) => {
+    authRequestVersion.current += 1;
     setAuthCsrfToken(payload.csrfToken);
     resetFamilyDataRequest();
     setSession(payload);
@@ -59,6 +62,7 @@ export default function AuthApp() {
   }, []);
 
   const checkSession = useCallback(async () => {
+    const requestVersion = ++authRequestVersion.current;
     setStatus('checking');
     setAuthError('');
     try {
@@ -66,10 +70,12 @@ export default function AuthApp() {
         fetch(apiUrl('/api/auth/config'), { credentials: 'include', cache: 'no-store' }).then(readJson),
         fetch(apiUrl('/api/auth/me'), { credentials: 'include', cache: 'no-store' }).then(readJson),
       ]);
+      if (requestVersion !== authRequestVersion.current) return;
       if (configResult.status === 'fulfilled') setGoogleClientId(configResult.value.googleClientId || '');
       if (sessionResult.status === 'fulfilled') acceptSession(sessionResult.value);
       else clearSession(sessionResult.reason?.message === 'Please sign in to continue.' ? '' : sessionResult.reason?.message || '');
     } catch (error) {
+      if (requestVersion !== authRequestVersion.current) return;
       clearSession(error.message || 'Could not reach the account service.');
     }
   }, [acceptSession, clearSession]);
@@ -85,6 +91,8 @@ export default function AuthApp() {
   }, [clearSession]);
 
   async function authenticate(path, values) {
+    // A pending startup check must never replace a newer sign-in result.
+    const requestVersion = ++authRequestVersion.current;
     setAuthError('');
     const response = await fetch(apiUrl(path), {
       method: 'POST',
@@ -93,6 +101,7 @@ export default function AuthApp() {
       body: JSON.stringify(values),
     });
     const payload = await readJson(response);
+    if (requestVersion !== authRequestVersion.current) return;
     acceptSession(payload);
   }
 
