@@ -25,7 +25,8 @@ VanshLink is a responsive family-history application for building, exploring, an
 ### Accounts and collaboration
 
 - Sign in using email/username and password or Google.
-- Existing password-reset links remain usable until they expire; new recovery emails are currently unavailable.
+- Verify new email/password registrations with a 6-digit email code delivered through Gmail SMTP.
+- Recover passwords using a 6-digit code delivered through Gmail. Existing reset links remain usable until they expire.
 - Create multiple trees and switch between owned and invited trees.
 - Manage members, invitation links, activity history, and deleted people.
 - Use the header's **Tree actions** menu for New tree, Join tree, Members & invitations, Activity history, and Recycle bin.
@@ -42,7 +43,7 @@ VanshLink is a responsive family-history application for building, exploring, an
 - React 18, Vite, and Lucide icons.
 - D3 shape utilities for relationship paths; ExcelJS for spreadsheet handling.
 - Express, Mongoose, and MongoDB.
-- Google Identity Services for Google sign-in. No email delivery provider is configured.
+- Google Identity Services for Google sign-in; Nodemailer and Gmail SMTP for email-verification codes.
 - Node.js **20.19 or later**; the deployment workflow uses Node.js 22.
 - npm and an accessible MongoDB instance.
 
@@ -93,7 +94,9 @@ npm run dev:server
 npm run dev:client
 ```
 
-Authentication requires MongoDB. Google sign-in is optional and requires a Google client ID. Password-recovery email delivery is currently disabled.
+Authentication requires MongoDB. Google sign-in is optional and requires a Google client ID. New email/password registrations require Gmail delivery configuration by default. Password recovery uses the same Gmail connection.
+
+For both Google integrations, follow [Google and Gmail setup](docs/GOOGLE_SETUP.md). Run `npm run check:google --workspace server` to verify Gmail credentials without sending an email.
 
 ## Environment configuration
 
@@ -111,7 +114,11 @@ Copy `server/.env.example` into `server/.env` for local development. On a hosted
 | `COOKIE_SECURE` | Set to `true` for HTTPS deployments. Production cookies are always marked Secure. |
 | `TRUST_PROXY_HOPS` | Number of trusted reverse-proxy hops. Defaults to `1` in production and `0` otherwise; the example file explicitly sets `0`, so override it on Render. |
 | `GOOGLE_CLIENT_ID` | Google Web application client ID; enables the Google sign-in button. |
-| `PUBLIC_APP_URL` | Frontend URL retained for deployment configuration; email recovery is currently disabled. |
+| `EMAIL_VERIFICATION_REQUIRED` | Defaults to enabled; set to `false` only to explicitly allow new registrations without verification. Existing pending accounts still require verification. |
+| `GMAIL_USER` | Gmail address used to send verification codes. |
+| `GMAIL_APP_PASSWORD` | Private Gmail App Password, created after enabling Google 2-Step Verification. |
+| `EMAIL_OTP_SECRET` | Private random secret of at least 32 characters, used for keyed code hashes; keep stable across API instances. |
+| `PUBLIC_APP_URL` | Frontend URL retained for deployment configuration; email codes do not require a reset-link URL. |
 
 Development origins on localhost and supported private-network addresses using port 5173 are also allowed when the API is not running in production.
 
@@ -180,9 +187,19 @@ The Google script loader shares pending loads across component mounts and offers
 
 ### Password recovery
 
-Password-recovery email delivery is currently disabled. **Forgot password?** returns an explicit unavailable message rather than promising an email. Use Google sign-in for a linked account, or contact the site owner.
+Select **Forgot password?**, enter the account email, then enter the emailed 6-digit code and choose a new password. Gmail and the OTP secret must be configured. Responses do not reveal whether an account exists.
+
+Recovery codes expire after 5 minutes, allow at most 5 attempts, and can be used once. Requesting another code invalidates the previous code, requires a 60-second wait, and allows at most 5 deliveries per account per hour. Recovery codes have separate keyed hashes and attempt counters from registration verification codes. IP limits also apply.
 
 Previously issued reset links remain valid until their original expiration. Reset tokens are stored as hashes, expire after 30 minutes, and can be used once. Completing a valid reset changes the password version and invalidates existing sessions. No password-change notification email is sent.
+
+### Email verification codes
+
+New email/password accounts must enter a 6-digit code before a session is issued. Codes expire after 5 minutes and allow at most 5 attempts. Resending invalidates the old code, requires a 60-second wait, and allows at most 5 deliveries per account per hour. Codes are stored as keyed hashes bound to the account, address, and purpose. Server-side IP limits also apply.
+
+Existing accounts remain accessible. Successful Google sign-in uses Google's verified email claim and does not send a separate code. When Gmail is not configured, new email registration and recovery report unavailable errors; Google sign-in remains independent. Registration verification and password recovery use separate codes.
+
+Gmail does not require a custom domain, but its sending limits apply. Render's free web services block outbound SMTP ports, so Gmail delivery needs an SMTP-capable host. See [setup details](docs/GOOGLE_SETUP.md).
 
 ## Shared trees and roles
 
@@ -207,7 +224,7 @@ Open **Tree actions → Members & invitations**, enter an email, and choose Edit
 
 Invitation links expire after **seven days**, are stored as hashes, and can be accepted once by an account with the invited email. Pending invitations can be revoked. **Join tree** also accepts a pasted invitation link or code.
 
-Invitation links are shared manually; the application does not send account or invitation emails.
+Invitation links are shared manually; email delivery is used only for registration verification codes.
 
 ### Activity and recycle bin
 
@@ -249,12 +266,14 @@ Authenticated routes use the session cookie. State-changing authenticated routes
 | POST | `/api/auth/register` | Create an account |
 | POST | `/api/auth/login` | Sign in with email/username and password |
 | POST | `/api/auth/google` | Verify a Google credential and sign in |
+| POST | `/api/auth/verify-email` | Consume a 6-digit code using `email` and `code`, then issue a session |
+| POST | `/api/auth/resend-verification` | Request a replacement registration code using `email` |
 | GET | `/api/auth/me` | Current account and CSRF token |
 | POST | `/api/auth/logout` | End the current session |
-| POST | `/api/auth/forgot-password` | Returns 503: recovery email is unavailable |
-| POST | `/api/auth/reset-password` | Set a password using `token` and `password` |
+| POST | `/api/auth/forgot-password` | Request a recovery code using `email` |
+| POST | `/api/auth/reset-password` | Set a password using `email`, `code`, and `password`; legacy `token` and `password` remain supported |
 
-Registration, login, Google sign-in, and password recovery are pre-authentication endpoints. Reset requests are authorized by the reset token rather than an existing session.
+Registration, login, Google sign-in, and password recovery are pre-authentication endpoints. Reset requests are authorized by a valid recovery code or legacy reset token rather than an existing session.
 
 ### Trees and collaboration
 
@@ -338,6 +357,7 @@ client/
     AuthApp.jsx           Session bootstrap and authentication entry
     LoginPage.jsx         Sign-in and registration interface
     PasswordRecovery.jsx  Forgot/reset password screens
+    EmailVerification.jsx Registration code entry and resend controls
     TreeWorkspace.jsx     Tree selection and collaboration panels
     App.jsx               Interactive family tree workspace
     AppHeader.jsx         Header, search, and account controls
@@ -391,8 +411,9 @@ server/
 | `npm test` | Run all workspace tests |
 | `npm run test --workspace client` | Run client tests |
 | `npm run test --workspace server` | Run API/security integration tests |
+| `npm run check:google --workspace server` | Check Google client-ID format and Gmail SMTP credentials without sending email |
 
-Integration tests start temporary MongoDB instances. They do not use the live database or send emails. The first run downloads a MongoDB binary and may take longer.
+Integration tests start temporary MongoDB instances and mock Gmail delivery. They do not use the live database or send emails. The first run downloads a MongoDB binary and may take longer.
 
 Coverage includes local/deployed API routing, family-data loading, placement, zoom math, Google script loading/retry, password hashing, session password-version preservation, role enforcement, tree isolation, legacy migration, invitations, saved-view isolation, recycle-bin restore, and password-reset expiration/single use/session invalidation.
 
@@ -409,8 +430,10 @@ Coverage includes local/deployed API routing, family-data loading, placement, zo
 | Sign-in does not persist across sites | `COOKIE_SAME_SITE=none`, HTTPS, browser cookie policy, and `COOKIE_SECURE=true` |
 | Google button stays loading or fails | Retry, browser/network blocking, `GOOGLE_CLIENT_ID`, and authorized JavaScript origins |
 | Only one Google account appears on the button | The personalized button is a preview; click it to open Google's selection flow |
-| Password recovery is unavailable | Email delivery is disabled; use linked Google sign-in or contact the site owner |
-| Reset link is expired or already used | Request a new reset link |
+| Password recovery is unavailable | Configure Gmail and the OTP secret, and verify SMTP access; linked Google sign-in remains an alternative |
+| New registration reports email setup is unavailable | Configure Gmail and the OTP secret; see `docs/GOOGLE_SETUP.md` |
+| Verification code never arrives | Check spam, App Password, Gmail limits, API logs, and SMTP access from the hosting plan |
+| Reset code/link is expired or already used | Request a new code from Forgot password |
 | Read-only MongoDB user cannot log in | The API database user needs write access for sessions and account updates |
 | Address already in use on port 4000 | Stop the process already listening there, or change the local API port and Vite proxy |
 | Selected-tree request fails | Session, membership, `X-Tree-Id`, and Owner/Editor/Viewer access |

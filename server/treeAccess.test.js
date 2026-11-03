@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 
 process.env.NODE_ENV = 'test';
+process.env.EMAIL_VERIFICATION_REQUIRED = 'false';
 const { app, initializeDatabase } = await import('./index.js');
 const { FamilyTree, TreeMembership, TreeInvitation } = await import('./treeAccess.js');
 const { default: Person } = await import('./models/Person.js');

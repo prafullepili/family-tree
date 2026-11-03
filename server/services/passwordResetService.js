@@ -10,7 +10,7 @@ export async function applyPasswordReset(token, password) {
   const passwordHash = await hashPassword(password);
   const user = await User.findOneAndUpdate({ ...filter, resetTokenExpiresAt: { $gt: new Date() } }, {
     $set: { passwordHash }, $inc: { passwordVersion: 1 },
-    $unset: { resetTokenHash: 1, resetTokenExpiresAt: 1, resetRequestedAt: 1 },
+    $unset: { resetTokenHash: 1, resetTokenExpiresAt: 1, resetRequestedAt: 1, recoveryHash: 1, recoveryExpiresAt: 1, recoverySentAt: 1, recoveryAttempts: 1 },
   }, { new: true });
   if (!user) return null;
   await AuthSession.deleteMany({ userId: user._id });

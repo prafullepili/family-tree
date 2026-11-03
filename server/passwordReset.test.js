@@ -4,6 +4,8 @@ import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 
 process.env.NODE_ENV = 'test';
+process.env.EMAIL_VERIFICATION_REQUIRED = 'false';
+process.env.GMAIL_APP_PASSWORD = '';
 const { app, initializeDatabase } = await import('./index.js');
 const { default: User } = await import('./models/User.js');
 const { default: AuthSession } = await import('./models/AuthSession.js');

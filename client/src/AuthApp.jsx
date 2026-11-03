@@ -15,6 +15,7 @@ export default function AuthApp() {
   const [status, setStatus] = useState('checking');
   const [authError, setAuthError] = useState('');
   const [googleClientId, setGoogleClientId] = useState('');
+  const [verificationEmail, setVerificationEmail] = useState('');
   const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('reset-password') || '');
   function clearResetLink() {
     setResetToken('');
@@ -58,6 +59,7 @@ export default function AuthApp() {
     resetFamilyDataRequest();
     setSession(payload);
     setAuthError('');
+    setVerificationEmail('');
     setStatus('signed-in');
   }, []);
 
@@ -100,8 +102,14 @@ export default function AuthApp() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(values),
     });
-    const payload = await readJson(response);
+    const payload = await response.json().catch(() => null);
     if (requestVersion !== authRequestVersion.current) return;
+    if (payload?.verificationRequired) {
+      setVerificationEmail(payload.email);
+      setAuthError(payload.error || '');
+      return;
+    }
+    if (!response.ok || !payload?.user) throw Error(payload?.error || 'Could not sign in.');
     acceptSession(payload);
   }
 
@@ -131,6 +139,9 @@ export default function AuthApp() {
   if (resetToken || status !== 'signed-in' || !session?.user) {
     return (
       <LoginPage
+        verificationEmail={verificationEmail}
+        onVerifyEmail={(values) => authenticate('/api/auth/verify-email', values)}
+        onExitVerification={() => { setVerificationEmail(''); setAuthError(''); }}
         resetToken={resetToken}
         onResetComplete={() => {
           clearSession();

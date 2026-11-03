@@ -348,18 +348,20 @@ html[data-theme='dark'] .auth-loading {
   font-weight: 700;
 }
 .auth-input-wrap {
+  --auth-input-bg: var(--auth-field);
   height: 45px;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 0 13px;
   color: #8c9991;
-  background: var(--auth-field);
+  background: var(--auth-input-bg);
   border: 1px solid var(--auth-border);
   border-radius: 10px;
   transition: border-color 0.16s, box-shadow 0.16s, background 0.16s;
 }
 .auth-input-wrap:focus-within {
+  --auth-input-bg: var(--auth-panel);
   color: var(--auth-accent);
   background: var(--auth-panel);
   border-color: color-mix(in srgb, var(--auth-accent) 70%, var(--auth-border));
@@ -376,6 +378,13 @@ html[data-theme='dark'] .auth-loading {
 }
 .auth-input-wrap input::placeholder {
   color: color-mix(in srgb, var(--auth-muted) 72%, transparent);
+}
+.auth-input-wrap input:is(:autofill, :-webkit-autofill) {
+  -webkit-box-shadow: 0 0 0 1000px var(--auth-input-bg) inset !important;
+  box-shadow: 0 0 0 1000px var(--auth-input-bg) inset !important;
+  -webkit-text-fill-color: var(--auth-text) !important;
+  color: var(--auth-text) !important;
+  caret-color: var(--auth-text);
 }
 .auth-password-toggle {
   width: 28px;

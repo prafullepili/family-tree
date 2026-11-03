@@ -3,13 +3,16 @@ import User from '../models/User.js';
 import { OAuth2Client } from 'google-auth-library';
 import { hashPassword, isValidEmail, isValidUsername, normalizeIdentity, publicUser, sessionCookie, verifyPassword } from '../authSecurity.js';
 import { createSession, claimLegacyTree, uniqueGoogleUsername } from '../services/authService.js';
+import { emailVerificationRequired, emailVerificationConfigured, issueVerificationCode } from '../services/emailVerificationService.js';
 export const getAuthConfig = (_req, res) => {
   res.json({
-    googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    emailVerificationRequired: emailVerificationRequired(),
   });
 };
 export const register = async (req, res, next) => {
   try {
+    if (emailVerificationRequired() && !emailVerificationConfigured()) return res.status(503).json({ error: 'Email registration is not ready. Use Google sign-in or contact the site owner.' });
     const displayName = String(req.body?.displayName || '').trim().slice(0, 80);
     const username = String(req.body?.username || '').trim();
     const normalizedUsername = normalizeIdentity(username);
@@ -45,9 +48,15 @@ export const register = async (req, res, next) => {
       email,
       normalizedEmail,
       passwordHash: await hashPassword(password),
+      emailVerificationRequired: emailVerificationRequired(),
       role: isFirstUser ? 'owner' : 'member',
       lastLoginAt: new Date()
     });
+    if (user.emailVerificationRequired) {
+      try { await issueVerificationCode(user); }
+      catch (error) { return res.status(error.status || 503).json({ error: error.message, verificationRequired: true, email: user.email }); }
+      return res.status(202).json({ verificationRequired: true, email: user.email });
+    }
     await claimLegacyTree(user);
     res.status(201).json(await createSession(user, req, res));
   } catch (error) {
@@ -71,6 +80,7 @@ export const login = async (req, res, next) => {
     if (!user?.passwordHash || !(await verifyPassword(password, user.passwordHash))) return res.status(401).json({
       error: 'Email/username or password is incorrect.'
     });
+    if (user.emailVerificationRequired) return res.status(403).json({ error: 'Verify your email before signing in.', verificationRequired: true, email: user.email });
     user.lastLoginAt = new Date();
     await user.save();
     await claimLegacyTree(user);
@@ -131,6 +141,10 @@ export const googleLogin = async (req, res, next) => {
         await claimLegacyTree(user);
       }
     }
+    user.emailVerifiedAt = new Date();
+    user.emailVerificationRequired = false;
+    user.verificationHash = undefined;
+    user.verificationExpiresAt = undefined;
     user.lastLoginAt = new Date();
     await user.save();
     await claimLegacyTree(user);

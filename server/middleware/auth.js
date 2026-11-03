@@ -54,6 +54,7 @@ export async function requireAuth(req, res, next) {
         error: 'Please sign in to continue.'
       });
     }
+    if (user.emailVerificationRequired) return res.status(403).json({ error: 'Verify your email before accessing your trees.' });
     if (!SAFE_METHODS.has(req.method)) {
       const csrfToken = String(req.get('x-csrf-token') || '');
       if (!csrfToken || hashToken(csrfToken) !== hashToken(session.csrfToken)) return res.status(403).json({

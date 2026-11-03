@@ -5,8 +5,9 @@ import PasswordRecovery from './PasswordRecovery.jsx';
 import { loadGoogleIdentity } from './googleIdentity.js';
 import FamilyConstellation from './FamilyConstellation.jsx';
 import PasswordField from './PasswordField.jsx';
+import EmailVerification from './EmailVerification.jsx';
 
-export default function LoginPage({ error, googleClientId, theme, onThemeChange, onLogin, onRegister, onGoogle, onRetry, resetToken = '', onResetComplete, onExitRecovery }) {
+export default function LoginPage({ error, googleClientId, theme, onThemeChange, onLogin, onRegister, onGoogle, onRetry, resetToken = '', onResetComplete, onExitRecovery, verificationEmail = '', onVerifyEmail, onExitVerification }) {
   const [recovering, setRecovering] = useState(Boolean(resetToken));
   const [mode, setMode] = useState('login');
   const [values, setValues] = useState({ displayName: '', username: '', email: '', identity: '', password: '' });
@@ -20,7 +21,7 @@ export default function LoginPage({ error, googleClientId, theme, onThemeChange,
   googleHandlerRef.current = onGoogle;
 
   useEffect(() => {
-    if (!googleClientId || !googleButtonRef.current) return undefined;
+    if (!googleClientId || verificationEmail || !googleButtonRef.current) return undefined;
     let cancelled = false;
     setGoogleReady(false);
     setGoogleError('');
@@ -55,7 +56,7 @@ export default function LoginPage({ error, googleClientId, theme, onThemeChange,
     return () => {
       cancelled = true;
     };
-  }, [googleClientId, recovering, googleAttempt]);
+  }, [googleClientId, recovering, googleAttempt, verificationEmail]);
 
   function update(field) {
     return (valueOrEvent) => setValues((current) => ({ ...current, [field]: valueOrEvent?.target ? valueOrEvent.target.value : valueOrEvent }));
@@ -70,6 +71,7 @@ export default function LoginPage({ error, googleClientId, theme, onThemeChange,
       else await onRegister({ displayName: values.displayName, username: values.username, email: values.email, password: values.password });
     } catch (requestError) {
       setLocalError(requestError.message || 'Could not sign in.');
+    } finally {
       setPending(false);
     }
   }
@@ -101,7 +103,7 @@ export default function LoginPage({ error, googleClientId, theme, onThemeChange,
             VanshLink
           </div>
           <div className="auth-form-content">
-            {recovering ? <PasswordRecovery token={resetToken} onResetComplete={onResetComplete} onBack={() => { setRecovering(false); onExitRecovery?.(); }} /> : <>
+            {verificationEmail ? <EmailVerification key={verificationEmail} email={verificationEmail} initialError={error} onVerify={onVerifyEmail} onBack={() => { setMode('login'); setLocalError(''); onExitVerification(); }} /> : recovering ? <PasswordRecovery token={resetToken} onResetComplete={onResetComplete} onBack={() => { setRecovering(false); onExitRecovery?.(); }} /> : <>
             <div className="auth-form-heading">
               <span>{mode === 'login' ? 'WELCOME BACK' : 'START YOUR ARCHIVE'}</span>
               <h2>{mode === 'login' ? 'Sign in to your family tree' : 'Create your VanshLink account'}</h2>
