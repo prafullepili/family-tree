@@ -8,7 +8,7 @@ VanshLink is a responsive family-history application for building, exploring, an
 
 - Create and edit people with first name, surname, maiden name, gender, birth/death dates, birthplace, occupation, photo URL, biography, and family notes.
 - Link parents, children, partners, siblings, and custom relationships. Each person can have up to two parents.
-- Add relatives directly from a node's shortcut menu.
+- Add a father, mother, brother, sister, son, daughter, or partner directly from a node's shortcut menu. Child shortcuts link both known parents and related siblings; sibling shortcuts preserve known parents and sibling connections.
 - Browse categorized family links in person details and focus a linked person on the canvas.
 - Search people and filter the canvas by family groups.
 
@@ -25,6 +25,7 @@ VanshLink is a responsive family-history application for building, exploring, an
 ### Accounts and collaboration
 
 - Sign in using email/username and password or Google.
+- Saved browser credentials follow the login form's light/dark colors.
 - Verify new email/password registrations with a 6-digit email code delivered through Gmail SMTP.
 - Recover passwords using a 6-digit code delivered through Gmail. Existing reset links remain usable until they expire.
 - Create multiple trees and switch between owned and invited trees.
@@ -43,7 +44,7 @@ VanshLink is a responsive family-history application for building, exploring, an
 - React 18, Vite, and Lucide icons.
 - D3 shape utilities for relationship paths; ExcelJS for spreadsheet handling.
 - Express, Mongoose, and MongoDB.
-- Google Identity Services for Google sign-in; Nodemailer and Gmail SMTP for email-verification codes.
+- Google Identity Services for Google sign-in; Nodemailer and Gmail SMTP for registration verification and password-recovery codes.
 - Node.js **20.19 or later**; the deployment workflow uses Node.js 22.
 - npm and an accessible MongoDB instance.
 
@@ -96,7 +97,9 @@ npm run dev:client
 
 Authentication requires MongoDB. Google sign-in is optional and requires a Google client ID. New email/password registrations require Gmail delivery configuration by default. Password recovery uses the same Gmail connection.
 
-For both Google integrations, follow [Google and Gmail setup](docs/GOOGLE_SETUP.md). Run `npm run check:google --workspace server` to verify Gmail credentials without sending an email.
+For both Google integrations, follow [Google and Gmail setup](docs/GOOGLE_SETUP.md). Run `npm run check:google --workspace server` to check the Google client-ID format and verify the Gmail SMTP connection and credentials without sending an email. This does not validate Google Cloud's allowed origins or confirm inbox delivery.
+
+Gmail setup requires Google 2-Step Verification and an App Password for the sending account. Use the App Password rather than the account's normal password. No custom sending domain is required for a personal Gmail sender; Gmail sending limits still apply.
 
 ## Environment configuration
 
@@ -115,14 +118,14 @@ Copy `server/.env.example` into `server/.env` for local development. On a hosted
 | `TRUST_PROXY_HOPS` | Number of trusted reverse-proxy hops. Defaults to `1` in production and `0` otherwise; the example file explicitly sets `0`, so override it on Render. |
 | `GOOGLE_CLIENT_ID` | Google Web application client ID; enables the Google sign-in button. |
 | `EMAIL_VERIFICATION_REQUIRED` | Defaults to enabled; set to `false` only to explicitly allow new registrations without verification. Existing pending accounts still require verification. |
-| `GMAIL_USER` | Gmail address used to send verification codes. |
+| `GMAIL_USER` | Gmail address used to send registration and password-recovery codes. |
 | `GMAIL_APP_PASSWORD` | Private Gmail App Password, created after enabling Google 2-Step Verification. |
 | `EMAIL_OTP_SECRET` | Private random secret of at least 32 characters, used for keyed code hashes; keep stable across API instances. |
 | `PUBLIC_APP_URL` | Frontend URL retained for deployment configuration; email codes do not require a reset-link URL. |
 
 Development origins on localhost and supported private-network addresses using port 5173 are also allowed when the API is not running in production.
 
-Never commit real environment files, database credentials, or email API keys.
+Never commit real environment files, database credentials, Gmail App Passwords, or OTP secrets. Server environment settings must also be configured on the deployed backend; local `.env` values are not uploaded by GitHub Pages.
 
 ### Frontend
 
@@ -132,7 +135,7 @@ Never commit real environment files, database credentials, or email API keys.
 VITE_API_URL=https://family-tree-t6j3.onrender.com
 ```
 
-`client/.env.production` currently supplies that Render origin, which is also the production fallback. Rebuild the frontend after changing the API URL.
+The code uses that Render origin as its production fallback. A local `client/.env.production` can supply `VITE_API_URL`, but that file is ignored by Git and is not present in a fresh checkout. For deployment overrides, supply the variable in the frontend build environment. Rebuild the frontend after changing the API URL.
 
 On `localhost`, `127.0.0.1`, or the IPv6 loopback host, `apiBaseUrl.js` uses same-origin `/api` requests even for a production build configured with a remote API. With Vite on port 5173, those requests reach the local Express server through the proxy. With Express serving the built client on port 4000, they reach that same Express server directly. Other hosts use the configured API URL, or the production fallback when none is configured.
 
@@ -150,7 +153,7 @@ Collections include:
 
 | Collection | Stores |
 | --- | --- |
-| `users` | Accounts, password hashes, Google identity, and hashed reset-token metadata |
+| `users` | Accounts, password hashes, Google identity, email-verification state, keyed OTP hashes, attempt/send limits, and legacy reset-token metadata |
 | `authsessions` | Hashed session tokens, CSRF tokens, expiration, and password versions |
 | `people` | Person details, relationships, positions, tree scope, and soft-delete metadata |
 | `treelayouts` | Named saved views and person coordinates |
@@ -189,6 +192,8 @@ The Google script loader shares pending loads across component mounts and offers
 
 Select **Forgot password?**, enter the account email, then enter the emailed 6-digit code and choose a new password. Gmail and the OTP secret must be configured. Responses do not reveal whether an account exists.
 
+The generic request-success message is not a delivery receipt: unknown emails, resend limits, or SMTP delivery failures can result in no email. Check the API logs when troubleshooting and use the latest code; never share a code or password in logs or support messages.
+
 Recovery codes expire after 5 minutes, allow at most 5 attempts, and can be used once. Requesting another code invalidates the previous code, requires a 60-second wait, and allows at most 5 deliveries per account per hour. Recovery codes have separate keyed hashes and attempt counters from registration verification codes. IP limits also apply.
 
 Previously issued reset links remain valid until their original expiration. Reset tokens are stored as hashes, expire after 30 minutes, and can be used once. Completing a valid reset changes the password version and invalidates existing sessions. No password-change notification email is sent.
@@ -224,7 +229,7 @@ Open **Tree actions → Members & invitations**, enter an email, and choose Edit
 
 Invitation links expire after **seven days**, are stored as hashes, and can be accepted once by an account with the invited email. Pending invitations can be revoked. **Join tree** also accepts a pasted invitation link or code.
 
-Invitation links are shared manually; email delivery is used only for registration verification codes.
+Invitation links are shared manually; automated email delivery is used for registration verification and password recovery.
 
 ### Activity and recycle bin
 
@@ -262,8 +267,8 @@ Authenticated routes use the session cookie. State-changing authenticated routes
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/health` | API/database status and authentication configuration flags |
-| GET | `/api/auth/config` | Public Google client ID |
-| POST | `/api/auth/register` | Create an account |
+| GET | `/api/auth/config` | Public Google client ID and registration-verification requirement |
+| POST | `/api/auth/register` | Create an account; returns 202 with `verificationRequired` and `email` when a code is needed, without issuing a session |
 | POST | `/api/auth/login` | Sign in with email/username and password |
 | POST | `/api/auth/google` | Verify a Google credential and sign in |
 | POST | `/api/auth/verify-email` | Consume a 6-digit code using `email` and `code`, then issue a session |
@@ -309,7 +314,7 @@ Registration, login, Google sign-in, and password recovery are pre-authenticatio
 
 The current frontend is served at **https://prafullepili.github.io/family-tree/**. Vite's base path is `/family-tree/`.
 
-The workflow in `.github/workflows/deploy.yml` builds the client with Node.js 22 and deploys `client/dist` to GitHub Pages on pushes to `main` or manual dispatch. The build reads `client/.env.production`; set its public `VITE_API_URL` or supply a build-time override when deploying against a different API. Pushing the frontend does not itself deploy the Express API; deploy the backend changes through its hosting service too.
+The workflow in `.github/workflows/deploy.yml` builds the client with Node.js 22 and deploys `client/dist` to GitHub Pages on pushes to `main` or manual dispatch. The current workflow uses the production API fallback because `client/.env.production` is not tracked and it does not set a `VITE_API_URL` override. To use another API, set `VITE_API_URL` in the workflow's build-step environment. Pushing the frontend does not itself deploy the Express API; deploy the backend changes through its hosting service too.
 
 For a Render service using the repository root:
 
@@ -331,6 +336,25 @@ PUBLIC_APP_URL=https://prafullepili.github.io/family-tree/
 ```
 
 Set `GOOGLE_CLIENT_ID` to enable Google sign-in. Render supplies `PORT`; a custom value is not required.
+
+For email verification and recovery, configure these values on the backend too:
+
+```env
+EMAIL_VERIFICATION_REQUIRED=true
+GMAIL_USER=your-address@gmail.com
+GMAIL_APP_PASSWORD=your_google_app_password
+EMAIL_OTP_SECRET=your_private_random_secret_at_least_32_characters
+```
+
+The variable names must match exactly: `PASSWORD` and `SECRET` are not substitutes for `GMAIL_APP_PASSWORD` and `EMAIL_OTP_SECRET`. Keep the OTP secret consistent across backend instances and restart/redeploy after changing environment settings.
+
+**GitHub Pages does not send OTP emails.** It serves the React frontend; the Express backend connects to Gmail. Render's **Free web services block outbound ports 25, 465, and 587**, and the current mailer uses port 465. Valid Gmail credentials do not remove this restriction. An SMTP-capable backend hosting plan is required for the current mailer. See [Render's documented restrictions](https://render.com/docs/free#other-limitations).
+
+| Deployment | Google sign-in | Gmail OTP delivery |
+| --- | --- | --- |
+| Local Vite + Express | With the correct client ID and allowed origins | With valid credentials and SMTP network access |
+| GitHub Pages + Render Free API | With the correct OAuth, CORS, and cookie settings | Blocked by the backend's SMTP port restriction |
+| GitHub Pages + SMTP-capable API host | With the correct OAuth, CORS, and cookie settings | With valid backend Gmail settings and SMTP access |
 
 CORS uses the frontend **origin**, not its full page URL. `CLIENT_ORIGIN=https://prafullepili.github.io/family-tree/` is incorrect. Cross-site session cookies are marked Secure and Partitioned by the current server.
 
@@ -392,6 +416,11 @@ server/
   controllers/            Request validation and response handling
   middleware/             Sessions, CSRF, permissions, CORS, limits, audit, errors
   services/               Sessions, reset-token validation, migration, relationship logic
+    gmailService.js       Gmail SMTP delivery for account codes
+    emailVerificationService.js Registration OTP hashes, expiry, attempts, and resend limits
+    passwordRecoveryCodeService.js Recovery OTPs, password changes, and session invalidation
+    passwordResetService.js Legacy reset-link validation
+  scripts/checkGoogleSetup.js Client-ID format and Gmail SMTP connectivity check
   models/                 MongoDB schemas
   authSecurity.js         Password hashing, cookie, token, and identity utilities
   authRoutes.js           Compatibility exports
@@ -415,7 +444,7 @@ server/
 
 Integration tests start temporary MongoDB instances and mock Gmail delivery. They do not use the live database or send emails. The first run downloads a MongoDB binary and may take longer.
 
-Coverage includes local/deployed API routing, family-data loading, placement, zoom math, Google script loading/retry, password hashing, session password-version preservation, role enforcement, tree isolation, legacy migration, invitations, saved-view isolation, recycle-bin restore, and password-reset expiration/single use/session invalidation.
+Coverage includes local/deployed API routing, family-data loading, placement, zoom math, Google script loading/retry, password hashing, session password-version preservation, role enforcement, tree isolation, legacy migration, invitations, saved-view isolation, and recycle-bin restore. Account-code tests cover registration gating, expiry, attempt and resend limits, concurrent single-use consumption, SMTP failure cleanup, Google-verified accounts, and password-reset session invalidation.
 
 ## Troubleshooting
 
@@ -433,6 +462,8 @@ Coverage includes local/deployed API routing, family-data loading, placement, zo
 | Password recovery is unavailable | Configure Gmail and the OTP secret, and verify SMTP access; linked Google sign-in remains an alternative |
 | New registration reports email setup is unavailable | Configure Gmail and the OTP secret; see `docs/GOOGLE_SETUP.md` |
 | Verification code never arrives | Check spam, App Password, Gmail limits, API logs, and SMTP access from the hosting plan |
+| OTP works locally but fails on GitHub Pages | Verify the deployed API version and its environment settings; Render Free blocks the SMTP port used by Gmail |
+| SMTP check passes but no message arrives | The check sends no email; inspect the recipient mailbox, spam, API logs, and account resend limits |
 | Reset code/link is expired or already used | Request a new code from Forgot password |
 | Read-only MongoDB user cannot log in | The API database user needs write access for sessions and account updates |
 | Address already in use on port 4000 | Stop the process already listening there, or change the local API port and Vite proxy |
@@ -443,6 +474,7 @@ Coverage includes local/deployed API routing, family-data loading, placement, zo
 
 - Photos use URLs; direct file upload and object-storage integration are not implemented.
 - Invitations are manually shared links, not automatically emailed.
+- Gmail delivery depends on the backend's SMTP network access and Gmail limits; it is incompatible with Render Free's SMTP restrictions.
 - Ownership transfer, tree deletion, and permanent recycle-bin deletion are not exposed.
 - Activity displays the latest 100 records and has no pagination interface.
 - Collaboration uses server-validated requests; there is no live WebSocket synchronization.
