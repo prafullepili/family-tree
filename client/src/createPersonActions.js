@@ -2,6 +2,7 @@ import { layoutTree } from './layoutTree.js';
 import { relationshipPlacement } from './relationshipPlacement.js';
 import { apiUrl } from './apiClient.js';
 import { fromApi } from './appHelpers.js';
+import { uploadPersonPhoto, discardUnusedPhoto } from './personPhotos.js';
 
 export default function createPersonActions({
   readOnly,
@@ -27,7 +28,8 @@ export default function createPersonActions({
   async function saveMember(values) {
     if (readOnly) return notify('This tree is read-only.');
     const prior = modal.person;
-    const { childIds = [], childRelationships = [], ...memberValues } = values;
+    const { childIds = [], childRelationships = [], photoFile, ...memberValues } = values;
+    if (photoFile && apiState !== 'connected') return notify('Connect to the database before uploading a device photo. Your form has been kept open.');
     const childRoleById = new Map(childRelationships.map((link) => [link.personId, link.role]));
     const currentPositions = new Map([...layoutTree(people).positions, ...layout.positions]);
     const placement = relationshipPlacement(people, values, prior, currentPositions);
@@ -47,7 +49,9 @@ export default function createPersonActions({
       relationshipLinks: (values.relationshipLinks || []).filter((link) => link.label.trim() && people.some((p) => p.id === link.personId && p._id)),
     };
     if (apiState === 'connected') {
+      let uploadedPhoto;
       try {
+        if (photoFile) { uploadedPhoto = await uploadPersonPhoto(photoFile, apiFetch); payload.photoUrl = uploadedPhoto; }
         if (placement) {
           const positions = anchoredPeople
             .filter(
@@ -97,12 +101,14 @@ export default function createPersonActions({
         await Promise.all(childUpdates);
         const rows = await refreshPeople();
         setPeople(rows);
+        if (prior?.photoUrl && prior.photoUrl !== saved.photoUrl) await discardUnusedPhoto(prior.photoUrl, apiFetch);
         setSelectedId(saved.id);
         setModal(null);
         setDetailsOpen(false);
         setMobileDetailsOpen(false);
         notify(prior ? 'Person updated' : 'Person added to the tree');
       } catch (e) {
+        if (uploadedPhoto) await discardUnusedPhoto(uploadedPhoto, apiFetch);
         notify(e.message);
       }
       return;
@@ -110,7 +116,7 @@ export default function createPersonActions({
     const id = prior?.id || `local-${Date.now()}`;
     const newPerson = {
       ...prior,
-      ...values,
+      ...memberValues,
       ...placement,
       id,
       _id: null,

@@ -1,4 +1,5 @@
 import { curveBumpY, curveLinear, line as d3Line } from 'd3-shape';
+import { personPhotoSrc } from './personPhotos.js';
 
 const straightRelationshipLine = d3Line().curve(curveLinear);
 const verticalRelationshipLine = d3Line().curve(curveBumpY);
@@ -6,7 +7,7 @@ const fullName = (person) => [person?.firstName, person?.lastName].filter(Boolea
 const initials = (person) => `${person?.firstName?.[0] || ''}${person?.lastName?.[0] || ''}`.toUpperCase() || '?';
 
 export function PersonAvatar({ person, size = 'small' }) {
-  return <div className={`person-avatar ${size} ${person?.color || 'sage'}`}>{person?.photoUrl ? <img src={person.photoUrl} alt="" /> : <span>{initials(person)}</span>}</div>;
+  return <div className={`person-avatar ${size} ${person?.color || 'sage'}`}>{person?.photoUrl ? <img src={personPhotoSrc(person.photoUrl)} crossOrigin={person.photoUrl.startsWith('/api/photos/') ? 'use-credentials' : undefined} alt="" /> : <span>{initials(person)}</span>}</div>;
 }
 export function FamilyBranchLinks({ branches, people, orthogonal = false, curved = false, endpointDots = false, highlightedLink, highlightedNodeId, highlightedAncestorIds, onHighlight }) {
   const byId = new Map(people.map((person) => [person.id, person]));

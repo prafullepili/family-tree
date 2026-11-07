@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, LoaderCircle, Search, X } from 'lucide-react';
+import { LoaderCircle, Search, X } from 'lucide-react';
+import PersonPhotoField from './PersonPhotoField.jsx';
 
 const fullName = (person) => [person?.firstName, person?.lastName].filter(Boolean).join(' ') || 'Unnamed person';
 const initials = (person) => `${person?.firstName?.[0] || ''}${person?.lastName?.[0] || ''}`.toUpperCase() || '?';
@@ -146,6 +147,8 @@ export default function PersonModal({ modal, people, onClose, onSave }) {
   const saveInFlight = useRef(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [photoFile, setPhotoFile] = useState(null);
+  const [preparingPhoto, setPreparingPhoto] = useState(false);
   const [form, setForm] = useState({
     firstName: person?.firstName || modal.defaults?.firstName || '',
     lastName: person?.lastName || modal.defaults?.lastName || '',
@@ -193,7 +196,7 @@ export default function PersonModal({ modal, people, onClose, onSave }) {
 
   async function submit(event) {
     event.preventDefault();
-    if (saveInFlight.current) return;
+    if (saveInFlight.current || preparingPhoto) return;
     saveInFlight.current = true;
     setSaving(true);
     setSaveError('');
@@ -202,6 +205,7 @@ export default function PersonModal({ modal, people, onClose, onSave }) {
     try {
       await onSave({
       ...form,
+      photoFile,
       parentIds: byRole(['Father', 'Mother', 'Parent']),
       partnerIds,
       partnerRelationships: relationships.filter((link) => partnerIds.includes(link.personId)).map((link) => ({ partnerId: link.personId, label: link.role })),
@@ -225,7 +229,7 @@ export default function PersonModal({ modal, people, onClose, onSave }) {
         <button type="button" className="plain-icon" onClick={onClose} disabled={saving} aria-label="Close editor"><X size={18} /></button>
       </header>
       <fieldset className="person-form-body" disabled={saving} aria-label="Person information">
-        <label className="photo-url"><Camera size={15} /><span>Photo URL</span><input value={form.photoUrl} onChange={(event) => change('photoUrl', event.target.value)} placeholder="https://…" /></label>
+        <PersonPhotoField photoUrl={form.photoUrl} file={photoFile} onFileChange={setPhotoFile} onUrlChange={(value) => change('photoUrl', value)} preparing={preparingPhoto} onPreparingChange={setPreparingPhoto} disabled={saving} />
         <div className="simple-form-grid person-basic-grid">
           <div className="person-form-row two-field-row">
             <label>First name *<input required value={form.firstName} onChange={(event) => change('firstName', event.target.value)} placeholder="First name" /></label>
@@ -257,7 +261,7 @@ export default function PersonModal({ modal, people, onClose, onSave }) {
       </fieldset>
       <footer>
         <button type="button" onClick={onClose} disabled={saving}>Cancel</button>
-        <button type="submit" className="save-person-button" disabled={saving}>
+        <button type="submit" className="save-person-button" disabled={saving || preparingPhoto}>
           {saving && <LoaderCircle size={14} className="person-save-spinner" aria-hidden="true" />}
           <span role="status" aria-live="polite">{saving ? (person ? 'Saving…' : 'Adding…') : (person ? 'Save changes' : 'Add person')}</span>
         </button>

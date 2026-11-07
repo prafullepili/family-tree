@@ -37,6 +37,7 @@ export const auditChanges = (req, res, next) => {
   next();
 };
 export const errorHandler = (err, _req, res, _next) => {
+  if (err.type === 'entity.too.large') return res.status(413).json({ error: 'The uploaded file is too large.' });
   console.error(err);
   res.status(['ValidationError', 'CastError'].includes(err.name) ? 400 : 500).json({
     error: err.name === 'CastError' ? 'Invalid record identifier.' : err.message || 'Server error'

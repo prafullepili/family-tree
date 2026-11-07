@@ -1,4 +1,6 @@
 import { stepCanvasZoom } from './zoomMath.js';
+import { flushSync } from 'react-dom';
+import { positionZoomAnchor } from './useCanvasZoomViewport.js';
 
 export default function createCanvasNavigation({
   treeScroll,
@@ -32,27 +34,34 @@ export default function createCanvasNavigation({
       }),
     );
   }
-  function zoomAround(clientX, clientY, nextZoom) {
+  function zoomAround(clientX, clientY, nextZoom, fixedAnchor) {
     manualZoomTouched.current = true;
-    pendingZoom.current = { clientX, clientY, nextZoom };
+    pendingZoom.current = { clientX, clientY, nextZoom, fixedAnchor };
     if (zoomFrame.current) return;
     zoomFrame.current = requestAnimationFrame(() => {
       zoomFrame.current = 0;
       const request = pendingZoom.current;
       pendingZoom.current = null;
-      if (!request || Math.abs(request.nextZoom - zoomValue.current) < 0.0001) return;
+      if (!request) return;
       const viewport = treeScroll.current;
       const board = viewport?.querySelector('.tree-board');
       if (viewport && board) {
         const boardRect = board.getBoundingClientRect();
         pendingZoomAnchor.current = {
-          x: (request.clientX - boardRect.left) / zoomValue.current,
-          y: (request.clientY - boardRect.top) / zoomValue.current,
+          x: request.fixedAnchor?.x ?? (request.clientX - boardRect.left) / zoomValue.current,
+          y: request.fixedAnchor?.y ?? (request.clientY - boardRect.top) / zoomValue.current,
           clientX: request.clientX,
           clientY: request.clientY,
         };
       }
-      setZoom(request.nextZoom);
+      if (Math.abs(request.nextZoom - zoomValue.current) < 0.0001) {
+        if (request.fixedAnchor && pendingZoomAnchor.current) positionZoomAnchor(viewport, pendingZoomAnchor.current, zoomValue.current);
+        pendingZoomAnchor.current = null;
+        return;
+      }
+      // Commit scale and the layout-effect scroll correction in this animation
+      // frame, rather than leaving a scaled-but-unanchored frame visible.
+      flushSync(() => setZoom(request.nextZoom));
     });
   }
   function zoomTo(nextZoom) {
@@ -70,6 +79,8 @@ export default function createCanvasNavigation({
     zoomTo(stepCanvasZoom(currentZoom, direction, maxCanvasZoom));
   }
   function fitTreeToView() {
+    if (zoomFrame.current) cancelAnimationFrame(zoomFrame.current);
+    zoomFrame.current = 0; pendingZoom.current = null; pendingZoomAnchor.current = null;
     manualZoomTouched.current = true;
     const viewport = treeScroll.current;
     if (!viewport) return;

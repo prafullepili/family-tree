@@ -1,3 +1,5 @@
+import useCanvasZoomViewport from './useCanvasZoomViewport.js';
+import useCanvasGestures from './useCanvasGestures.js';
 import useDetailsPanelResize from './useDetailsPanelResize.js';
 import createPersonNavigation from './createPersonNavigation.js';
 import createPersonActions from './createPersonActions.js';
@@ -309,42 +311,12 @@ export default function App({ authUser, onLogout, workspaceActions }) {
   useEffect(() => {
     storageSet('kinfolk-family-colors-v1', String(familyColorsEnabled));
   }, [familyColorsEnabled]);
-  useLayoutEffect(() => {
-    zoomValue.current = zoom;
-    const anchor = pendingZoomAnchor.current;
-    if (!anchor) return;
-    const viewport = treeScroll.current;
-    pendingZoomAnchor.current = null;
-    if (!viewport) return;
-    // Measure the transformed board after React applies the new scale. Using
-    // the board rect keeps the zoom anchor correct when the surface is centered
-    // or scroll bounds change (especially with a single node).
-    requestAnimationFrame(() => {
-      const board = viewport.querySelector('.tree-board');
-      if (!board) return;
-      const boardRect = board.getBoundingClientRect();
-      const pointX = boardRect.left + anchor.x * zoom;
-      const pointY = boardRect.top + anchor.y * zoom;
-      viewport.scrollLeft = Math.max(0, Math.min(viewport.scrollWidth - viewport.clientWidth, viewport.scrollLeft + pointX - anchor.clientX));
-      viewport.scrollTop = Math.max(0, Math.min(viewport.scrollHeight - viewport.clientHeight, viewport.scrollTop + pointY - anchor.clientY));
-    });
-  }, [zoom, treeBoardLeft, treeBoardTop]);
-  useLayoutEffect(() => {
-    const viewport = treeScroll.current;
-    if (!viewport) return;
-    const nextOffset = treePaddingX + treeBoardOffsetX * zoom;
-    const delta = nextOffset - appliedTreeOffset.current.x;
-    appliedTreeOffset.current.x = nextOffset;
-    if (delta) viewport.scrollLeft = Math.max(0, Math.min(viewport.scrollWidth - viewport.clientWidth, viewport.scrollLeft + delta));
-  }, [treeBoardOffsetX, treePaddingX, zoom]);
-  useLayoutEffect(() => {
-    const viewport = treeScroll.current;
-    if (!viewport) return;
-    const nextOffset = treePaddingY + treeBoardOffsetY * zoom;
-    const delta = nextOffset - appliedTreeOffset.current.y;
-    appliedTreeOffset.current.y = nextOffset;
-    if (delta) viewport.scrollTop = Math.max(0, Math.min(viewport.scrollHeight - viewport.clientHeight, viewport.scrollTop + delta));
-  }, [treeBoardOffsetY, treePaddingY, zoom]);
+  useCanvasZoomViewport({
+    treeScroll, zoom, zoomValue, pendingZoomAnchor, appliedTreeOffset,
+    offsetX: treePaddingX + treeBoardOffsetX * zoom,
+    offsetY: treePaddingY + treeBoardOffsetY * zoom,
+    boardLeft: treeBoardLeft, boardTop: treeBoardTop,
+  });
   useLayoutEffect(() => {
     const viewport = treeScroll.current;
     if (!viewport) return;
@@ -357,19 +329,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     observer.observe(viewport);
     return () => observer.disconnect();
   }, []);
-  useEffect(() => {
-    const viewport = treeScroll.current;
-    if (!viewport) return;
-    const onWheel = (e) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const baseZoom = pendingZoom.current?.nextZoom ?? zoomValue.current;
-      zoomAround(e.clientX, e.clientY, Math.max(0.1, Math.min(maxCanvasZoom, baseZoom * Math.exp(-e.deltaY * 0.01))));
-    };
-    viewport.addEventListener('wheel', onWheel, { passive: false });
-    return () => viewport.removeEventListener('wheel', onWheel);
-  }, [zoomAround]);
+  useCanvasGestures({ treeScroll, drag, pinch, zoomValue, pendingZoom, zoomFrame, pendingZoomAnchor, zoomAround, maxCanvasZoom });
   useEffect(() => {
     if (!sidebarOpen || !selectedId) return;
     memberList.current?.querySelector('.member-list-item.active')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -803,28 +763,6 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     setDeletingLayoutId,
     setConfirmLayoutDeleteId,
   });
-  function handleTouchStart(e) {
-    if (e.touches.length !== 2) return;
-    e.preventDefault();
-    drag.current = null;
-    const [a, b] = e.touches;
-    pinch.current = {
-      distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
-      zoom: zoomValue.current,
-    };
-  }
-  function handleTouchMove(e) {
-    if (e.touches.length !== 2 || !pinch.current) return;
-    e.preventDefault();
-    const [a, b] = e.touches;
-    const centerX = (a.clientX + b.clientX) / 2;
-    const centerY = (a.clientY + b.clientY) / 2;
-    const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-    zoomAround(centerX, centerY, Math.max(0.1, Math.min(maxCanvasZoom, (pinch.current.zoom * distance) / pinch.current.distance)));
-  }
-  function handleTouchEnd(e) {
-    if (e.touches.length < 2) pinch.current = null;
-  }
   const { selectPerson, openAddPersonForm, openQuickAdd, openPersonDetails, openPersonEditor, openLinkEditor, clearSelection } = createPersonNavigation({
     setSelectedId,
     setSelectedNodeIds,
@@ -1252,10 +1190,6 @@ export default function App({ authUser, onLogout, workspaceActions }) {
             className="tree-scroll"
             ref={treeScroll}
             onPointerDown={startPan}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            onTouchCancel={handleTouchEnd}
           >
             <div
               className="tree-zoom-surface"

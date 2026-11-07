@@ -1,8 +1,10 @@
 import mongoose from 'mongoose';
 import Person from '../models/Person.js';
+import { validatePhotoReference } from './personPhotoService.js';
 export async function sanitizeOwnedRelationships(values, treeId, currentPersonId = null) {
   const allowedFields = ['firstName', 'lastName', 'maidenName', 'gender', 'birthDate', 'deathDate', 'birthPlace', 'photoUrl', 'bio', 'occupation', 'notes', 'seedKey', 'treeX', 'treeY', 'parentIds', 'partnerIds', 'siblingIds', 'partnerRelationships', 'relationshipLinks'];
   const safeValues = Object.fromEntries(allowedFields.filter(field => Object.hasOwn(values, field)).map(field => [field, values[field]]));
+  if (Object.hasOwn(safeValues, 'photoUrl')) await validatePhotoReference(safeValues.photoUrl, treeId);
   const relationshipIds = [...(Array.isArray(values.parentIds) ? values.parentIds : []), ...(Array.isArray(values.partnerIds) ? values.partnerIds : []), ...(Array.isArray(values.siblingIds) ? values.siblingIds : []), ...(Array.isArray(values.partnerRelationships) ? values.partnerRelationships.map(link => link?.partnerId) : []), ...(Array.isArray(values.relationshipLinks) ? values.relationshipLinks.map(link => link?.personId) : [])].filter(id => mongoose.isValidObjectId(id) && String(id) !== String(currentPersonId || ''));
   const ownedIds = new Set((await Person.find({
     treeId,

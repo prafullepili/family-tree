@@ -6,7 +6,8 @@ VanshLink is a responsive family-history application for building, exploring, an
 
 ### People and relationships
 
-- Create and edit people with first name, surname, maiden name, gender, birth/death dates, birthplace, occupation, photo URL, biography, and family notes.
+- Create and edit people with first name, surname, maiden name, gender, birth/death dates, birthplace, occupation, a device photo or photo URL, biography, and family notes.
+- Choose a photo from a phone or computer, preview it, replace it, or remove it before saving. Uploaded photos persist privately in MongoDB GridFS.
 - Link parents, children, partners, siblings, and custom relationships. Each person can have up to two parents.
 - Add a father, mother, brother, sister, son, daughter, or partner directly from a node's shortcut menu. Child shortcuts link both known parents and related siblings; sibling shortcuts preserve known parents and sibling connections.
 - Browse categorized family links in person details and focus a linked person on the canvas.
@@ -161,6 +162,7 @@ Collections include:
 | `treememberships` | User membership and role within each tree |
 | `treeinvitations` | Email-scoped invitation hashes, roles, and expiration |
 | `treeactivities` | Acting member, action, detail, and timestamp |
+| `personPhotos.files` / `personPhotos.chunks` | Uploaded photo metadata and image bytes, scoped to a family tree |
 
 Startup initializes model indexes and replaces legacy saved-layout indexes where necessary.
 
@@ -243,6 +245,16 @@ Family notes are tree data available to authorized tree members; they do not hav
 
 The first legacy archive owner claims unowned records that predate authentication. Existing account-owned people and saved layouts migrate idempotently into that account's first workspace when its tree list opens. Legacy owner fields remain for compatibility.
 
+## Person photos
+
+Open **Add person** or **Edit person**, then select **Choose photo**. JPEG, PNG, and WebP originals up to 10 MB are supported. The browser resizes photos to a maximum of 1024 pixels on their longest side and converts them to JPEG before upload; the API accepts up to 1 MB per uploaded photo. Unsupported files, including HEIC and SVG, must be converted to a supported image format first.
+
+The preview stays local until the person is saved. Saving uploads the prepared image and stores its private API path on the person. Owners and Editors can upload; authorized tree members, including Viewers, can view. Database connectivity is required for device uploads. Existing external photo URLs remain supported.
+
+Photos use the existing MongoDB connection and storage quota, with no additional storage service. They survive API restarts and deployments. Photos referenced by recycled people are retained for restoration. Unused photos from failed saves or successful replacements are cleaned up where possible; an interrupted browser session can leave an unused upload. Replacing or removing a photo takes effect when the form is saved.
+
+CSV/Excel exports include photo URLs rather than image files. Private uploaded-photo URLs require an authenticated account with access to the source tree; exporting a spreadsheet does not make those photos public or bundle them.
+
 ## Canvas controls
 
 | Action | Desktop | Touch |
@@ -307,6 +319,14 @@ Registration, login, Google sign-in, and password recovery are pre-authenticatio
 | GET | `/api/layouts?familyId=...` | List saved views; optional comma-separated `personIds` |
 | POST | `/api/layouts` | Save a named view with `familyId` and `positions` |
 | DELETE | `/api/layouts/:id` | Remove a saved view |
+
+### Uploaded photos
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/api/photos` | Upload JPEG/PNG/WebP bytes with their image Content-Type; requires session, CSRF, `X-Tree-Id`, and Owner/Editor access |
+| GET | `/api/photos/:id` | Privately stream an image after verifying membership in its stored tree |
+| DELETE | `/api/photos/:id` | Delete an unused upload; requires session, CSRF, `X-Tree-Id`, and Owner/Editor access; saved/recycled references prevent deletion |
 
 ## Deployment
 
@@ -397,11 +417,15 @@ client/
     createSavedViewActions.js Save, restore, and remove named tree views
     useTreeCanvasLayout.js Canvas bounds, mobile previews, and layout geometry
     createCanvasNavigation.js Zoom, fit, and person focus actions
+    useCanvasZoomViewport.js Scroll-anchor correction before the zoomed frame paints
+    useCanvasGestures.js Stable wheel and two-finger gesture listeners
     createPersonActions.js Person saves, relationship updates, and deletion
     createPersonNavigation.js Selection, editors, and quick-add shortcuts
     useDetailsPanelResize.js Details panel width, pointer, and keyboard resizing
     FamilyConstellation.jsx Login-page tree illustration
     PasswordField.jsx     Password input and visibility toggle
+    PersonPhotoField.jsx Device photo picker, preview, and photo URL controls
+    personPhotos.js       Image resizing, upload, and cleanup helpers
     apiClient.js          API, session, and selected-tree request helpers
     apiBaseUrl.js         Local versus deployed API origin selection
     googleIdentity.js     Shared Google script loader
@@ -472,7 +496,7 @@ Coverage includes local/deployed API routing, family-data loading, placement, zo
 
 ## Current limitations
 
-- Photos use URLs; direct file upload and object-storage integration are not implemented.
+- Device photos support JPEG, PNG, and WebP with automatic resizing; cropping, HEIC conversion, and a standalone media library are not implemented.
 - Invitations are manually shared links, not automatically emailed.
 - Gmail delivery depends on the backend's SMTP network access and Gmail limits; it is incompatible with Render Free's SMTP restrictions.
 - Ownership transfer, tree deletion, and permanent recycle-bin deletion are not exposed.

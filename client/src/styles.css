@@ -4520,6 +4520,14 @@ button {
   color: var(--text-soft);
   font-size: 11px;
 }
+.person-photo-field { margin-bottom: 14px; }
+.person-photo-upload-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.person-photo-preview { width: 62px; height: 62px; flex-shrink: 0; display: grid; place-items: center; overflow: hidden; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text-soft); }
+.person-photo-preview img { width: 100%; height: 100%; object-fit: cover; }
+.person-photo-upload-actions { min-width: 0; flex: 1; display: grid; gap: 4px; }
+.person-photo-upload-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; justify-self: start; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); cursor: pointer; font: inherit; font-size: 11px; }
+.person-photo-upload-actions button:disabled { opacity: 0.6; cursor: wait; }
+.person-photo-upload-actions small { color: var(--text-soft); font-size: 10px; line-height: 1.5; }
 .photo-url input {
   min-width: 0;
   flex: 1;
@@ -5102,6 +5110,8 @@ button {
 }
 .tree-scroll {
   overscroll-behavior: contain;
+  overflow-anchor: none;
+  scroll-behavior: auto;
   user-select: none;
 }
 .tree-board {
