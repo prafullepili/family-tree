@@ -4484,8 +4484,29 @@ button {
     sans-serif;
 }
 .person-form-body {
+  min-inline-size: 0;
+  margin: 0;
+  border: 0;
   padding: 16px 21px;
   overflow: auto;
+}
+.save-person-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 108px;
+}
+.save-person-button:disabled {
+  cursor: wait;
+  opacity: 0.8;
+}
+.person-save-spinner {
+  flex-shrink: 0;
+  animation: auth-spin 0.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .person-save-spinner { animation: none; }
 }
 .photo-url {
   height: 35px;

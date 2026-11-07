@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, Search, X } from 'lucide-react';
+import { Camera, LoaderCircle, Search, X } from 'lucide-react';
 
 const fullName = (person) => [person?.firstName, person?.lastName].filter(Boolean).join(' ') || 'Unnamed person';
 const initials = (person) => `${person?.firstName?.[0] || ''}${person?.lastName?.[0] || ''}`.toUpperCase() || '?';
@@ -143,6 +143,9 @@ function RelationshipEditor({ people, relationships, onChange, excludeId }) {
 export default function PersonModal({ modal, people, onClose, onSave }) {
   const person = modal.person;
   const familyLinksRef = useRef(null);
+  const saveInFlight = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [form, setForm] = useState({
     firstName: person?.firstName || modal.defaults?.firstName || '',
     lastName: person?.lastName || modal.defaults?.lastName || '',
@@ -188,11 +191,16 @@ export default function PersonModal({ modal, people, onClose, onSave }) {
 
   const change = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
+    if (saveInFlight.current) return;
+    saveInFlight.current = true;
+    setSaving(true);
+    setSaveError('');
     const byRole = (roles) => relationships.filter((link) => roles.includes(link.role)).map((link) => link.personId);
     const partnerIds = byRole(['Husband', 'Wife', 'Boyfriend', 'Girlfriend', 'Fiancé', 'Fiancée', 'Partner', 'Spouse', 'Former spouse', 'Former partner']);
-    onSave({
+    try {
+      await onSave({
       ...form,
       parentIds: byRole(['Father', 'Mother', 'Parent']),
       partnerIds,
@@ -201,16 +209,22 @@ export default function PersonModal({ modal, people, onClose, onSave }) {
       relationshipLinks: relationships.filter((link) => link.role === 'Other' && link.customLabel.trim()).map((link) => ({ personId: link.personId, label: link.customLabel.trim() })),
       childIds: byRole(['Son', 'Daughter', 'Child']),
       childRelationships: relationships.filter((link) => ['Son', 'Daughter', 'Child'].includes(link.role)).map(({ personId, role }) => ({ personId, role })),
-    });
+      });
+    } catch (error) {
+      setSaveError(error.message || 'Could not save this person. Please try again.');
+    } finally {
+      saveInFlight.current = false;
+      setSaving(false);
+    }
   }
 
   const editor = (
-    <form className={modal.inline ? 'inline-person-editor' : 'simple-person-modal'} onSubmit={submit}>
+    <form className={modal.inline ? 'inline-person-editor' : 'simple-person-modal'} onSubmit={submit} aria-busy={saving}>
       <header>
         <div><small>FAMILY MEMBER</small><h2>{person ? 'Edit person' : 'Add a person'}</h2></div>
-        <button type="button" className="plain-icon" onClick={onClose}><X size={18} /></button>
+        <button type="button" className="plain-icon" onClick={onClose} disabled={saving} aria-label="Close editor"><X size={18} /></button>
       </header>
-      <div className="person-form-body">
+      <fieldset className="person-form-body" disabled={saving} aria-label="Person information">
         <label className="photo-url"><Camera size={15} /><span>Photo URL</span><input value={form.photoUrl} onChange={(event) => change('photoUrl', event.target.value)} placeholder="https://…" /></label>
         <div className="simple-form-grid person-basic-grid">
           <div className="person-form-row two-field-row">
@@ -239,11 +253,18 @@ export default function PersonModal({ modal, people, onClose, onSave }) {
           <label className="wide-form-field">About<textarea rows="2" value={form.bio} onChange={(event) => change('bio', event.target.value)} placeholder="A little about this person" /></label>
           <label className="wide-form-field">Family notes<textarea rows="2" value={form.notes} onChange={(event) => change('notes', event.target.value)} placeholder="Notes for the family archive" /></label>
         </div>
-      </div>
-      <footer><button type="button" onClick={onClose}>Cancel</button><button type="submit" className="save-person-button">{person ? 'Save changes' : 'Add person'}</button></footer>
+        {saveError && <p className="relationship-error" role="alert">{saveError}</p>}
+      </fieldset>
+      <footer>
+        <button type="button" onClick={onClose} disabled={saving}>Cancel</button>
+        <button type="submit" className="save-person-button" disabled={saving}>
+          {saving && <LoaderCircle size={14} className="person-save-spinner" aria-hidden="true" />}
+          <span role="status" aria-live="polite">{saving ? (person ? 'Saving…' : 'Adding…') : (person ? 'Save changes' : 'Add person')}</span>
+        </button>
+      </footer>
     </form>
   );
 
   if (modal.inline) return editor;
-  return <div className="simple-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>{editor}</div>;
+  return <div className="simple-modal-backdrop" onMouseDown={(event) => { if (!saveInFlight.current && event.target === event.currentTarget) onClose(); }}>{editor}</div>;
 }
