@@ -13,6 +13,7 @@ const QUICK_ADD_OPTIONS = [
 ];
 
 export default function TreePersonNode({
+  editingLocked = false,
   person,
   position,
   detailsVisible,
@@ -71,6 +72,7 @@ export default function TreePersonNode({
         <button
           type="button"
           className="tree-node-quick-add-button"
+          disabled={editingLocked}
           aria-label={`Quickly add a relative of ${name}`}
           aria-expanded={quickAddOpen}
           title="Add relative"
@@ -82,7 +84,7 @@ export default function TreePersonNode({
         >
           <Plus size={16} />
         </button>
-        {quickAddOpen && (
+        {quickAddOpen && !editingLocked && (
           <div className="tree-node-quick-add-menu" role="menu" aria-label={`Add relative of ${name}`}>
             {QUICK_ADD_OPTIONS.map(([kind, label]) => (
               <button
@@ -104,6 +106,7 @@ export default function TreePersonNode({
       </div>
       <button
         className="tree-node-edit"
+        disabled={editingLocked}
         title={`Edit ${name}`}
         aria-label={`Edit ${name}`}
         onPointerDown={(event) => event.stopPropagation()}
@@ -180,6 +183,7 @@ export default function TreePersonNode({
       </div>
       <button
         className="tree-node-delete"
+        disabled={editingLocked}
         title={`Delete ${name}`}
         aria-label={`Delete ${name}`}
         onPointerDown={(event) => event.stopPropagation()}

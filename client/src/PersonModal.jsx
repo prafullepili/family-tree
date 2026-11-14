@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { LoaderCircle, Search, X } from 'lucide-react';
 import PersonPhotoField from './PersonPhotoField.jsx';
+import { partnerDisplayLabel } from './appHelpers.js';
+import { normalizePartnerRole } from '../../shared/partnerRoles.js';
 
 const fullName = (person) => [person?.firstName, person?.lastName].filter(Boolean).join(' ') || 'Unnamed person';
 const initials = (person) => `${person?.firstName?.[0] || ''}${person?.lastName?.[0] || ''}`.toUpperCase() || '?';
 
 const relationshipOptionGroups = [
   { label: 'Parents', options: ['Father', 'Mother', 'Parent'] },
-  { label: 'Partners', options: ['Husband', 'Wife', 'Boyfriend', 'Girlfriend', 'Fiancé', 'Partner', 'Spouse'] },
+  { label: 'Partners', options: ['Husband', 'Wife', 'Boyfriend', 'Girlfriend', 'Fiancé', 'Fiancée', 'Partner', 'Spouse'] },
   { label: 'Children', options: ['Son', 'Daughter', 'Child'] },
   { label: 'Siblings', options: ['Brother', 'Sister', 'Sibling'] },
   { label: 'Other relationships', options: ['Other'] },
@@ -16,14 +18,6 @@ const relationshipOptions = relationshipOptionGroups.flatMap((group) => group.op
 
 function relationshipCategory(role) {
   return relationshipOptionGroups.find((group) => group.options.includes(role))?.label || 'Uncategorized';
-}
-
-function defaultPartnerLabel(gender) {
-  return gender === 'male' ? 'Husband' : gender === 'female' ? 'Wife' : 'Spouse';
-}
-
-function partnerRelationship(person, partnerId) {
-  return (person?.partnerRelationships || []).find((link) => String(link.partnerId) === String(partnerId))?.label || '';
 }
 
 function RelationshipEditor({ people, relationships, onChange, excludeId }) {
@@ -49,6 +43,10 @@ function RelationshipEditor({ people, relationships, onChange, excludeId }) {
   }
 
   function update(index, changes) {
+    if (changes.role) {
+      const relative = people.find((item) => item.id === relationships[index]?.personId);
+      changes = { ...changes, role: normalizePartnerRole(changes.role, relative?.gender) };
+    }
     if (changes.role && ['Father', 'Mother', 'Parent'].includes(changes.role)) {
       const parentCount = relationships.filter((link, rowIndex) => rowIndex !== index && ['Father', 'Mother', 'Parent'].includes(link.role)).length;
       if (parentCount >= 2) {
@@ -89,7 +87,7 @@ function RelationshipEditor({ people, relationships, onChange, excludeId }) {
                       </div>
                       <select
                         aria-label={`Relationship with ${fullName(person)}`}
-                        value={link.role}
+                        value={link.role ? normalizePartnerRole(link.role, person.gender) : ''}
                         required
                         onChange={(event) => update(index, { role: event.target.value, customLabel: event.target.value === 'Other' ? link.customLabel : '' })}
                       >
@@ -174,10 +172,8 @@ export default function PersonModal({ modal, people, onClose, onSave }) {
     });
     people.filter((item) => (item.parentIds || []).includes(person.id)).forEach((child) => add(child.id, child.gender === 'male' ? 'Son' : child.gender === 'female' ? 'Daughter' : 'Child'));
     (person.partnerIds || []).forEach((id) => {
-      const stored = partnerRelationship(person, id);
-      const fallback = defaultPartnerLabel(people.find((item) => item.id === id)?.gender);
-      const role = relationshipOptions.includes(stored) ? stored : relationshipOptions.includes(fallback) ? fallback : 'Spouse';
-      add(id, stored && !relationshipOptions.includes(stored) ? 'Other' : role, stored && !relationshipOptions.includes(stored) ? stored : '');
+      const role = partnerDisplayLabel(person, people.find((item) => item.id === id));
+      add(id, relationshipOptions.includes(role) ? role : 'Other', relationshipOptions.includes(role) ? '' : role);
     });
     const relatedSiblings = new Set(person.siblingIds || []);
     people.filter((item) => item.id !== person.id && (item.parentIds || []).some((parentId) => (person.parentIds || []).includes(parentId))).forEach((item) => relatedSiblings.add(item.id));
@@ -249,7 +245,7 @@ export default function PersonModal({ modal, people, onClose, onSave }) {
         <div className="simple-link-fields" ref={familyLinksRef}>
           <div className="simple-link-field relationship-field">
             <strong>Relationships</strong>
-            <p className="relationship-help">Add a person, then choose how they are related.</p>
+            <p className="relationship-help">Choose each linked person’s relationship to {form.firstName || 'this person'}.</p>
             <RelationshipEditor people={people} relationships={relationships} onChange={setRelationships} excludeId={person?.id} />
           </div>
         </div>

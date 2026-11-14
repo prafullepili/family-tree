@@ -1,3 +1,4 @@
+import { allowTreeEdit } from './treeEditLock.js';
 import { storageGet, storageSet } from './appHelpers.js';
 import { apiUrl } from './apiClient.js';
 
@@ -29,7 +30,7 @@ export default function createSavedViewActions({
   setConfirmLayoutDeleteId,
 }) {
   async function saveNamedLayout(event) {
-    if (readOnly) { event?.preventDefault(); return notify('This tree is read-only.'); }
+    if (!allowTreeEdit(readOnly, notify)) { event?.preventDefault(); return; }
     event.preventDefault();
     const name = layoutName.trim();
     if (!name || !treePeople.length || isSavingLayout) return;
@@ -86,7 +87,7 @@ export default function createSavedViewActions({
     }
   }
   async function applyNamedLayout(savedLayout) {
-    if (readOnly) return notify('This tree is read-only.');
+    if (!allowTreeEdit(readOnly, notify)) return;
     if (applyingLayoutId) return;
     setApplyingLayoutId(savedLayout._id);
     try {
@@ -128,7 +129,7 @@ export default function createSavedViewActions({
     }
   }
   async function removeNamedLayout(savedLayout) {
-    if (readOnly) return notify('This tree is read-only.');
+    if (!allowTreeEdit(readOnly, notify)) return;
     if (deletingLayoutId) return;
     setDeletingLayoutId(savedLayout._id);
     try {

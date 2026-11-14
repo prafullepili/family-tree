@@ -15,6 +15,7 @@ export function PersonModalDialog({ modal, people, onClose, onSave }) {
 }
 
 export default function PersonDetailsPanel({
+  editingLocked = false,
   open,
   mobileOpen,
   editingModal,
@@ -69,7 +70,7 @@ export default function PersonDetailsPanel({
               <div className="details-heading">
                 <span>PERSON DETAILS</span>
                 <div>
-                  <button className="family-links-edit-button" onClick={onEditPerson} aria-label="Edit person" title="Edit person">
+                  <button className="family-links-edit-button" onClick={onEditPerson} disabled={editingLocked} aria-label="Edit person" title="Edit person">
                     <Pencil size={14} />
                   </button>
                 </div>
@@ -129,7 +130,7 @@ export default function PersonDetailsPanel({
               <div className="details-links">
                 <div className="details-links-heading">
                   <label>FAMILY LINKS</label>
-                  <button className="family-links-edit-button" onClick={onEditLinks} aria-label="Edit family links" title="Edit family links">
+                  <button className="family-links-edit-button" onClick={onEditLinks} disabled={editingLocked} aria-label="Edit family links" title="Edit family links">
                     <Pencil size={13} />
                   </button>
                 </div>
@@ -163,7 +164,7 @@ export default function PersonDetailsPanel({
                   <button className="details-cancel-button" onClick={onClosePanel}>
                     Cancel
                   </button>
-                  <button className="remove-person-button" onClick={onRequestDelete}>
+                  <button className="remove-person-button" onClick={onRequestDelete} disabled={editingLocked}>
                     <Trash2 size={14} /> Remove person
                   </button>
                 </div>

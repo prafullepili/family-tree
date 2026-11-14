@@ -1,24 +1,7 @@
 import { Check, Download, FileSpreadsheet, Network, Settings, Upload, X } from 'lucide-react';
 
-export const DATA_COLUMNS = [
-  'First Name',
-  'Last Name',
-  'Maiden Name',
-  'Gender',
-  'Born',
-  'Died',
-  'Birthplace',
-  'Occupation',
-  'About',
-  'Family Notes',
-  'Photo URL',
-  'Parents',
-  'Partners',
-  'Siblings',
-  'Other Relationships',
-  'Tree X',
-  'Tree Y',
-];
+import { DATA_COLUMNS } from './dataColumns.js';
+export { DATA_COLUMNS } from './dataColumns.js';
 
 const RELATIONSHIP_OPTIONS = [
   ['parent', 'Parents and children'],
@@ -34,6 +17,7 @@ const TREE_STYLES = [
 ];
 
 export default function TreeSettingsControls({
+  editingLocked = false,
   settingsOpen,
   settingsControlRef,
   onSettingsOpenChange,
@@ -151,7 +135,7 @@ export default function TreeSettingsControls({
                   <button type="button" onClick={onExportSvg} title="Download the entire family tree as an SVG image">
                     <Download size={13} /> SVG
                   </button>
-                  <button type="button" onClick={() => importFileRef.current?.click()} title="Import CSV or Excel">
+                  <button type="button" onClick={() => importFileRef.current?.click()} disabled={editingLocked} title={editingLocked ? 'Unlock the tree to import data' : 'Import CSV or Excel'}>
                     <Upload size={13} /> Import
                   </button>
                 </div>
@@ -161,6 +145,7 @@ export default function TreeSettingsControls({
                   type="file"
                   accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   onChange={onImportFile}
+                  disabled={editingLocked}
                 />
               </div>
             </div>

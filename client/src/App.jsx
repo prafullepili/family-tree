@@ -1,4 +1,5 @@
 import useCanvasZoomViewport from './useCanvasZoomViewport.js';
+import { allowTreeEdit, isTreeEditingLocked, setTreeEditingLocked } from './treeEditLock.js';
 import useCanvasGestures from './useCanvasGestures.js';
 import useDetailsPanelResize from './useDetailsPanelResize.js';
 import createPersonNavigation from './createPersonNavigation.js';
@@ -88,8 +89,8 @@ export default function App({ authUser, onLogout, workspaceActions }) {
   const [highlightedLink, setHighlightedLink] = useState(null);
   const [highlightedNodeId, setHighlightedNodeId] = useState('');
   const [dismissedAboutTooltipId, setDismissedAboutTooltipId] = useState('');
-  const [movementUnlockedSetting, setMovementLocked] = useState(() => storageGet('kinfolk-canvas-movement-locked-v2') === 'true');
-  const movementLocked = readOnly || movementUnlockedSetting;
+  const [treeLockedSetting, setMovementLocked] = useState(() => storageGet('kinfolk-canvas-movement-locked-v2') === 'true');
+  const movementLocked = readOnly || treeLockedSetting;
   const [marqueeRect, setMarqueeRect] = useState(null);
   const [phoneLayoutPreview, setPhoneLayoutPreview] = useState({});
   const [theme, setTheme] = useState(() => storageGet('kinfolk-theme') === 'light' ? 'light' : 'dark');
@@ -258,7 +259,18 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     storageSet('kinfolk-theme', theme);
   }, [theme]);
   useEffect(() => {
-    storageSet('kinfolk-canvas-movement-locked-v2', String(movementLocked));
+    storageSet('kinfolk-canvas-movement-locked-v2', String(treeLockedSetting));
+  }, [treeLockedSetting]);
+  useLayoutEffect(() => {
+    setTreeEditingLocked(movementLocked);
+    if (movementLocked) {
+      if (drag.current?.holdTimer) clearTimeout(drag.current.holdTimer);
+      drag.current = null;
+      setQuickAddForId(''); setModal(null); setConfirmDelete(false);
+      setConfirmArrange(false); setPendingImport(null); setSavedLayoutsOpen(false);
+      setConfirmLayoutDeleteId('');
+    }
+    return () => setTreeEditingLocked(false);
   }, [movementLocked]);
   useEffect(() => {
     storageSet('kinfolk-tree-visual-style-v2', treeVisualStyle);
@@ -633,11 +645,11 @@ export default function App({ authUser, onLogout, workspaceActions }) {
         return;
       }
       const code = String(event.code || '').toLowerCase();
-      if (readOnly) return;
       if (!['delete', 'del', 'backspace'].includes(key) && !['delete', 'numpaddecimal'].includes(code) && event.keyCode !== 46) return;
       if (event.ctrlKey || event.metaKey || !state.selectedId) return;
       event.preventDefault();
       event.stopImmediatePropagation();
+      if (readOnly || isTreeEditingLocked()) return;
       setConfirmDelete(true);
     };
     const onKeyUp = (event) => {
@@ -694,7 +706,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     return () => document.removeEventListener('pointerdown', closeHelpOutside);
   }, []);
   async function arrangeFamily() {
-    if (readOnly) return notify('This tree is read-only.');
+    if (!allowTreeEdit(readOnly, notify)) return;
     if (!treePeople.length || isArranging) return;
     setIsArranging(true);
     try {
@@ -778,7 +790,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     setHighlightedNodeId,
   });
   async function flushPositionSaves({ silent = false, keepalive = false } = {}) {
-    if (readOnly) return;
+    if (readOnly || isTreeEditingLocked()) return;
     if (positionSaveTimer.current) {
       clearTimeout(positionSaveTimer.current);
       positionSaveTimer.current = 0;
@@ -808,6 +820,17 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     positionSaveMessage.current = message;
     if (positionSaveTimer.current) clearTimeout(positionSaveTimer.current);
     positionSaveTimer.current = window.setTimeout(() => flushPositionSaves(), 650);
+  }
+  function toggleTreeLock() {
+    if (readOnly) return notify('This tree is read-only.');
+    const next = !isTreeEditingLocked();
+    // Finish queuing the previous drag's save before closing editing access.
+    if (next) flushPositionSaves({ silent: true });
+    setTreeEditingLocked(next);
+    setMovementLocked(next);
+  }
+  function requestDelete() {
+    if (allowTreeEdit(readOnly, notify)) setConfirmDelete(true);
   }
   function startDrag(e, p, pos) {
     if (e.button !== 0) return;
@@ -1127,6 +1150,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
       )}
       <main className="simple-main">
         <AppHeader
+          editingLocked={movementLocked}
           workspaceActions={workspaceActions}
           sidebarOpen={sidebarOpen}
           onSidebarOpenChange={(open) => {
@@ -1173,11 +1197,11 @@ export default function App({ authUser, onLogout, workspaceActions }) {
           loading={apiState === 'checking' && (!hasMongoSnapshot || !people.length)}
           peopleCount={treePeople.length}
           generationCount={layout.generationCount}
-          onOpenSavedViews={() => setSavedLayoutsOpen(true)}
-          onArrange={() => setConfirmArrange(true)}
+          onOpenSavedViews={() => { if (allowTreeEdit(readOnly, notify)) setSavedLayoutsOpen(true); }}
+          onArrange={() => { if (allowTreeEdit(readOnly, notify)) setConfirmArrange(true); }}
           arranging={isArranging}
           movementLocked={movementLocked}
-          onToggleMovement={() => setMovementLocked((locked) => !locked)}
+          onToggleMovement={toggleTreeLock}
           zoom={zoom}
           onZoomOut={() => stepZoom(-1)}
           onZoomIn={() => stepZoom(1)}
@@ -1185,7 +1209,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
         />
         <section ref={canvasRef} className={`simple-canvas ${fullscreenFallback ? 'is-fullscreen-fallback' : ''}`}>
           <CanvasHelp open={helpOpen} controlRef={canvasHelpRef} onToggle={() => setHelpOpen((open) => !open)} />
-          <SelectionToolbar count={selectedNodeIds.length} onRemove={() => setConfirmDelete(true)} onClear={clearSelection} />
+          <SelectionToolbar count={selectedNodeIds.length} onRemove={requestDelete} onClear={clearSelection} editingLocked={movementLocked} />
           <div
             className="tree-scroll"
             ref={treeScroll}
@@ -1225,6 +1249,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
                   treeBoardHeight={treeBoardHeight}
                 />
                 <TreeNodeLayer
+                  editingLocked={movementLocked}
                   treePeople={treePeople}
                   layout={layout}
                   detailsOpen={detailsOpen}
@@ -1250,13 +1275,14 @@ export default function App({ authUser, onLogout, workspaceActions }) {
                   setAboutTooltipId={setAboutTooltipId}
                   setSelectedId={setSelectedId}
                   setSelectedNodeIds={setSelectedNodeIds}
-                  setConfirmDelete={setConfirmDelete}
+                  setConfirmDelete={(value) => { if (value) requestDelete(); else setConfirmDelete(false); }}
                 />
               </div>
             </div>
             {marqueeRect && <div className="marquee-selection" style={{ left: marqueeRect.left, top: marqueeRect.top, width: marqueeRect.width, height: marqueeRect.height }} aria-hidden="true" />}
           </div>
           <TreeStatus
+            editingLocked={movementLocked}
             apiState={apiState}
             hasSnapshot={hasMongoSnapshot}
             peopleCount={people.length}
@@ -1276,6 +1302,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
             </button>
           </div>
           <TreeSettingsControls
+            editingLocked={movementLocked}
             settingsOpen={settingsOpen}
             settingsControlRef={settingsControlRef}
             onSettingsOpenChange={setSettingsOpen}
@@ -1301,6 +1328,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
         </section>
       </main>
       <PersonDetailsPanel
+        editingLocked={movementLocked}
         open={detailsOpen}
         mobileOpen={mobileDetailsOpen}
         editingModal={modal}
@@ -1320,7 +1348,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
           }
         }}
         onSavePerson={saveMember}
-        onEditPerson={() => { if (!readOnly) setModal({ person: selected, inline: true }); }}
+        onEditPerson={() => { if (selected) openPersonEditor(selected); }}
         familyLinkGroups={familyLinkGroups}
         getPersonById={byId}
         onEditLinks={openLinkEditor}
@@ -1333,7 +1361,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
           setDetailsOpen(false);
           setMobileDetailsOpen(false);
         }}
-        onRequestDelete={() => setConfirmDelete(true)}
+        onRequestDelete={requestDelete}
       />
       <PersonModalDialog modal={modal} people={people} onClose={() => setModal(null)} onSave={saveMember} />
       <AppDialogs

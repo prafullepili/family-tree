@@ -1,5 +1,6 @@
 import { curveBumpX, curveBumpY, line as d3Line } from 'd3-shape';
 import { layoutTree } from './layoutTree.js';
+import { normalizePartnerRole } from '../../shared/partnerRoles.js';
 
 export const fullName = (p) => [p?.firstName, p?.lastName].filter(Boolean).join(' ') || 'Unnamed person';
 export function storageGet(key) {
@@ -53,7 +54,7 @@ export function partnerRelationship(person, partnerId) {
 }
 export function partnerDisplayLabel(person, relative) {
   const stored = partnerRelationship(person, relative?.id);
-  return ['', 'Husband', 'Wife', 'Spouse'].includes(stored) ? relationshipLabel('Partner', relative, person) || stored || 'Partner' : stored;
+  return normalizePartnerRole(stored, relative?.gender);
 }
 export function descendantIds(people, personId) {
   const childrenByParent = new Map();

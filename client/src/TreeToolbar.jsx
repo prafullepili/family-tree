@@ -55,7 +55,7 @@ export default function TreeToolbar({
         <button
           className="arrange-family-button saved-layouts-button"
           onClick={onOpenSavedViews}
-          disabled={!peopleCount}
+          disabled={!peopleCount || movementLocked}
           aria-label="Save or restore a favorite tree view"
           title="Save or restore a favorite tree view"
         >
@@ -65,7 +65,7 @@ export default function TreeToolbar({
         <button
           className="arrange-family-button"
           onClick={onArrange}
-          disabled={!peopleCount || arranging}
+          disabled={!peopleCount || arranging || movementLocked}
           aria-label="Arrange family into a clear layout"
           title="Arrange generations and save the new positions"
         >
@@ -76,8 +76,8 @@ export default function TreeToolbar({
           className={`canvas-lock-button ${movementLocked ? 'locked' : 'unlocked'}`}
           onClick={onToggleMovement}
           aria-pressed={movementLocked}
-          aria-label={movementLocked ? 'Unlock node movement' : 'Lock node movement'}
-          title={movementLocked ? 'Node movement is locked. Unlock to move people.' : 'Node movement is unlocked. Lock to prevent moving people.'}
+          aria-label={movementLocked ? 'Unlock tree editing' : 'Lock tree editing'}
+          title={movementLocked ? 'Tree changes are locked. Unlock to add, edit, delete, or move people.' : 'Lock the tree to prevent changes.'}
         >
           {movementLocked ? <Lock size={14} /> : <Unlock size={14} />}
           <span>{movementLocked ? 'Locked' : 'Unlocked'}</span>

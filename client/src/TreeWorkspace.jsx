@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import App from './App.jsx';
 import WorkspaceHeaderActions from './WorkspaceHeaderActions.jsx';
 import { apiFetch, apiUrl, setActiveTreeId, resetFamilyDataRequest } from './apiClient.js';
 import './treeWorkspace.css';
+import { isTreeEditingLocked, subscribeTreeEditLock, TREE_LOCK_MESSAGE } from './treeEditLock.js';
 
 async function request(path, method = 'GET', body) {
   const response = await apiFetch(apiUrl(`/api/trees${path}`), { method, headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
@@ -12,6 +13,7 @@ async function request(path, method = 'GET', body) {
 }
 
 export default function TreeWorkspace({ user, onLogout }) {
+  const editingLocked = useSyncExternalStore(subscribeTreeEditLock, isTreeEditingLocked, () => false);
   const [trees, setTrees] = useState([]);
   const [active, setActive] = useState(null);
   const [panel, setPanel] = useState('');
@@ -67,6 +69,7 @@ export default function TreeWorkspace({ user, onLogout }) {
     return () => { window.removeEventListener('keydown', close); previousFocus?.focus(); };
   }, [panel]);
   async function act(action) {
+    if (isTreeEditingLocked()) { setError(TREE_LOCK_MESSAGE); return; }
     setBusy(true); setError('');
     try { await action(); setRevision((n) => n + 1); } catch (e) { setError(e.message); }
     finally { setBusy(false); }
@@ -75,7 +78,7 @@ export default function TreeWorkspace({ user, onLogout }) {
   return (
     <div className={`tree-workspace ${active?.role === 'viewer' ? 'tree-workspace-viewer' : ''}`}>
       {!active && <div className="workspace-loading">{error || 'Opening your family trees…'}{error && <button onClick={() => loadTrees().catch((e) => setError(e.message))}>Retry</button>}</div>}
-      {active && <div className="workspace-content" inert={panel ? '' : undefined}><App key={`${active.id}:${canvasRevision}`} authUser={{ ...user, treeId: active.id, treeRole: active.role }} onLogout={onLogout} workspaceActions={<WorkspaceHeaderActions trees={trees} active={active} onSelectTree={selectTree} onOpenPanel={setPanel} />} /></div>}
+      {active && <div className="workspace-content" inert={panel ? '' : undefined}><App key={`${active.id}:${canvasRevision}`} authUser={{ ...user, treeId: active.id, treeRole: active.role }} onLogout={onLogout} workspaceActions={<WorkspaceHeaderActions editingLocked={editingLocked} trees={trees} active={active} onSelectTree={selectTree} onOpenPanel={setPanel} />} /></div>}
       {panel && <>
         <button className="workspace-scrim" aria-label="Close tree panel" onClick={() => setPanel('')} />
         <aside ref={panelRef} className="workspace-panel" role="dialog" aria-modal="true" aria-label={title} onKeyDown={(event) => {
@@ -89,30 +92,31 @@ export default function TreeWorkspace({ user, onLogout }) {
           }
         }}>
           <header><h2>{title}</h2><button autoFocus onClick={() => setPanel('')} aria-label="Close">×</button></header>
+          {editingLocked && <p role="status" className="workspace-error">{TREE_LOCK_MESSAGE}</p>}
           {error && <p role="alert" className="workspace-error">{error}</p>}
           {panel === 'create' && <form onSubmit={(e) => { e.preventDefault(); act(async () => { const tree = await request('', 'POST', { name }); await loadTrees(tree.id); setName(''); }); }}>
             <label>Tree name<input required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder="Our family" /></label>
-            <button disabled={busy}>Create tree</button>
+            <button disabled={busy || editingLocked}>Create tree</button>
           </form>}
           {panel === 'join' && <form onSubmit={(e) => { e.preventDefault(); act(async () => { let value = token.trim(); try { value = new URL(value).searchParams.get('invite') || value; } catch {} const result = await request('/accept-invitation', 'POST', { token: value }); await loadTrees(result.treeId); setToken(''); const url = new URL(location.href); url.searchParams.delete('invite'); history.replaceState(null, '', url); }); }}>
             <p>Sign in with the email address that received the invitation, then paste the invitation link or code.</p>
-            <label>Invitation link or code<input required value={token} onChange={(e) => setToken(e.target.value)} /></label><button disabled={busy}>Join tree</button>
+            <label>Invitation link or code<input required value={token} onChange={(e) => setToken(e.target.value)} /></label><button disabled={busy || editingLocked}>Join tree</button>
           </form>}
           {panel === 'members' && <>
             <p>Owners manage access. Editors update people and positions. Viewers browse without changing the tree.</p>
             {active.role === 'owner' && <form onSubmit={(e) => { e.preventDefault(); act(async () => { const result = await request(`/${active.id}/invitations`, 'POST', { email, role }); const url = new URL(location.href); url.searchParams.set('invite', result.token); setInviteLink(url.href); setEmail(''); }); }}>
               <label>Email<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
               <label>Access<select value={role} onChange={(e) => setRole(e.target.value)}><option value="viewer">Viewer</option><option value="editor">Editor</option></select></label>
-              <button disabled={busy}>Create invitation link</button>
+              <button disabled={busy || editingLocked}>Create invitation link</button>
               {inviteLink && <label>Share this link (valid for 7 days)<input readOnly value={inviteLink} onFocus={(e) => e.target.select()} /><button type="button" onClick={() => act(() => navigator.clipboard.writeText(inviteLink))}>Copy link</button><small>Send it to the invited person. Email delivery is not automatic.</small></label>}
             </form>}
             <ul>{rows.map((member) => <li key={member.id}><div><strong>{member.name}</strong><small>{member.email}</small></div>
-              {active.role === 'owner' && member.role !== 'owner' ? <><select aria-label={`Role for ${member.name}`} disabled={busy} value={member.role} onChange={(e) => act(() => request(`/${active.id}/members/${member.id}`, 'PATCH', { role: e.target.value }))}><option value="viewer">Viewer</option><option value="editor">Editor</option></select><button disabled={busy} onClick={() => { if (confirm(`Remove ${member.name} from this tree?`)) act(() => request(`/${active.id}/members/${member.id}`, 'DELETE')); }}>Remove</button></> : <span className="workspace-role">{member.role}</span>}
+              {active.role === 'owner' && member.role !== 'owner' ? <><select aria-label={`Role for ${member.name}`} disabled={busy || editingLocked} value={member.role} onChange={(e) => act(() => request(`/${active.id}/members/${member.id}`, 'PATCH', { role: e.target.value }))}><option value="viewer">Viewer</option><option value="editor">Editor</option></select><button disabled={busy || editingLocked} onClick={() => { if (confirm(`Remove ${member.name} from this tree?`)) act(() => request(`/${active.id}/members/${member.id}`, 'DELETE')); }}>Remove</button></> : <span className="workspace-role">{member.role}</span>}
             </li>)}</ul>
-            {active.role === 'owner' && invitations.length > 0 && <><h3>Pending invitations</h3><ul>{invitations.map((invite) => <li key={invite._id}><div>{invite.email}<small>{invite.role} · Expires {new Date(invite.expiresAt).toLocaleDateString()}</small></div><button disabled={busy} onClick={() => act(() => request(`/${active.id}/invitations/${invite._id}`, 'DELETE'))}>Revoke</button></li>)}</ul></>}
+            {active.role === 'owner' && invitations.length > 0 && <><h3>Pending invitations</h3><ul>{invitations.map((invite) => <li key={invite._id}><div>{invite.email}<small>{invite.role} · Expires {new Date(invite.expiresAt).toLocaleDateString()}</small></div><button disabled={busy || editingLocked} onClick={() => act(() => request(`/${active.id}/invitations/${invite._id}`, 'DELETE'))}>Revoke</button></li>)}</ul></>}
           </>}
           {panel === 'activity' && <><p>Latest 100 changes to this tree.</p><ul>{rows.map((item) => <li key={item._id}><div><strong>{item.actorName}</strong><p>{item.action}{item.detail && ` · ${item.detail}`}</p><small>{new Date(item.createdAt).toLocaleString()}</small></div></li>)}{!rows.length && <p>No activity recorded yet.</p>}</ul></>}
-          {panel === 'recycle-bin' && <><p>Deleted people stay here with their saved relationships and positions. Restore related people together to see their connections again.</p><ul>{rows.map((person) => <li key={person._id}><div><strong>{person.firstName} {person.lastName}</strong><small>Deleted {new Date(person.deletedAt).toLocaleString()}</small></div>{active.role !== 'viewer' && <button disabled={busy} onClick={() => act(async () => { await request(`/${active.id}/recycle-bin/${person._id}/restore`, 'POST'); resetFamilyDataRequest(); setCanvasRevision((n) => n + 1); })}>Restore</button>}</li>)}{!rows.length && <p>The recycle bin is empty.</p>}</ul></>}
+          {panel === 'recycle-bin' && <><p>Deleted people stay here with their saved relationships and positions. Restore related people together to see their connections again.</p><ul>{rows.map((person) => <li key={person._id}><div><strong>{person.firstName} {person.lastName}</strong><small>Deleted {new Date(person.deletedAt).toLocaleString()}</small></div>{active.role !== 'viewer' && <button disabled={busy || editingLocked} onClick={() => act(async () => { await request(`/${active.id}/recycle-bin/${person._id}/restore`, 'POST'); resetFamilyDataRequest(); setCanvasRevision((n) => n + 1); })}>Restore</button>}</li>)}{!rows.length && <p>The recycle bin is empty.</p>}</ul></>}
         </aside>
       </>}
     </div>

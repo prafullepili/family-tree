@@ -17,6 +17,7 @@ import VanshLinkLogo from './VanshLinkLogo.jsx';
 import FamilyFilter from './FamilyFilter.jsx';
 
 export default function AppHeader({
+  editingLocked = false,
   workspaceActions,
   sidebarOpen,
   onSidebarOpenChange,
@@ -103,7 +104,7 @@ export default function AppHeader({
         <button className="right-panel-toggle" onClick={onToggleDetails} aria-label={detailsVisible ? 'Hide person details' : 'Show person details'}>
           {detailsVisible ? <PanelRightClose size={17} /> : <PanelRightOpen size={17} />}
         </button>
-        <button className="add-person-button" onClick={onAddPerson}>
+        <button className="add-person-button" onClick={onAddPerson} disabled={editingLocked} title={editingLocked ? 'Unlock the tree to add a person' : 'Add person'}>
           <Plus size={16} />
           <span>Add person</span>
         </button>

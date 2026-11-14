@@ -1,3 +1,5 @@
+import { normalizePartnerRole } from '../../shared/partnerRoles.js';
+
 const fullName = (person) => [person?.firstName, person?.lastName].filter(Boolean).join(' ') || 'Unnamed person';
 
 function exportDate(value) {
@@ -11,7 +13,8 @@ function personDataRow(person, peopleById) {
   const namedPeople = (ids) => (ids || []).map(personName).join('; ');
   const partners = (person.partnerIds || [])
     .map((id) => {
-      const label = (person.partnerRelationships || []).find((link) => String(link.partnerId) === String(id))?.label;
+      const stored = (person.partnerRelationships || []).find((link) => String(link.partnerId) === String(id))?.label;
+      const label = stored ? normalizePartnerRole(stored, peopleById.get(String(id))?.gender) : '';
       return `${personName(id)}${label ? ` (${label})` : ''}`;
     })
     .join('; ');

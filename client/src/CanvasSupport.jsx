@@ -21,7 +21,7 @@ export function CanvasHelp({ open, controlRef, onToggle }) {
         <div className="canvas-help-items">
           <p>
             <strong>Select and move people</strong>
-            <span>Click or tap a person to select them. Drag a person to move them; dragging any person in a group selection moves the whole group. Lock movement to prevent accidental changes.</span>
+            <span>Click or tap a person to select them. Drag a person to move them; dragging any person in a group selection moves the whole group. Lock the tree to prevent adding, editing, deleting, moving, importing, or changing saved views. Viewing, panning, and zooming still work.</span>
           </p>
           <p>
             <strong>Select several people</strong>
@@ -53,12 +53,12 @@ export function CanvasHelp({ open, controlRef, onToggle }) {
   );
 }
 
-export function SelectionToolbar({ count, onRemove, onClear }) {
+export function SelectionToolbar({ count, onRemove, onClear, editingLocked = false }) {
   if (count <= 1) return null;
   return (
     <div className="selection-toolbar" aria-live="polite">
       <span>{count} selected</span>
-      <button onClick={onRemove}>
+      <button onClick={onRemove} disabled={editingLocked}>
         <Trash2 size={14} /> Remove selected
       </button>
       <button className="selection-clear-button" aria-label="Clear selection" title="Clear selection" onClick={onClear}>
@@ -68,7 +68,7 @@ export function SelectionToolbar({ count, onRemove, onClear }) {
   );
 }
 
-export function TreeStatus({ apiState, hasSnapshot, peopleCount, treePeopleCount, refreshing, onRefresh, onAdd }) {
+export function TreeStatus({ apiState, hasSnapshot, peopleCount, treePeopleCount, refreshing, onRefresh, onAdd, editingLocked = false }) {
   if (apiState === 'checking' && (!hasSnapshot || !peopleCount)) {
     return (
       <div className="tree-loading" role="status" aria-live="polite">
@@ -95,7 +95,7 @@ export function TreeStatus({ apiState, hasSnapshot, peopleCount, treePeopleCount
         <>
           <h2>Start your family tree</h2>
           <p>Add a person, then link parents and partners to build the branches.</p>
-          <button className="add-person-button" onClick={onAdd}>
+          <button className="add-person-button" onClick={onAdd} disabled={editingLocked}>
             <Plus size={16} />
             Add first person
           </button>

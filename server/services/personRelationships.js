@@ -1,18 +1,21 @@
 import mongoose from 'mongoose';
 import Person from '../models/Person.js';
 import { validatePhotoReference } from './personPhotoService.js';
+import { normalizePartnerRole } from '../../shared/partnerRoles.js';
 export async function sanitizeOwnedRelationships(values, treeId, currentPersonId = null) {
   const allowedFields = ['firstName', 'lastName', 'maidenName', 'gender', 'birthDate', 'deathDate', 'birthPlace', 'photoUrl', 'bio', 'occupation', 'notes', 'seedKey', 'treeX', 'treeY', 'parentIds', 'partnerIds', 'siblingIds', 'partnerRelationships', 'relationshipLinks'];
   const safeValues = Object.fromEntries(allowedFields.filter(field => Object.hasOwn(values, field)).map(field => [field, values[field]]));
   if (Object.hasOwn(safeValues, 'photoUrl')) await validatePhotoReference(safeValues.photoUrl, treeId);
   const relationshipIds = [...(Array.isArray(values.parentIds) ? values.parentIds : []), ...(Array.isArray(values.partnerIds) ? values.partnerIds : []), ...(Array.isArray(values.siblingIds) ? values.siblingIds : []), ...(Array.isArray(values.partnerRelationships) ? values.partnerRelationships.map(link => link?.partnerId) : []), ...(Array.isArray(values.relationshipLinks) ? values.relationshipLinks.map(link => link?.personId) : [])].filter(id => mongoose.isValidObjectId(id) && String(id) !== String(currentPersonId || ''));
-  const ownedIds = new Set((await Person.find({
+  const ownedPeople = await Person.find({
     treeId,
     deletedAt: null,
     _id: {
       $in: relationshipIds
     }
-  }).select('_id').lean()).map(person => String(person._id)));
+  }).select('_id gender').lean();
+  const ownedIds = new Set(ownedPeople.map(person => String(person._id)));
+  const genderById = new Map(ownedPeople.map(person => [String(person._id), person.gender]));
   const filterIds = ids => [...new Set(ids.filter(id => ownedIds.has(String(id))).map(String))];
   if (Array.isArray(values.parentIds)) safeValues.parentIds = filterIds(values.parentIds).slice(0, 2);
   if (Array.isArray(values.partnerIds)) safeValues.partnerIds = filterIds(values.partnerIds);
@@ -20,7 +23,7 @@ export async function sanitizeOwnedRelationships(values, treeId, currentPersonId
   if (Array.isArray(values.partnerRelationships)) {
     safeValues.partnerRelationships = values.partnerRelationships.filter(link => ownedIds.has(String(link?.partnerId))).map(link => ({
       partnerId: link.partnerId,
-      label: String(link.label || '').trim()
+      label: normalizePartnerRole(link.label, genderById.get(String(link.partnerId)))
     }));
   }
   if (Array.isArray(values.relationshipLinks)) {
@@ -69,7 +72,7 @@ export async function syncPartners(person, treeId) {
       $push: {
         partnerRelationships: {
           partnerId: person._id,
-          label
+          label: normalizePartnerRole(label, person.gender)
         }
       }
     });

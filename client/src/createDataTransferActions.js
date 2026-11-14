@@ -1,4 +1,5 @@
-import { DATA_COLUMNS } from './TreeSettingsControls.jsx';
+import { allowTreeEdit } from './treeEditLock.js';
+import { DATA_COLUMNS } from './dataColumns.js';
 import { storageSet } from './appHelpers.js';
 import { apiUrl } from './apiClient.js';
 
@@ -73,10 +74,11 @@ export default function createDataTransferActions({
   async function handleImportFile(event) {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file) return;
+    if (!file || !allowTreeEdit(readOnly, notify)) return;
     try {
       const { readImportFile } = await import('./dataTransfer.js');
       const importedPeople = await readImportFile(file);
+      if (!allowTreeEdit(readOnly, notify)) return;
       if (!importedPeople.length) throw Error('No people with a first name were found');
       setPendingImport({ filename: file.name, people: importedPeople });
       setSettingsOpen(false);
@@ -85,7 +87,7 @@ export default function createDataTransferActions({
     }
   }
   async function confirmDataImport() {
-    if (readOnly) return notify('This tree is read-only.');
+    if (!allowTreeEdit(readOnly, notify)) return;
     if (!pendingImport || isImporting) return;
     setIsImporting(true);
     try {

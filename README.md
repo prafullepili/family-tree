@@ -9,6 +9,7 @@ VanshLink is a responsive family-history application for building, exploring, an
 - Create and edit people with first name, surname, maiden name, gender, birth/death dates, birthplace, occupation, a device photo or photo URL, biography, and family notes.
 - Choose a photo from a phone or computer, preview it, replace it, or remove it before saving. Uploaded photos persist privately in MongoDB GridFS.
 - Link parents, children, partners, siblings, and custom relationships. Each person can have up to two parents.
+- Relationship roles describe the linked person: a male spouse is shown as Husband and a female spouse as Wife. Reciprocal partner labels are saved in the correct direction; neutral and custom labels remain available.
 - Add a father, mother, brother, sister, son, daughter, or partner directly from a node's shortcut menu. Child shortcuts link both known parents and related siblings; sibling shortcuts preserve known parents and sibling connections.
 - Browse categorized family links in person details and focus a linked person on the canvas.
 - Search people and filter the canvas by family groups.
@@ -16,7 +17,7 @@ VanshLink is a responsive family-history application for building, exploring, an
 ### Interactive canvas
 
 - Move individual people or groups, pan, zoom, fit/center, arrange families, and enter full screen.
-- Rectangle selection, movement locking, touch interaction, and keyboard shortcuts.
+- Rectangle selection, a tree edit lock, touch interaction, and keyboard shortcuts.
 - Persist node positions to MongoDB after movement stops.
 - Save named favorite views, restore their positions, and remove saved views.
 - Dashboard cards, Classic cards, and Family atlas appearances.
@@ -268,6 +269,8 @@ CSV/Excel exports include photo URLs rather than image files. Private uploaded-p
 
 Use Ctrl/Command + A to select everyone in the current family, Delete to request removal, and Escape to close panels/help. The on-canvas help describes the current controls. Viewer access prevents persistent edits and node movement.
 
+**Locked** blocks adding, editing, deleting, moving, arranging, importing, and saving/restoring/removing named views. It also blocks workspace changes such as invitations, member-role changes, and restoring deleted people. Open edit dialogs and quick-add menus close when locking. Browsing, selecting, panning, zooming, viewing settings, exporting, and switching trees remain available. The lock preference is saved in this browser; it is an accidental-edit safeguard, while server-side tree roles enforce access permissions.
+
 ## API reference
 
 All paths below are relative to the API origin.
@@ -450,6 +453,9 @@ server/
   authRoutes.js           Compatibility exports
   treeAccess.js           Compatibility exports
   *.test.js               Authentication, collaboration, and recovery tests
+
+shared/
+  partnerRoles.js         Partner-role normalization shared by the editor and API
 ```
 
 ## Commands and tests

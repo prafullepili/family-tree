@@ -1,3 +1,5 @@
+import { allowTreeEdit } from './treeEditLock.js';
+import { normalizePartnerRole } from '../../shared/partnerRoles.js';
 import { layoutTree } from './layoutTree.js';
 import { relationshipPlacement } from './relationshipPlacement.js';
 import { apiUrl } from './apiClient.js';
@@ -26,7 +28,7 @@ export default function createPersonActions({
   setConfirmDelete,
 }) {
   async function saveMember(values) {
-    if (readOnly) return notify('This tree is read-only.');
+    if (!allowTreeEdit(readOnly, notify)) return;
     const prior = modal.person;
     const { childIds = [], childRelationships = [], photoFile, ...memberValues } = values;
     if (photoFile && apiState !== 'connected') return notify('Connect to the database before uploading a device photo. Your form has been kept open.');
@@ -117,6 +119,7 @@ export default function createPersonActions({
     const newPerson = {
       ...prior,
       ...memberValues,
+      partnerRelationships: (memberValues.partnerRelationships || []).map((link) => ({ ...link, label: normalizePartnerRole(link.label, people.find((person) => person.id === link.partnerId)?.gender) })),
       ...placement,
       id,
       _id: null,
@@ -148,7 +151,7 @@ export default function createPersonActions({
       updated = {
         ...updated,
         partnerIds: next ? [...new Set([...(updated.partnerIds || []), id])] : currentPartners.has(p.id) ? (updated.partnerIds || []).filter((x) => x !== id) : updated.partnerIds || [],
-        partnerRelationships: next ? (relationship ? [...partnerRelationships, { partnerId: id, label: relationship }] : partnerRelationships) : partnerRelationships,
+        partnerRelationships: next ? (relationship ? [...partnerRelationships, { partnerId: id, label: normalizePartnerRole(relationship, newPerson.gender) }] : partnerRelationships) : partnerRelationships,
         siblingIds: nextSiblings.has(p.id)
           ? [...new Set([...(updated.siblingIds || []), id])]
           : currentSiblings.has(p.id)
@@ -167,7 +170,7 @@ export default function createPersonActions({
     notify(prior ? 'Person updated for this browser' : 'Person added for this browser');
   }
   async function removePerson() {
-    if (readOnly) return notify('This tree is read-only.');
+    if (!allowTreeEdit(readOnly, notify)) return;
     if (!selected) return;
     const isBulkSelection = selectedNodeIds.length > 1;
     try {

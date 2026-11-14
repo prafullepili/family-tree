@@ -1,3 +1,4 @@
+import { allowTreeEdit } from './treeEditLock.js';
 export default function createPersonNavigation({
   setSelectedId,
   setSelectedNodeIds,
@@ -17,7 +18,7 @@ export default function createPersonNavigation({
     setSelectedNodeIds([]);
   }
   function openAddPersonForm() {
-    if (readOnly) return notify('This tree is read-only.');
+    if (!allowTreeEdit(readOnly, notify)) return;
     setModal({ inline: true });
     setDetailsOpen(true);
     if (window.innerWidth <= 1050) {
@@ -26,7 +27,7 @@ export default function createPersonNavigation({
     }
   }
   function openQuickAdd(person, kind) {
-    if (readOnly) return notify('This tree is read-only.');
+    if (!allowTreeEdit(readOnly, notify)) return;
     const childRole = person.gender === 'male' ? 'Son' : person.gender === 'female' ? 'Daughter' : 'Child';
     const parentRole = person.gender === 'male' ? 'Father' : person.gender === 'female' ? 'Mother' : 'Parent';
     const partnerRole = person.gender === 'male' ? 'Husband' : person.gender === 'female' ? 'Wife' : 'Partner';
@@ -93,12 +94,12 @@ export default function createPersonNavigation({
     }
   }
   function openPersonEditor(person) {
-    if (readOnly) return;
+    if (!allowTreeEdit(readOnly, notify)) return;
     openPersonDetails(person.id);
     setModal({ person, inline: true });
   }
   function openLinkEditor() {
-    if (readOnly) return;
+    if (!allowTreeEdit(readOnly, notify)) return;
     if (selected) setModal({ person: selected, inline: true, focusLinks: true });
   }
   function clearSelection() {

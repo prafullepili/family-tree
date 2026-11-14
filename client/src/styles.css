@@ -3804,6 +3804,13 @@ button {
     box-shadow 0.14s,
     background 0.14s;
 }
+.tree-node-quick-add-button:disabled,
+.tree-node-edit:disabled,
+.tree-node-delete:disabled,
+.family-links-edit-button:disabled,
+.remove-person-button:disabled,
+.tree-data-actions button:disabled,
+.add-person-button:disabled { opacity: 0.4; cursor: not-allowed; }
 .family-app.deceased-ribbon-black .tree-person.is-deceased .tree-person-card::after,
 .family-app.deceased-ribbon-red .tree-person.is-deceased .tree-person-card::after {
   content: '';

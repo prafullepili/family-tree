@@ -1,4 +1,5 @@
 import { resolveApiBaseUrl } from './apiBaseUrl.js';
+import { isTreeEditingLocked, isTreeMutation, TREE_LOCK_MESSAGE } from './treeEditLock.js';
 
 const API_BASE_URL = resolveApiBaseUrl({
   hostname: typeof window !== 'undefined' ? window.location?.hostname : '',
@@ -29,6 +30,7 @@ export function resetFamilyDataRequest() {
 
 export async function apiFetch(input, options = {}) {
   const method = String(options.method || 'GET').toUpperCase();
+  if (isTreeEditingLocked() && isTreeMutation(input, method)) throw Error(TREE_LOCK_MESSAGE);
   const headers = new Headers(options.headers || {});
   if (activeTreeId && !headers.has('X-Tree-Id')) headers.set('X-Tree-Id', activeTreeId);
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && csrfToken && !headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', csrfToken);

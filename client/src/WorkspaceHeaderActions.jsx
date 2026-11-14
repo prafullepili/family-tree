@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, FolderPlus, History, MailPlus, Trash2, Users } from 'lucide-react';
 
-export default function WorkspaceHeaderActions({ trees, active, onSelectTree, onOpenPanel }) {
+export default function WorkspaceHeaderActions({ trees, active, onSelectTree, onOpenPanel, editingLocked = false }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const trigger = useRef(null);
@@ -31,7 +31,7 @@ export default function WorkspaceHeaderActions({ trees, active, onSelectTree, on
         </button>
         {open && <div id="workspace-action-list" className="workspace-action-list">
           <span className="workspace-menu-caption">Your access: {active.role}</span>
-          {actions.map(([panel, label, Icon]) => <button key={panel} type="button" onClick={() => { trigger.current?.focus(); setOpen(false); onOpenPanel(panel); }}><Icon size={17} /><span>{label}</span></button>)}
+          {actions.map(([panel, label, Icon]) => <button key={panel} type="button" disabled={editingLocked && ['create', 'join'].includes(panel)} onClick={() => { trigger.current?.focus(); setOpen(false); onOpenPanel(panel); }}><Icon size={17} /><span>{label}</span></button>)}
         </div>}
       </div>
     </nav>
