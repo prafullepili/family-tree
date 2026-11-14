@@ -6791,6 +6791,20 @@ button {
 .link-style-smooth .relationship-link.is-node-related .connector-relation {
   opacity: 1;
 }
+
+/* Keep light-mode branches readable against the warm canvas. */
+.family-app:not(.theme-dark).link-style-smooth .connector {
+  stroke: #424b50;
+}
+.family-app:not(.theme-dark).link-style-smooth #smooth-link-dot circle {
+  fill: #424b50;
+}
+.family-app:not(.theme-dark).link-style-smooth:not(.has-link-focus) .connector {
+  opacity: 0.85;
+}
+.family-app:not(.theme-dark).tree-style-dashboard.link-style-smooth:not(.has-link-focus) .connector {
+  opacity: 0.85 !important;
+}
 .tree-style-atlas {
   --atlas-canvas: #d9d4ce;
   --atlas-grid: #77726c;
