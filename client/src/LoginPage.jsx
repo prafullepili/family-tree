@@ -120,6 +120,7 @@ export default function LoginPage({ error, googleClientId, theme, onThemeChange,
               </button>
             )}
 
+            <p className="auth-signin-note">New users: use Google, then optionally set a password in Account settings. Email codes may be unavailable. Existing password users can sign in below.</p>
             <div className="auth-divider"><span>or continue with {mode === 'login' ? 'email or username' : 'email'}</span></div>
 
             <form className="auth-form" onSubmit={submit}>

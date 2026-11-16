@@ -30,6 +30,8 @@ VanshLink is a responsive family-history application for building, exploring, an
 - Saved browser credentials follow the login form's light/dark colors.
 - Verify new email/password registrations with a 6-digit email code delivered through Gmail SMTP.
 - Recover passwords using a 6-digit code delivered through Gmail. Existing reset links remain usable until they expire.
+- Open Account settings from the header to reset your password while signed in or log out from all devices. Logging out everywhere revokes all account sessions, including the current browser; password recovery also invalidates existing sessions.
+- New users are guided to Google sign-in while email delivery is limited. Google accounts without a password see optional password setup in Account settings after sign-in; setup requires a session created within the last 15 minutes, CSRF protection, and cannot overwrite an existing password. Existing email/password registration remains available with a delivery warning.
 - Create multiple trees and switch between owned and invited trees.
 - Manage members, invitation links, activity history, and deleted people.
 - Use the header's **Tree actions** menu for New tree, Join tree, Members & invitations, Activity history, and Recycle bin.

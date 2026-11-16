@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAuthConfig, register, login, googleLogin, getSession, logout } from '../controllers/authController.js';
+import { getAuthConfig, register, login, googleLogin, getSession, logout, logoutAll, setPassword } from '../controllers/authController.js';
 import { authLimiter, databaseReady, requireAuth } from '../middleware/auth.js';
 import { resetRequestLimiter } from '../middleware/passwordReset.js';
 import { forgotPassword, resetPassword } from '../controllers/passwordResetController.js';
@@ -19,5 +19,7 @@ export function createAuthRouter() {
   router.post("/google", authLimiter, databaseReady, googleLogin);
   router.get("/me", databaseReady, requireAuth, getSession);
   router.post("/logout", requireAuth, logout);
+  router.post('/logout-all', databaseReady, requireAuth, logoutAll);
+  router.post('/set-password', authLimiter, databaseReady, requireAuth, setPassword);
   return router;
 }

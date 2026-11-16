@@ -165,6 +165,19 @@ export const getSession = (req, res) => {
     csrfToken: req.authSession.csrfToken
   });
 };
+export const setPassword = async (req, res, next) => {
+  try {
+    if (!req.user.googleSubject || req.user.passwordHash) return res.status(409).json({ error: 'A password is already set, or this account is not connected to Google.' });
+    if (!req.authSession.createdAt || Date.now() - new Date(req.authSession.createdAt).getTime() > 15 * 60000) return res.status(403).json({ error: 'Sign out and sign in with Google again before setting your password.' });
+    const password = String(req.body?.password || '');
+    if (password.length < 8 || password.length > 128) return res.status(400).json({ error: 'Password must be between 8 and 128 characters.' });
+    const user = await User.findOneAndUpdate({ _id: req.user._id, passwordHash: null }, {
+      $set: { passwordHash: await hashPassword(password) },
+    }, { new: true }).select('+passwordHash');
+    if (!user) return res.status(409).json({ error: 'A password is already set. Refresh your account settings.' });
+    res.json({ user: publicUser(user) });
+  } catch (error) { next(error); }
+};
 export const logout = async (req, res, next) => {
   try {
     await AuthSession.deleteOne({
@@ -177,4 +190,14 @@ export const logout = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+};
+
+export const logoutAll = async (req, res, next) => {
+  try {
+    // Invalidate sessions even if a concurrent sign-in was creating one.
+    await User.updateOne({ _id: req.user._id }, { $inc: { passwordVersion: 1 } });
+    await AuthSession.deleteMany({ userId: req.user._id });
+    res.setHeader('Set-Cookie', sessionCookie('', { clear: true }));
+    res.status(204).end();
+  } catch (error) { next(error); }
 };

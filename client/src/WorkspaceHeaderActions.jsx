@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, FolderPlus, History, MailPlus, Trash2, Users } from 'lucide-react';
+import { ChevronDown, FolderPlus, History, MailPlus, Trash2, Users, UserRound } from 'lucide-react';
 
-export default function WorkspaceHeaderActions({ trees, active, onSelectTree, onOpenPanel, editingLocked = false }) {
+export default function WorkspaceHeaderActions({ trees, active, onSelectTree, onOpenPanel, onAccount, editingLocked = false }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const trigger = useRef(null);
@@ -34,6 +34,7 @@ export default function WorkspaceHeaderActions({ trees, active, onSelectTree, on
           {actions.map(([panel, label, Icon]) => <button key={panel} type="button" disabled={editingLocked && ['create', 'join'].includes(panel)} onClick={() => { trigger.current?.focus(); setOpen(false); onOpenPanel(panel); }}><Icon size={17} /><span>{label}</span></button>)}
         </div>}
       </div>
+      <button className="workspace-menu-trigger" type="button" title="Account settings" aria-label="Account settings" onClick={onAccount}><UserRound size={18} /></button>
     </nav>
   );
 }

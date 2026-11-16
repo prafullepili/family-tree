@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import TreeWorkspace from './TreeWorkspace.jsx';
 import LoginPage from './LoginPage.jsx';
+import AccountSettings from './AccountSettings.jsx';
 import { apiUrl, resetFamilyDataRequest, setAuthCsrfToken } from './apiClient.js';
 
 async function readJson(response) {
@@ -12,6 +13,7 @@ async function readJson(response) {
 export default function AuthApp() {
   const authRequestVersion = useRef(0);
   const [session, setSession] = useState(null);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [status, setStatus] = useState('checking');
   const [authError, setAuthError] = useState('');
   const [googleClientId, setGoogleClientId] = useState('');
@@ -49,6 +51,7 @@ export default function AuthApp() {
     setAuthCsrfToken('');
     resetFamilyDataRequest();
     setSession(null);
+    setAccountOpen(false);
     setStatus('signed-out');
     setAuthError(message);
   }, []);
@@ -58,6 +61,7 @@ export default function AuthApp() {
     setAuthCsrfToken(payload.csrfToken);
     resetFamilyDataRequest();
     setSession(payload);
+    setAccountOpen(Boolean(payload.user.googleConnected && !payload.user.hasPassword));
     setAuthError('');
     setVerificationEmail('');
     setStatus('signed-in');
@@ -162,5 +166,20 @@ export default function AuthApp() {
     );
   }
 
-  return <TreeWorkspace key={session.user.id} user={session.user} onLogout={logout} />;
+  async function logoutAll() {
+    const response = await fetch(apiUrl('/api/auth/logout-all'), {
+      method: 'POST', credentials: 'include',
+      headers: { 'X-CSRF-Token': session.csrfToken },
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw Error(payload?.error || 'Could not log out from all devices.');
+    }
+    window.google?.accounts?.id?.disableAutoSelect?.();
+    clearSession('You have been logged out from all devices.');
+  }
+  return <>
+    <div inert={accountOpen ? '' : undefined}><TreeWorkspace key={session.user.id} user={session.user} onLogout={logout} onAccount={() => setAccountOpen(true)} /></div>
+    {accountOpen && <AccountSettings user={session.user} onUserUpdated={(user) => setSession((current) => ({ ...current, user }))} onClose={() => setAccountOpen(false)} onLogoutAll={logoutAll} onPasswordReset={() => clearSession('Password updated. Sign in with your new password.')} />}
+  </>;
 }

@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, LockKeyhole, Mail } from 'lucide-react';
 import { apiUrl } from './apiClient.js';
 
-export default function PasswordRecovery({ token, onBack, onResetComplete }) {
-  const [email, setEmail] = useState('');
+export default function PasswordRecovery({ token, onBack, onResetComplete, initialEmail = '', backLabel = 'Back to sign in' }) {
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
@@ -67,6 +67,6 @@ export default function PasswordRecovery({ token, onBack, onResetComplete }) {
       {codeSent && !token && <p className="auth-mode-switch"><button type="button" disabled={busy || cooldown > 0} onClick={resend}>{cooldown ? `Request another code in ${cooldown}s` : 'Request another code'}</button><button type="button" disabled={busy} onClick={() => { setCodeSent(false); setCode(''); setPassword(''); setConfirmation(''); setError(''); }}>Use a different email</button></p>}
     </form>}
     {message && <p className="auth-recovery-success" role="status">{message}</p>}
-    <p className="auth-mode-switch"><button type="button" disabled={busy} onClick={onBack}>Back to sign in</button></p>
+    <p className="auth-mode-switch"><button type="button" disabled={busy} onClick={onBack}>{backLabel}</button></p>
   </>;
 }

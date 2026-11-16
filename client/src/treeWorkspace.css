@@ -1,6 +1,13 @@
 .tree-workspace { --panel: #f7f8f5; --text: #22362c; --border: #ccd3cc; height: 100dvh; display: flex; flex-direction: column; }
 html[data-theme='dark'] .tree-workspace { --panel: #1e2822; --text: #eef4ef; --border: #39463e; }
 .workspace-content { flex: 1; min-height: 0; }
+.account-settings-panel { --panel: #f7f8f5; --text: #22362c; --border: #ccd3cc; --surface: #f7f8f5; --surface-soft: #edf0eb; --muted: #647267; --accent: #476b50; }
+html[data-theme='dark'] .account-settings-panel { --panel: #1e2822; --surface: #1e2822; --surface-soft: #26332b; --text: #eef4ef; --muted: #a2b3a6; --border: #39463e; --accent: #a7c9ac; color-scheme: dark; }
+.account-settings-panel { --auth-text: var(--text); --auth-muted: var(--muted); --auth-border: var(--border); --auth-field: var(--surface-soft); --auth-panel: var(--surface); --auth-accent: var(--accent); --auth-accent-dark: var(--accent); }
+.account-settings-panel .auth-form-heading h2 { font-size: 24px; }
+.account-settings-panel .auth-input-wrap { background: var(--surface-soft); }
+.account-settings-panel .auth-input-wrap input { background: transparent; border: 0; }
+.account-settings-panel button:disabled { opacity: .6; cursor: wait; }
 .workspace-content > .family-app { height: 100%; min-height: 0; }
 .tree-workspace .simple-main { height: 100%; min-height: 0; }
 .tree-workspace .simple-canvas { min-height: 0; }
