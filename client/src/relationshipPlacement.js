@@ -14,7 +14,7 @@ export function relationshipPlacement(people, values, prior, positions) {
   if (!group) return null;
   const anchors = group.ids.filter((id) => id !== prior?.id && positions.has(id)).map((id) => positions.get(id));
   const width = 196;
-  const height = 76;
+  const height = anchors[0].h || 76;
   const step = width + (group.kind === 'partner' ? 184 : 120);
   const vertical = group.kind === 'child' || group.kind === 'parent';
   const x = vertical ? anchors.reduce((sum, anchor) => sum + anchor.rawX, 0) / anchors.length : anchors[0].rawX + step;

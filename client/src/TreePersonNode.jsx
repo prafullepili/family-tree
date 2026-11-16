@@ -13,6 +13,7 @@ const QUICK_ADD_OPTIONS = [
 ];
 
 export default function TreePersonNode({
+  portrait = false,
   editingLocked = false,
   person,
   position,
@@ -39,11 +40,13 @@ export default function TreePersonNode({
   onDelete,
 }) {
   const name = fullName(person);
+  const portraitDates = person.birthDate && person.deathDate ? `${year(person.birthDate)} – ${year(person.deathDate)}`
+    : person.birthDate ? `b. ${year(person.birthDate)}` : person.deathDate ? `d. ${year(person.deathDate)}` : 'Dates not added';
   const familyColorClass = familyColorIndex == null ? '' : `family-colored family-color-${familyColorIndex}`;
   return (
     <div
       data-person-id={person.id}
-      className={`tree-person gender-${person.gender || 'unspecified'} ${person.deathDate ? 'is-deceased' : ''} ${linkHighlighted ? 'link-highlighted' : ''} ${networkHighlighted ? 'link-path-node' : ''} ${selected ? 'selected' : ''} ${familyColorClass}`}
+      className={`tree-person ${portrait ? 'tree-person-portrait' : ''} gender-${person.gender || 'unspecified'} ${person.deathDate ? 'is-deceased' : ''} ${linkHighlighted ? 'link-highlighted' : ''} ${networkHighlighted ? 'link-path-node' : ''} ${selected ? 'selected' : ''} ${familyColorClass}`}
       style={{ left: position.x, top: position.y }}
       onPointerEnter={(event) => event.pointerType !== 'touch' && onHoverStart()}
       onPointerLeave={(event) => event.pointerType !== 'touch' && onHoverEnd()}
@@ -53,17 +56,20 @@ export default function TreePersonNode({
     >
       <button
         className="tree-person-card"
+        title={name}
         aria-label={`Select ${name}; drag to move; press and hold to open details`}
         onContextMenu={(event) => event.preventDefault()}
         onClick={(event) => event.detail === 0 && onOpenFromKeyboard()}
       >
-        <PersonAvatar person={person} size="large" />
+        <PersonAvatar person={person} size={portrait ? 'portrait' : 'large'} />
         <span className="tree-person-copy">
           <strong>{name}</strong>
-          <small>
+          <small title={person.maidenName ? `Birth surname: ${person.maidenName}` : undefined}>
+            {portrait ? `${person.maidenName ? `Born ${person.maidenName} · ` : ''}${portraitDates}` : <>
             {person.maidenName ? `Born: ${person.maidenName} · ` : ''}
             {year(person.birthDate)}
             {person.deathDate ? ` — ${year(person.deathDate)}` : ' —'}
+            </>}
           </small>
         </span>
         <span className="drag-grip">⠿</span>

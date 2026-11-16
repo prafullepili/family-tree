@@ -1,5 +1,6 @@
 import { curveBumpY, curveLinear, line as d3Line } from 'd3-shape';
 import { personPhotoSrc } from './personPhotos.js';
+import { useState } from 'react';
 
 const straightRelationshipLine = d3Line().curve(curveLinear);
 const verticalRelationshipLine = d3Line().curve(curveBumpY);
@@ -7,7 +8,14 @@ const fullName = (person) => [person?.firstName, person?.lastName].filter(Boolea
 const initials = (person) => `${person?.firstName?.[0] || ''}${person?.lastName?.[0] || ''}`.toUpperCase() || '?';
 
 export function PersonAvatar({ person, size = 'small' }) {
-  return <div className={`person-avatar ${size} ${person?.color || 'sage'}`}>{person?.photoUrl ? <img src={personPhotoSrc(person.photoUrl)} crossOrigin={person.photoUrl.startsWith('/api/photos/') ? 'use-credentials' : undefined} alt="" /> : <span>{initials(person)}</span>}</div>;
+  const [failedPhoto, setFailedPhoto] = useState(null);
+  const showPhoto = person?.photoUrl && failedPhoto !== person.photoUrl;
+  return <div className={`person-avatar ${size} ${person?.color || 'sage'}`}>
+    {showPhoto ? <img src={personPhotoSrc(person.photoUrl)} crossOrigin={person.photoUrl.startsWith('/api/photos/') ? 'use-credentials' : undefined} alt="" draggable={false} onError={() => setFailedPhoto(person.photoUrl)} /> : size === 'portrait' ? <>
+      <svg viewBox="0 0 96 96" aria-hidden="true" className="portrait-silhouette"><circle cx="48" cy="34" r="18" fill="currentColor" opacity=".35"/><path d="M12 96V84c0-20 16-30 36-30s36 10 36 30v12Z" fill="currentColor" opacity=".28"/></svg>
+      <span className="portrait-initials" aria-hidden="true">{initials(person)}</span>
+    </> : <span>{initials(person)}</span>}
+  </div>;
 }
 export function FamilyBranchLinks({ branches, people, orthogonal = false, curved = false, endpointDots = false, highlightedLink, highlightedNodeId, highlightedAncestorIds, onHighlight }) {
   const byId = new Map(people.map((person) => [person.id, person]));

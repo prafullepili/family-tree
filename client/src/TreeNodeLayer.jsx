@@ -1,6 +1,7 @@
 import TreePersonNode from './TreePersonNode.jsx';
 
 export default function TreeNodeLayer({
+  portrait = false,
   editingLocked = false,
   treePeople,
   layout,
@@ -36,6 +37,7 @@ export default function TreeNodeLayer({
                   const isDetailsVisible = detailsOpen && selectedId === person.id;
                   return (
                     <TreePersonNode
+                      portrait={portrait}
                       editingLocked={editingLocked}
                       key={person.id}
                       person={person}

@@ -294,7 +294,7 @@ function compactGenerationPositions(people, { nodeWidth = 196, coupleGap = 14, f
     });
   return positions;
 }
-export function compactDashboardPositions(people) {
+export function compactDashboardPositions(people, { generationGap = 126 } = {}) {
   const nodeWidth = 196;
   const groupGap = 132;
   const groups = getFamilyGroups(people);
@@ -303,7 +303,7 @@ export function compactDashboardPositions(people) {
       nodeWidth,
       coupleGap: 18,
       familyGap: 28,
-      generationGap: 126,
+      generationGap,
     }),
   );
   let cursor = 0;

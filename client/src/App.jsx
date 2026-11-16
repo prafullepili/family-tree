@@ -26,6 +26,7 @@ import { AppHeader, FamilySidebar } from './AppNavigation.jsx';
 import AppDialogs from './AppDialogs.jsx';
 import PersonDetailsPanel, { PersonModalDialog } from './PersonDetailsPanel.jsx';
 import TreeNodeLayer from './TreeNodeLayer.jsx';
+import FamilyGroupBorders from './FamilyGroupBorders.jsx';
 import { apiFetch as sharedApiFetch, apiUrl, loadInitialFamilyData, loadRemoteFamilyData } from './apiClient.js';
 import TreeConnections from './TreeConnections.jsx';
 import {
@@ -79,9 +80,10 @@ export default function App({ authUser, onLogout, workspaceActions }) {
   });
   const [treeVisualStyle, setTreeVisualStyle] = useState(() => {
     const savedStyle = storageGet('kinfolk-tree-visual-style-v2');
-    return ['dashboard', 'classic', 'atlas'].includes(savedStyle) ? savedStyle : 'dashboard';
+    return ['dashboard', 'classic', 'atlas', 'portraits'].includes(savedStyle) ? savedStyle : 'dashboard';
   });
   const [familyColorsEnabled, setFamilyColorsEnabled] = useState(() => storageGet('kinfolk-family-colors-v1') === 'true');
+  const [familyGroupBordersEnabled, setFamilyGroupBordersEnabled] = useState(() => storageGet('vanshlink-family-group-borders-v1') !== 'false');
   const [selectedId, setSelectedId] = useState('');
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [aboutTooltipId, setAboutTooltipId] = useState('');
@@ -202,7 +204,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     appliedTreeOffset,
     connectorNodePositions,
     connectorLabelPositions,
-  } = useTreeCanvasLayout({ treePeople, isCompactViewport, phoneLayoutPreview, treeViewportWidth, treeViewportHeight, zoom });
+  } = useTreeCanvasLayout({ treePeople, isCompactViewport, phoneLayoutPreview, treeViewportWidth, treeViewportHeight, zoom, treeVisualStyle });
   const { focusPersonInTree, zoomAround, zoomTo, stepZoom, fitTreeToView } = createCanvasNavigation({
     treeScroll,
     manualZoomTouched,
@@ -323,6 +325,9 @@ export default function App({ authUser, onLogout, workspaceActions }) {
   useEffect(() => {
     storageSet('kinfolk-family-colors-v1', String(familyColorsEnabled));
   }, [familyColorsEnabled]);
+  useEffect(() => {
+    storageSet('vanshlink-family-group-borders-v1', String(familyGroupBordersEnabled));
+  }, [familyGroupBordersEnabled]);
   useCanvasZoomViewport({
     treeScroll, zoom, zoomValue, pendingZoomAnchor, appliedTreeOffset,
     offsetX: treePaddingX + treeBoardOffsetX * zoom,
@@ -711,8 +716,8 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     setIsArranging(true);
     try {
       const arrangedPositions =
-        treeVisualStyle === 'dashboard' || treeVisualStyle === 'atlas'
-          ? compactDashboardPositions(treePeople)
+        ['dashboard', 'atlas', 'portraits'].includes(treeVisualStyle)
+          ? compactDashboardPositions(treePeople, { generationGap: treeVisualStyle === 'portraits' ? 210 : 126 })
           : (() => {
               const automaticLayout = layoutTree(treePeople.map((person) => ({ ...person, treeX: null, treeY: null })));
               return treePeople.map((person) => {
@@ -1234,6 +1239,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
                   transformOrigin: 'top left',
                 }}
               >
+                {treeVisualStyle === 'portraits' && familyGroupBordersEnabled && <FamilyGroupBorders layout={layout} width={treeBoardWidth} height={treeBoardHeight} selectedId={selectedId} selectedNodeIds={selectedNodeIds} />}
                 <TreeConnections
                   layout={layout}
                   treePeople={treePeople}
@@ -1249,6 +1255,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
                   treeBoardHeight={treeBoardHeight}
                 />
                 <TreeNodeLayer
+                  portrait={treeVisualStyle === 'portraits'}
                   editingLocked={movementLocked}
                   treePeople={treePeople}
                   layout={layout}
@@ -1308,6 +1315,8 @@ export default function App({ authUser, onLogout, workspaceActions }) {
             onSettingsOpenChange={setSettingsOpen}
             visibleLinkTypes={visibleLinkTypes}
             onVisibleLinkTypesChange={setVisibleLinkTypes}
+            familyGroupBordersEnabled={familyGroupBordersEnabled}
+            onFamilyGroupBordersChange={setFamilyGroupBordersEnabled}
             deceasedRibbon={deceasedRibbon}
             onDeceasedRibbonChange={setDeceasedRibbon}
             exportFieldsOpen={exportFieldsOpen}

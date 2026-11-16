@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react';
 import { layoutTree } from './layoutTree.js';
 
-export default function useTreeCanvasLayout({ treePeople, isCompactViewport, phoneLayoutPreview, treeViewportWidth, treeViewportHeight, zoom }) {
+export default function useTreeCanvasLayout({ treePeople, isCompactViewport, phoneLayoutPreview, treeViewportWidth, treeViewportHeight, zoom, treeVisualStyle }) {
   const layoutPeople = useMemo(() => {
     if (!isCompactViewport || !Object.keys(phoneLayoutPreview).length) return treePeople;
     return treePeople.map((person) => {
@@ -10,8 +10,9 @@ export default function useTreeCanvasLayout({ treePeople, isCompactViewport, pho
     });
   }, [treePeople, isCompactViewport, phoneLayoutPreview]);
   const cardWidth = 196;
-  const cardHeight = 76;
-  const layout = useMemo(() => layoutTree(layoutPeople, { nodeWidth: cardWidth, nodeHeight: cardHeight }), [layoutPeople, cardWidth, cardHeight]);
+  const cardHeight = treeVisualStyle === 'portraits' ? 156 : 76;
+  const portrait = treeVisualStyle === 'portraits';
+  const layout = useMemo(() => layoutTree(layoutPeople, { nodeWidth: cardWidth, nodeHeight: cardHeight, portrait }), [layoutPeople, cardWidth, cardHeight, portrait]);
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
   const layoutPositions = [...layout.positions.values()];

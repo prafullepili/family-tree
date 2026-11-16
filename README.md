@@ -20,7 +20,7 @@ VanshLink is a responsive family-history application for building, exploring, an
 - Rectangle selection, a tree edit lock, touch interaction, and keyboard shortcuts.
 - Persist node positions to MongoDB after movement stops.
 - Save named favorite views, restore their positions, and remove saved views.
-- Dashboard cards, Classic cards, and Family atlas appearances.
+- Dashboard cards, Classic cards, Family atlas, and Portraits appearances. Portraits shows a larger person image (or silhouette) above the name; choose it from Tree style. Your style choice is remembered on this browser.
 - Dark mode by default, with a saved light/dark preference, branch color coding, configurable relationship visibility, and optional black/red deceased ribbons.
 - Highlight connections on hover or selection, with relationship information available on links.
 

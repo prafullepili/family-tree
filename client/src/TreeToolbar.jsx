@@ -27,6 +27,7 @@ export default function TreeToolbar({
             <option value="dashboard">Dashboard cards</option>
             <option value="classic">Classic cards</option>
             <option value="atlas">Family atlas</option>
+            <option value="portraits">Portraits</option>
           </select>
         </label>
         <button

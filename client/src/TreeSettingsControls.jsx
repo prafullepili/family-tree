@@ -14,6 +14,7 @@ const TREE_STYLES = [
   ['dashboard', 'Dashboard cards'],
   ['classic', 'Classic cards'],
   ['atlas', 'Family atlas'],
+  ['portraits', 'Portraits'],
 ];
 
 export default function TreeSettingsControls({
@@ -23,6 +24,8 @@ export default function TreeSettingsControls({
   onSettingsOpenChange,
   visibleLinkTypes,
   onVisibleLinkTypesChange,
+  familyGroupBordersEnabled,
+  onFamilyGroupBordersChange,
   deceasedRibbon,
   onDeceasedRibbonChange,
   exportFieldsOpen,
@@ -73,6 +76,15 @@ export default function TreeSettingsControls({
                   <span>{label}</span>
                 </label>
               ))}
+              <div className="tree-settings-section-heading">
+                <strong>Family groups</strong>
+                <small>Outline parents and children in Portraits view</small>
+              </div>
+              <label className="link-visibility-option">
+                <input type="checkbox" checked={familyGroupBordersEnabled} onChange={(event) => onFamilyGroupBordersChange(event.target.checked)} />
+                <span className="link-visibility-check" aria-hidden="true">{familyGroupBordersEnabled && <Check size={12} />}</span>
+                <span>Family group borders</span>
+              </label>
               <label className="deceased-ribbon-setting">
                 <span>
                   <strong>Deceased marker</strong>

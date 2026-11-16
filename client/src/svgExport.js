@@ -51,6 +51,37 @@ function nodeMarkup(node, person, deceasedRibbon) {
   const muted = avatarStyle.color || text;
   const avatarFill = avatarStyle.backgroundColor || '#e6f3ed';
   const ribbonColor = deceasedRibbon === 'red' ? '#c83f49' : '#171918';
+  if (node.classList.contains('tree-person-portrait')) {
+    const label = card.querySelector('.tree-person-copy');
+    const labelFill = label ? getComputedStyle(label).backgroundColor : fill;
+    const portraitDateText = label?.querySelector('small')?.textContent || dateText;
+    const portraitStroke = avatarStyle.borderColor || stroke;
+    const portraitX = x + width / 2 - 48;
+    const portraitY = y;
+    let photo = '';
+    const image = avatar?.querySelector('img');
+    if (image?.complete && image.naturalWidth) {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 192; canvas.height = 192;
+        const context = canvas.getContext('2d');
+        const side = Math.min(image.naturalWidth, image.naturalHeight);
+        context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) * .25, side, side, 0, 0, 192, 192);
+        photo = canvas.toDataURL('image/png');
+      } catch { /* Remote photos without CORS permission use the silhouette. */ }
+    }
+    const clipId = `portrait-${String(person.id).replace(/[^a-z0-9_-]/gi, '')}`;
+    return `<g class="exported-person" data-person-id="${escapeXml(person.id)}">
+      <title>${escapeXml(title)}</title>
+      <defs><clipPath id="${clipId}"><rect x="${portraitX}" y="${portraitY}" width="96" height="96" rx="28"/></clipPath></defs>
+      <rect x="${portraitX}" y="${portraitY}" width="96" height="96" rx="28" fill="${avatarFill}" stroke="${portraitStroke}" stroke-width="2"/>
+      ${photo ? `<image href="${photo}" x="${portraitX}" y="${portraitY}" width="96" height="96" clip-path="url(#${clipId})"/>` : `<circle cx="${x + width / 2}" cy="${y + 36}" r="17" fill="${muted}" opacity=".45"/><path d="M ${portraitX + 16} ${y + 92} Q ${portraitX + 16} ${y + 60} ${x + width / 2} ${y + 60} Q ${portraitX + 80} ${y + 60} ${portraitX + 80} ${y + 92}" fill="${muted}" opacity=".45"/>`}
+      <rect x="${x + width / 2 - 72}" y="${y + 102}" width="144" height="40" rx="8" fill="${labelFill}"/>
+      <text x="${x + width / 2}" y="${y + 118}" text-anchor="middle" class="person-name" style="font-size:12px" fill="${text}">${escapeXml(shortened(personName(person), 20))}</text>
+      <text x="${x + width / 2}" y="${y + 133}" text-anchor="middle" class="person-meta" fill="${muted}">${escapeXml(shortened(portraitDateText, 25))}</text>
+      ${person.deathDate && deceasedRibbon !== 'off' ? `<path d="M ${portraitX + 72} ${y} H ${portraitX + 85} V ${y + 27} L ${portraitX + 78.5} ${y + 21} L ${portraitX + 72} ${y + 27} Z" fill="${ribbonColor}"/>` : ''}
+    </g>`;
+  }
   return `
     <g class="exported-person" data-person-id="${escapeXml(person.id)}">
       <title>${escapeXml(title)}</title>
@@ -96,6 +127,9 @@ export function exportTreeSvg({ board, people, treeName, theme, deceasedRibbon }
   const connector = liveConnector?.cloneNode(true);
   connector?.querySelectorAll('.connector-hit, .connector-child-name').forEach((element) => element.remove());
   const connectors = connector?.innerHTML || '';
+  const familyGroups = [...board.querySelectorAll('.family-group-borders rect')].map((rect) =>
+    `<rect x="${Number(rect.getAttribute('x'))}" y="${Number(rect.getAttribute('y'))}" width="${Number(rect.getAttribute('width'))}" height="${Number(rect.getAttribute('height'))}" rx="18"/>`,
+  ).join('');
   const peopleById = new Map(people.map((person) => [String(person.id), person]));
   const nodes = personNodes
     .map((node) => {
@@ -118,6 +152,7 @@ export function exportTreeSvg({ board, people, treeName, theme, deceasedRibbon }
   <style>
     :root { --line: ${line}; --accent: ${accent}; }
     .connector { fill: none; stroke: ${line}; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+    .family-groups rect { fill: none; stroke: ${line}; stroke-width: 1; stroke-dasharray: 5 5; opacity: .35; }
     .connector.partner { stroke: ${accent}; stroke-width: 1.9; }
     .connector.sibling { stroke-dasharray: 5 4; }
     .connector.custom { stroke-dasharray: 2 4; }
@@ -130,6 +165,7 @@ export function exportTreeSvg({ board, people, treeName, theme, deceasedRibbon }
   </style>
   <rect width="100%" height="100%" fill="${background}"/>
   <g transform="translate(${translateX} ${translateY})">
+    <g class="family-groups" aria-label="Family groups">${familyGroups}</g>
     <g aria-label="Relationships">${connectors}</g>
     <g aria-label="People">${nodes}</g>
   </g>

@@ -7134,3 +7134,131 @@ button {
   border: 0;
   background: #10161338;
 }
+
+/* Portrait nodes: the person is the focal point, with a quiet nameplate below. */
+.family-group-borders { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+.family-group-borders rect { fill: none; stroke: color-mix(in srgb, var(--text-soft) 28%, transparent); stroke-width: 1; stroke-dasharray: 5 5; }
+.theme-dark .family-group-borders rect { stroke: color-mix(in srgb, var(--text-soft) 35%, transparent); }
+.family-group-borders rect.is-selected { stroke: #e0443e; stroke-width: 1.7; stroke-dasharray: none; fill: #e0443e04; }
+.theme-dark .family-group-borders rect.is-selected { stroke: #f0a928; fill: #f0a92804; }
+.family-app .tree-person-portrait { height: 162px; }
+.family-app .tree-person-portrait .tree-person-card {
+  height: 156px;
+  outline: none;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 0 12px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  transform: none;
+  overflow: visible;
+  backdrop-filter: none;
+}
+.family-app .tree-person-portrait .tree-person-card::before { display: none; }
+.family-app .tree-person-portrait .tree-person-card { box-shadow: none !important; }
+.family-app:not(.theme-dark) .tree-person-portrait:is(.selected, .link-highlighted, .link-path-node) .tree-person-card { box-shadow: none !important; }
+.family-app .tree-person-portrait .person-avatar.portrait {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: 42px 42px 16px 16px;
+  border: 2px solid var(--family-card-border, var(--border));
+  background: var(--family-card-bg, var(--surface-soft));
+  color: var(--family-card-muted, var(--text-soft));
+  box-shadow: 0 4px 12px #101a1420;
+  transition: border-color .15s, box-shadow .15s;
+}
+.tree-person-portrait .person-avatar.portrait svg { width: 100%; height: 100%; align-self: end; }
+.tree-person-portrait .portrait-initials {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 9px;
+  letter-spacing: .02em;
+}
+.tree-person-portrait .person-avatar.portrait img { object-position: center 25%; }
+.family-app .tree-person-portrait .tree-person-copy {
+  flex: none;
+  gap: 2px;
+  width: 144px;
+  max-width: 100%;
+  text-align: center;
+  min-height: 40px;
+  align-content: center;
+  padding: 3px 6px;
+  background: var(--family-card-bg, var(--surface));
+  border-radius: 8px;
+  transition: background-color .15s, box-shadow .15s;
+}
+.family-app .tree-person-portrait.selected .tree-person-copy {
+  background: color-mix(in srgb, #e0443e 10%, var(--family-card-bg, var(--surface)));
+  box-shadow: inset 0 0 0 1.5px #e0443e;
+}
+.family-app.theme-dark .tree-person-portrait.selected .tree-person-copy {
+  background: color-mix(in srgb, var(--accent) 12%, var(--family-card-bg, var(--surface)));
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.family-app .tree-person-portrait .tree-person-copy strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 14px;
+  max-height: 28px;
+}
+.family-app .tree-person-portrait .tree-person-copy small {
+  font-size: 10px;
+  line-height: 11px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tree-person-portrait .drag-grip { display: none; }
+.tree-person-portrait .tree-node-quick-add { top: 151px; }
+.tree-person-portrait :is(.tree-node-info, .tree-node-edit, .tree-node-delete) {
+  right: 4px;
+  bottom: auto;
+  width: 28px;
+  height: 28px;
+}
+.tree-person-portrait .tree-node-info { top: 0; }
+.tree-person-portrait .tree-node-edit { top: 34px; }
+.tree-person-portrait .tree-node-delete { top: 68px; }
+.tree-person-portrait .tree-node-about-wrap { left: 4px; right: auto; top: 0; }
+.tree-person-portrait .tree-node-about { width: 28px; height: 28px; }
+.tree-person-portrait .tree-node-quick-add-button { width: 30px; height: 30px; }
+.tree-person-portrait:focus-within :is(.tree-node-info, .tree-node-edit, .tree-node-delete) { opacity: 1; pointer-events: auto; }
+@media (pointer: coarse) {
+  .tree-person-portrait :is(.tree-node-info, .tree-node-edit, .tree-node-delete) { width: 34px; height: 34px; right: 0; }
+  .tree-person-portrait .tree-node-quick-add-button { width: 34px; height: 34px; }
+  .tree-person-portrait .tree-node-about { width: 34px; height: 34px; }
+}
+.family-app .tree-person-portrait:hover .person-avatar.portrait,
+.family-app .tree-person-portrait.selected .person-avatar.portrait,
+.family-app .tree-person-portrait .tree-person-card:focus-visible .person-avatar.portrait {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg), 0 5px 16px #101a1428;
+}
+.family-app .tree-person-portrait.link-highlighted .person-avatar.portrait,
+.family-app .tree-person-portrait.link-path-node .person-avatar.portrait {
+  border-color: #f0a928;
+  box-shadow: 0 0 0 3px #f0a92840;
+}
+.family-app:not(.theme-dark) .tree-person-portrait:is(.selected, .link-highlighted, .link-path-node) .person-avatar.portrait {
+  border-color: #e0443e;
+  box-shadow: 0 0 0 3px #e0443e30;
+}
+.family-app .tree-person-portrait .tree-person-card::after { right: 53px; }

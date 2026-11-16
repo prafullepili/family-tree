@@ -1,4 +1,6 @@
 function connectRectangles(from, to) {
+  from = from.connectionBounds || from;
+  to = to.connectionBounds || to;
   const fromCenter = { x: from.x + from.w / 2, y: from.y + from.h / 2 };
   const toCenter = { x: to.x + to.w / 2, y: to.y + to.h / 2 };
   let dx = toCenter.x - fromCenter.x;
@@ -86,7 +88,7 @@ export function resolveNodeOverlaps(movingPositions, stationaryPositions) {
   });
 }
 
-export function layoutTree(people, { nodeWidth = 196, nodeHeight = 76 } = {}) {
+export function layoutTree(people, { nodeWidth = 196, nodeHeight = 76, portrait = false } = {}) {
   const representative = new Map(people.map((person) => [person.id, person.id]));
   function find(id) {
     const parent = representative.get(id);
@@ -318,6 +320,7 @@ export function layoutTree(people, { nodeWidth = 196, nodeHeight = 76 } = {}) {
   positions.forEach((position) => {
     position.x = position.rawX + originX;
     position.y = position.rawY + originY;
+    if (portrait) position.connectionBounds = { x: position.x + (position.w - 96) / 2, y: position.y, w: 96, h: 96 };
   });
 
   const edges = [];
