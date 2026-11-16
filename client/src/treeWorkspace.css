@@ -12,6 +12,8 @@ html[data-theme='dark'] .account-settings-panel { --panel: #1e2822; --surface: #
 .tree-workspace .simple-main { height: 100%; min-height: 0; }
 .tree-workspace .simple-canvas { min-height: 0; }
 .workspace-panel button, .workspace-panel input, .workspace-panel select { font: inherit; color: inherit; background: var(--panel, #f7f8f5); border: 1px solid var(--border, #b8c4b9); border-radius: 8px; padding: 8px 10px; }
+.account-settings-panel .auth-submit { background: var(--auth-accent-dark); color: #fff; border: 0; font-weight: 700; }
+html[data-theme='dark'] .account-settings-panel .auth-submit { background: var(--auth-accent-dark); color: #172219; }
 .has-workspace-actions { gap: 14px; }
 .workspace-header-actions { display: flex; align-items: center; gap: 8px; min-width: 0; margin-left: auto; }
 .workspace-header-actions select, .workspace-menu-trigger { height: 38px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); font: inherit; font-size: 13px; }
