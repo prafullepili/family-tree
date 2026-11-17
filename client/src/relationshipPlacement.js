@@ -17,9 +17,10 @@ export function relationshipPlacement(people, values, prior, positions) {
   const height = anchors[0].h || 76;
   const step = width + (group.kind === 'partner' ? 184 : 120);
   const vertical = group.kind === 'child' || group.kind === 'parent';
+  const generationGap = Math.max(190, height + 62);
   const x = vertical ? anchors.reduce((sum, anchor) => sum + anchor.rawX, 0) / anchors.length : anchors[0].rawX + step;
-  const y = group.kind === 'child' ? Math.max(...anchors.map((anchor) => anchor.rawY)) + 190
-    : group.kind === 'parent' ? Math.min(...anchors.map((anchor) => anchor.rawY)) - 190 : anchors[0].rawY;
+  const y = group.kind === 'child' ? Math.max(...anchors.map((anchor) => anchor.rawY)) + generationGap
+    : group.kind === 'parent' ? Math.min(...anchors.map((anchor) => anchor.rawY)) - generationGap : anchors[0].rawY;
   const occupied = [...positions.entries()].filter(([id]) => id !== prior?.id).map(([, position]) => position);
   // Search sideways on the correct generation instead of spilling into another row.
   const candidates = [x, ...occupied.flatMap((position) => [position.rawX - step, position.rawX + step])]

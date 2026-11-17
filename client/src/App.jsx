@@ -717,7 +717,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     try {
       const arrangedPositions =
         ['dashboard', 'atlas', 'portraits'].includes(treeVisualStyle)
-          ? compactDashboardPositions(treePeople, { generationGap: treeVisualStyle === 'portraits' ? 210 : 126 })
+          ? compactDashboardPositions(treePeople, { generationGap: treeVisualStyle === 'portraits' ? 246 : 126 })
           : (() => {
               const automaticLayout = layoutTree(treePeople.map((person) => ({ ...person, treeX: null, treeY: null })));
               return treePeople.map((person) => {

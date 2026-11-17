@@ -18,14 +18,29 @@ export async function preparePersonPhoto(file) {
     canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
     const context = canvas.getContext('2d');
     if (!context) throw Error('Your browser could not prepare this photo.');
-    context.fillStyle = '#ffffff'; context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const transparent = file.type !== 'image/jpeg' && hasTransparentPixels(context.getImageData(0, 0, canvas.width, canvas.height).data);
+    if (transparent) {
+      for (let attempt = 0; attempt < 7; attempt++) {
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+        if (blob && blob.size <= 1024 * 1024) return blob;
+        canvas.width = Math.max(1, Math.round(canvas.width * .8));
+        canvas.height = Math.max(1, Math.round(canvas.height * .8));
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      }
+      throw Error('This transparent photo is too large. Choose a smaller image.');
+    }
     for (const quality of [0.86, 0.7, 0.5]) {
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
       if (blob && blob.size <= 1024 * 1024) return blob;
     }
     throw Error('This photo could not be reduced below 1 MB. Choose a smaller image.');
   } finally { URL.revokeObjectURL(source); }
+}
+
+export function hasTransparentPixels(pixels) {
+  for (let index = 3; index < pixels.length; index += 4) if (pixels[index] < 255) return true;
+  return false;
 }
 
 export async function uploadPersonPhoto(file, request = apiFetch) {

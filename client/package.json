@@ -10,6 +10,7 @@
     "test": "node --test src/*.test.js"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "1.2.3",
     "d3-shape": "^3.2.0",
     "exceljs": "^4.4.0",
     "lucide-react": "^0.468.0",

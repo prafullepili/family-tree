@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: { include: ['@mediapipe/tasks-vision'] },
   base: '/family-tree/',
   server: {
     proxy: {

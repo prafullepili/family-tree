@@ -4540,6 +4540,21 @@ button {
 .person-photo-upload-actions { min-width: 0; flex: 1; display: grid; gap: 4px; }
 .person-photo-upload-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; justify-self: start; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); cursor: pointer; font: inherit; font-size: 11px; }
 .person-photo-upload-actions button:disabled { opacity: 0.6; cursor: wait; }
+.photo-background-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.photo-cropper { display: grid; gap: 10px; margin: 12px 0; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-soft); color: var(--text); }
+.photo-cropper > p { margin: 0; color: var(--text-soft); font-size: 12px; line-height: 1.5; }
+.photo-crop-stage { position: relative; width: min(240px,100%); aspect-ratio: 1; justify-self: center; overflow: hidden; touch-action: none; cursor: grab; border-radius: 8px; background: var(--surface); outline: 1px solid var(--border); }
+.photo-crop-stage:active { cursor: grabbing; }
+.photo-crop-stage img { position: absolute; max-width: none; max-height: none; user-select: none; pointer-events: none; }
+.photo-crop-grid { position: absolute; inset: 0; pointer-events: none; border: 1px solid #ffffff90; border-radius: inherit; background: linear-gradient(to right,transparent 33%,#ffffff50 33%,#ffffff50 33.5%,transparent 33.5%,transparent 66%,#ffffff50 66%,#ffffff50 66.5%,transparent 66.5%),linear-gradient(to bottom,transparent 33%,#ffffff50 33%,#ffffff50 33.5%,transparent 33.5%,transparent 66%,#ffffff50 66%,#ffffff50 66.5%,transparent 66.5%); }
+.photo-cropper .photo-crop-slider { display: grid; grid-template-columns: 76px minmax(0,1fr); align-items: center; gap: 8px; font-size: 12px; }
+.photo-cropper .photo-crop-slider input { width: 100%; min-width: 0; padding: 0; accent-color: var(--accent); cursor: pointer; }
+.photo-crop-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.photo-crop-actions button { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+.photo-crop-actions button:nth-child(2) { background: var(--accent); color: var(--surface); border-color: var(--accent); }
+.photo-crop-actions button:disabled { opacity: .5; cursor: wait; }
+.photo-processing-notice { color: var(--text-soft); font-size: 11px; line-height: 1.5; margin: 6px 0; }
+.person-photo-preview { background-image: conic-gradient(var(--surface-soft) 25%, transparent 0 50%, var(--surface-soft) 0 75%, transparent 0); background-size: 12px 12px; }
 .person-photo-upload-actions small { color: var(--text-soft); font-size: 10px; line-height: 1.5; }
 .photo-url input {
   min-width: 0;
@@ -7141,9 +7156,9 @@ button {
 .theme-dark .family-group-borders rect { stroke: color-mix(in srgb, var(--text-soft) 35%, transparent); }
 .family-group-borders rect.is-selected { stroke: #e0443e; stroke-width: 1.7; stroke-dasharray: none; fill: #e0443e04; }
 .theme-dark .family-group-borders rect.is-selected { stroke: #f0a928; fill: #f0a92804; }
-.family-app .tree-person-portrait { height: 162px; }
+.family-app .tree-person-portrait { height: 190px; }
 .family-app .tree-person-portrait .tree-person-card {
-  height: 156px;
+  height: 184px;
   outline: none;
   flex-direction: column;
   justify-content: flex-start;
@@ -7162,8 +7177,8 @@ button {
 .family-app:not(.theme-dark) .tree-person-portrait:is(.selected, .link-highlighted, .link-path-node) .tree-person-card { box-shadow: none !important; }
 .family-app .tree-person-portrait .person-avatar.portrait {
   position: relative;
-  width: 96px;
-  height: 96px;
+  width: 120px;
+  height: 120px;
   border-radius: 42px 42px 16px 16px;
   border: 2px solid var(--family-card-border, var(--border));
   background: var(--family-card-bg, var(--surface-soft));
@@ -7172,29 +7187,21 @@ button {
   transition: border-color .15s, box-shadow .15s;
 }
 .tree-person-portrait .person-avatar.portrait svg { width: 100%; height: 100%; align-self: end; }
-.tree-person-portrait .portrait-initials {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  display: grid;
-  place-items: center;
-  width: 25px;
-  height: 25px;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 9px;
-  letter-spacing: .02em;
-}
 .tree-person-portrait .person-avatar.portrait img { object-position: center 25%; }
+.family-app .tree-person-portrait .person-avatar.portrait.has-photo {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+.tree-person-portrait .person-avatar.portrait.has-photo img { object-fit: contain; object-position: center bottom; }
 .family-app .tree-person-portrait .tree-person-copy {
   flex: none;
   gap: 2px;
-  width: 144px;
+  width: 120px;
   max-width: 100%;
   text-align: center;
-  min-height: 40px;
+  min-height: 48px;
   align-content: center;
   padding: 3px 6px;
   background: var(--family-card-bg, var(--surface));
@@ -7210,24 +7217,24 @@ button {
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 .family-app .tree-person-portrait .tree-person-copy strong {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  display: block;
   white-space: normal;
   overflow-wrap: anywhere;
-  font-size: 12px;
-  line-height: 14px;
-  max-height: 28px;
+  font-size: 13px;
+  line-height: 15px;
+  max-height: none;
+  overflow: visible;
 }
+.portrait-name-line { display: block; white-space: pre; }
 .family-app .tree-person-portrait .tree-person-copy small {
-  font-size: 10px;
-  line-height: 11px;
+  font-size: 11px;
+  line-height: 12px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 .tree-person-portrait .drag-grip { display: none; }
-.tree-person-portrait .tree-node-quick-add { top: 151px; }
+.tree-person-portrait .tree-node-quick-add { top: calc(100% - 11px); }
 .tree-person-portrait :is(.tree-node-info, .tree-node-edit, .tree-node-delete) {
   right: 4px;
   bottom: auto;
@@ -7261,4 +7268,15 @@ button {
   border-color: #e0443e;
   box-shadow: 0 0 0 3px #e0443e30;
 }
-.family-app .tree-person-portrait .tree-person-card::after { right: 53px; }
+.family-app .tree-person-portrait .tree-person-card::after { right: 41px; }
+.family-app .tree-person-portrait .person-avatar.portrait {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  background: transparent;
+  border-radius: 0;
+  outline: none;
+}
+.family-app .tree-person-portrait .tree-person-card:focus-visible .tree-person-copy {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

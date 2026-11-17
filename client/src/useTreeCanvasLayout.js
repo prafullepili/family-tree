@@ -1,5 +1,6 @@
 import { useMemo, useRef } from 'react';
 import { layoutTree } from './layoutTree.js';
+import { PORTRAIT_MIN_HEIGHT } from './portraitName.js';
 
 export default function useTreeCanvasLayout({ treePeople, isCompactViewport, phoneLayoutPreview, treeViewportWidth, treeViewportHeight, zoom, treeVisualStyle }) {
   const layoutPeople = useMemo(() => {
@@ -10,7 +11,7 @@ export default function useTreeCanvasLayout({ treePeople, isCompactViewport, pho
     });
   }, [treePeople, isCompactViewport, phoneLayoutPreview]);
   const cardWidth = 196;
-  const cardHeight = treeVisualStyle === 'portraits' ? 156 : 76;
+  const cardHeight = treeVisualStyle === 'portraits' ? PORTRAIT_MIN_HEIGHT : 76;
   const portrait = treeVisualStyle === 'portraits';
   const layout = useMemo(() => layoutTree(layoutPeople, { nodeWidth: cardWidth, nodeHeight: cardHeight, portrait }), [layoutPeople, cardWidth, cardHeight, portrait]);
   const layoutRef = useRef(layout);

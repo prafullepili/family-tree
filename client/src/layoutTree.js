@@ -1,3 +1,5 @@
+import { portraitNodeHeight, PORTRAIT_SIZE } from './portraitName.js';
+
 function connectRectangles(from, to) {
   from = from.connectionBounds || from;
   to = to.connectionBounds || to;
@@ -210,7 +212,7 @@ export function layoutTree(people, { nodeWidth = 196, nodeHeight = 76, portrait 
   const partnerGap = 184;
   const siblingGap = 120;
   const familyGap = 56;
-  const generationGap = 190;
+  const generationGap = portrait ? 246 : 190;
   const canonical = new Map();
   const maxLevel = Math.max(0, ...levels.values());
 
@@ -298,7 +300,8 @@ export function layoutTree(people, { nodeWidth = 196, nodeHeight = 76, portrait 
     const automaticY = level * generationGap + partnerBranchOffset;
     const rawX = Number.isFinite(person.treeX) ? person.treeX : automaticX;
     const rawY = Number.isFinite(person.treeY) ? person.treeY : automaticY;
-    positions.set(person.id, { x: rawX, y: rawY, rawX, rawY, automaticX, automaticY, w: nodeWidth, h: nodeHeight, person });
+    const height = portrait ? portraitNodeHeight([person.firstName, person.lastName].filter(Boolean).join(' ')) : nodeHeight;
+    positions.set(person.id, { x: rawX, y: rawY, rawX, rawY, automaticX, automaticY, w: nodeWidth, h: height, person });
   });
 
   const collisionSafe = resolveNodeOverlaps(
@@ -320,7 +323,7 @@ export function layoutTree(people, { nodeWidth = 196, nodeHeight = 76, portrait 
   positions.forEach((position) => {
     position.x = position.rawX + originX;
     position.y = position.rawY + originY;
-    if (portrait) position.connectionBounds = { x: position.x + (position.w - 96) / 2, y: position.y, w: 96, h: 96 };
+    if (portrait) position.connectionBounds = { x: position.x + (position.w - PORTRAIT_SIZE) / 2, y: position.y, w: PORTRAIT_SIZE, h: PORTRAIT_SIZE };
   });
 
   const edges = [];
@@ -448,7 +451,7 @@ export function layoutTree(people, { nodeWidth = 196, nodeHeight = 76, portrait 
     const orderedChildren = children.map((person) => positions.get(person.id)).sort((a, b) => a.x - b.x);
     const partnerEdge = edges.find((edge) => edge.kind === 'partner' && parentIds.includes(edge.fromId) && parentIds.includes(edge.toId));
     const sourceX = partnerEdge ? (partnerEdge.x1 + partnerEdge.x2) / 2 : parents.reduce((sum, parent) => sum + parent.x + parent.w / 2, 0) / parents.length;
-    const sourceY = partnerEdge ? (partnerEdge.y1 + partnerEdge.y2) / 2 : parents.length > 1 ? parents.reduce((sum, parent) => sum + parent.y + parent.h / 2, 0) / parents.length : parents[0].y + nodeHeight;
+    const sourceY = partnerEdge ? (partnerEdge.y1 + partnerEdge.y2) / 2 : parents.length > 1 ? parents.reduce((sum, parent) => sum + parent.y + parent.h / 2, 0) / parents.length : parents[0].y + parents[0].h;
     const childTop = Math.min(...orderedChildren.map((child) => child.y));
     const childrenAreAbove = orderedChildren.every((child) => child.y + child.h <= sourceY);
     return {

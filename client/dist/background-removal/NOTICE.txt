@@ -1,0 +1,6 @@
+Background removal uses Google MediaPipe Tasks Vision 1.2.3 (Apache-2.0).
+Runtime files copied from the @mediapipe/tasks-vision npm package.
+Source: https://github.com/google-ai-edge/mediapipe
+Model: Google MediaPipe Selfie Segmenter, float16, version 1.
+Source: https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite
+These assets are hosted with VanshLink. User photos are not sent to Google for processing.

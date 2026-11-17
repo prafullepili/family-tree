@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { preparePersonPhoto, uploadPersonPhoto, discardUnusedPhoto } from './personPhotos.js';
+import { preparePersonPhoto, uploadPersonPhoto, discardUnusedPhoto, hasTransparentPixels } from './personPhotos.js';
 
 test('photo preparation rejects unsupported formats and oversized originals before opening them', async () => {
   await assert.rejects(preparePersonPhoto({ type: 'image/svg+xml', size: 30 }), /JPEG, PNG, or WebP/);
@@ -22,9 +22,24 @@ test('photo preparation scales images down, produces JPEG, and releases the sour
   };
   const canvas = { width: 0, height: 0, getContext: () => ({ fillRect() {}, drawImage() {} }), toBlob(callback, type, value) { quality = value; callback(new Blob(['jpeg'], { type })); } };
   globalThis.document = { createElement: () => canvas };
-  const file = await preparePersonPhoto(new Blob(['image'], { type: 'image/png' }));
+  const file = await preparePersonPhoto(new Blob(['image'], { type: 'image/jpeg' }));
   assert.equal(file.type, 'image/jpeg'); assert.equal(canvas.width, 1024); assert.equal(canvas.height, 512);
   assert.equal(quality, 0.86); assert.equal(revoked, true);
+});
+
+test('transparent uploads retain alpha as PNG instead of being flattened onto white', async (t) => {
+  const previousImage = globalThis.Image, previousDocument = globalThis.document;
+  t.after(() => { globalThis.Image = previousImage; globalThis.document = previousDocument; });
+  t.mock.method(URL, 'createObjectURL', () => 'blob:transparent');
+  t.mock.method(URL, 'revokeObjectURL', () => {});
+  globalThis.Image = class { naturalWidth = 400; naturalHeight = 600; set src(_) { queueMicrotask(() => this.onload()); } };
+  let outputType;
+  const canvas = { getContext: () => ({drawImage(){}, getImageData: () => ({data: new Uint8ClampedArray([20,30,40,0,20,30,40,255])})}), toBlob(callback, type) { outputType = type; callback(new Blob(['png'], {type})); } };
+  globalThis.document = { createElement: () => canvas };
+  const result = await preparePersonPhoto(new Blob(['image'], {type:'image/png'}));
+  assert.equal(outputType,'image/png');
+  assert.equal(result.type,'image/png');
+  assert.equal(hasTransparentPixels(new Uint8ClampedArray([1,2,3,255])),false);
 });
 
 test('photo upload sends binary data and surfaces server errors; cleanup only targets stored photos', async () => {

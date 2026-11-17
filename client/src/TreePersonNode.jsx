@@ -1,6 +1,7 @@
 import { Eye, EyeOff, Info, Pencil, Plus, Trash2 } from 'lucide-react';
 import { fullName, year } from './appHelpers.js';
 import { PersonAvatar } from './TreeRenderComponents.jsx';
+import { portraitNameLines } from './portraitName.js';
 
 const QUICK_ADD_OPTIONS = [
   ['father', 'Father'],
@@ -47,7 +48,7 @@ export default function TreePersonNode({
     <div
       data-person-id={person.id}
       className={`tree-person ${portrait ? 'tree-person-portrait' : ''} gender-${person.gender || 'unspecified'} ${person.deathDate ? 'is-deceased' : ''} ${linkHighlighted ? 'link-highlighted' : ''} ${networkHighlighted ? 'link-path-node' : ''} ${selected ? 'selected' : ''} ${familyColorClass}`}
-      style={{ left: position.x, top: position.y }}
+      style={{ left: position.x, top: position.y, ...(portrait ? {height: position.h + 6} : {}) }}
       onPointerEnter={(event) => event.pointerType !== 'touch' && onHoverStart()}
       onPointerLeave={(event) => event.pointerType !== 'touch' && onHoverEnd()}
       onPointerDown={(event) => event.pointerType === 'touch' && onTouchDragStart(event)}
@@ -56,6 +57,7 @@ export default function TreePersonNode({
     >
       <button
         className="tree-person-card"
+        style={portrait ? {height: position.h} : undefined}
         title={name}
         aria-label={`Select ${name}; drag to move; press and hold to open details`}
         onContextMenu={(event) => event.preventDefault()}
@@ -63,7 +65,7 @@ export default function TreePersonNode({
       >
         <PersonAvatar person={person} size={portrait ? 'portrait' : 'large'} />
         <span className="tree-person-copy">
-          <strong>{name}</strong>
+          <strong>{portrait ? portraitNameLines(name).map((line,index) => <span className="portrait-name-line" key={index}>{line}</span>) : name}</strong>
           <small title={person.maidenName ? `Birth surname: ${person.maidenName}` : undefined}>
             {portrait ? `${person.maidenName ? `Born ${person.maidenName} · ` : ''}${portraitDates}` : <>
             {person.maidenName ? `Born: ${person.maidenName} · ` : ''}

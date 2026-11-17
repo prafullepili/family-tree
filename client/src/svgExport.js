@@ -1,3 +1,5 @@
+import { portraitNameLines, PORTRAIT_SIZE } from './portraitName.js';
+
 const escapeXml = (value) =>
   String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -54,9 +56,13 @@ function nodeMarkup(node, person, deceasedRibbon) {
   if (node.classList.contains('tree-person-portrait')) {
     const label = card.querySelector('.tree-person-copy');
     const labelFill = label ? getComputedStyle(label).backgroundColor : fill;
+    const nameLines = portraitNameLines(personName(person));
+    const labelHeight = label?.offsetHeight || Math.max(48, nameLines.length * 15 + 20);
+    const labelY = y + PORTRAIT_SIZE + 6;
+    const firstNameY = labelY + 12 + (labelHeight - (nameLines.length * 15 + 14)) / 2;
     const portraitDateText = label?.querySelector('small')?.textContent || dateText;
     const portraitStroke = avatarStyle.borderColor || stroke;
-    const portraitX = x + width / 2 - 48;
+    const portraitX = x + width / 2 - PORTRAIT_SIZE / 2;
     const portraitY = y;
     let photo = '';
     const image = avatar?.querySelector('img');
@@ -65,21 +71,22 @@ function nodeMarkup(node, person, deceasedRibbon) {
         const canvas = document.createElement('canvas');
         canvas.width = 192; canvas.height = 192;
         const context = canvas.getContext('2d');
-        const side = Math.min(image.naturalWidth, image.naturalHeight);
-        context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) * .25, side, side, 0, 0, 192, 192);
+        const scale = Math.min(192 / image.naturalWidth, 192 / image.naturalHeight);
+        const photoWidth = image.naturalWidth * scale, photoHeight = image.naturalHeight * scale;
+        context.drawImage(image, (192 - photoWidth) / 2, 192 - photoHeight, photoWidth, photoHeight);
         photo = canvas.toDataURL('image/png');
       } catch { /* Remote photos without CORS permission use the silhouette. */ }
     }
     const clipId = `portrait-${String(person.id).replace(/[^a-z0-9_-]/gi, '')}`;
     return `<g class="exported-person" data-person-id="${escapeXml(person.id)}">
       <title>${escapeXml(title)}</title>
-      <defs><clipPath id="${clipId}"><rect x="${portraitX}" y="${portraitY}" width="96" height="96" rx="28"/></clipPath></defs>
-      <rect x="${portraitX}" y="${portraitY}" width="96" height="96" rx="28" fill="${avatarFill}" stroke="${portraitStroke}" stroke-width="2"/>
-      ${photo ? `<image href="${photo}" x="${portraitX}" y="${portraitY}" width="96" height="96" clip-path="url(#${clipId})"/>` : `<circle cx="${x + width / 2}" cy="${y + 36}" r="17" fill="${muted}" opacity=".45"/><path d="M ${portraitX + 16} ${y + 92} Q ${portraitX + 16} ${y + 60} ${x + width / 2} ${y + 60} Q ${portraitX + 80} ${y + 60} ${portraitX + 80} ${y + 92}" fill="${muted}" opacity=".45"/>`}
-      <rect x="${x + width / 2 - 72}" y="${y + 102}" width="144" height="40" rx="8" fill="${labelFill}"/>
-      <text x="${x + width / 2}" y="${y + 118}" text-anchor="middle" class="person-name" style="font-size:12px" fill="${text}">${escapeXml(shortened(personName(person), 20))}</text>
-      <text x="${x + width / 2}" y="${y + 133}" text-anchor="middle" class="person-meta" fill="${muted}">${escapeXml(shortened(portraitDateText, 25))}</text>
-      ${person.deathDate && deceasedRibbon !== 'off' ? `<path d="M ${portraitX + 72} ${y} H ${portraitX + 85} V ${y + 27} L ${portraitX + 78.5} ${y + 21} L ${portraitX + 72} ${y + 27} Z" fill="${ribbonColor}"/>` : ''}
+      <defs><clipPath id="${clipId}"><rect x="${portraitX}" y="${portraitY}" width="${PORTRAIT_SIZE}" height="${PORTRAIT_SIZE}"/></clipPath></defs>
+      <rect x="${portraitX}" y="${portraitY}" width="${PORTRAIT_SIZE}" height="${PORTRAIT_SIZE}" fill="${avatarFill}" stroke="${portraitStroke}" stroke-width="2"/>
+      ${photo ? `<image href="${photo}" x="${portraitX}" y="${portraitY}" width="${PORTRAIT_SIZE}" height="${PORTRAIT_SIZE}" clip-path="url(#${clipId})"/>` : `<g transform="translate(${portraitX} ${y}) scale(${PORTRAIT_SIZE / 96})" fill="${muted}"><circle cx="48" cy="34" r="18" opacity=".35"/><path d="M12 96V84c0-20 16-30 36-30s36 10 36 30v12Z" opacity=".28"/></g>`}
+      <rect x="${portraitX}" y="${labelY}" width="${PORTRAIT_SIZE}" height="${labelHeight}" rx="8" fill="${labelFill}"/>
+      <text text-anchor="middle" class="person-name" style="font-size:13px" fill="${text}">${nameLines.map((line,index) => `<tspan x="${x + width / 2}" y="${firstNameY + index * 15}">${escapeXml(line)}</tspan>`).join('')}</text>
+      <text x="${x + width / 2}" y="${firstNameY + nameLines.length * 15}" text-anchor="middle" class="person-meta" fill="${muted}">${escapeXml(shortened(portraitDateText, 20))}</text>
+      ${person.deathDate && deceasedRibbon !== 'off' ? `<path d="M ${portraitX + PORTRAIT_SIZE - 24} ${y} H ${portraitX + PORTRAIT_SIZE - 11} V ${y + 27} L ${portraitX + PORTRAIT_SIZE - 17.5} ${y + 21} L ${portraitX + PORTRAIT_SIZE - 24} ${y + 27} Z" fill="${ribbonColor}"/>` : ''}
     </g>`;
   }
   return `
