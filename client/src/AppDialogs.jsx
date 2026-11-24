@@ -1,11 +1,15 @@
 import { Bookmark, FolderOpen, GitFork, Save, Trash2, Upload, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { fullName } from './appHelpers.js';
+import { familyBranchPeople } from './branchImport.js';
 
 export default function AppDialogs({
   pendingImport,
   isImporting,
+  people = [],
   onCancelImport,
   onConfirmImport,
+  onConfirmBranchImport,
   confirmDelete,
   selected,
   selectedNodeIds,
@@ -32,6 +36,26 @@ export default function AppDialogs({
   onRemoveLayout,
   onApplyLayout,
 }) {
+  const [branchMode, setBranchMode] = useState(false);
+  const [branchPersonId, setBranchPersonId] = useState('');
+  const [connectToId, setConnectToId] = useState('');
+  const selectedBranch = familyBranchPeople(pendingImport?.people || [], branchPersonId);
+  const branchIds = new Set(selectedBranch.map((person) => String(person.sourceId)));
+  const branchHasRelationships = selectedBranch.some((person) =>
+    [...person.parentIds, ...person.partnerIds, ...person.siblingIds, ...person.partnerRelationships.map((link) => link.partnerId), ...person.relationshipLinks.map((link) => link.personId)].some((id) => branchIds.has(String(id))),
+  );
+  const possibleDuplicates = selectedBranch.filter((person) => String(person.sourceId) !== String(branchPersonId)).filter((person) => people.some((candidate) =>
+    fullName(candidate).trim().toLowerCase() === fullName(person).trim().toLowerCase() &&
+    (!candidate.birthDate || !person.birthDate || String(candidate.birthDate).slice(0, 10) === String(person.birthDate).slice(0, 10)),
+  ));
+  useEffect(() => {
+    setBranchMode(false);
+    const source = pendingImport?.people?.[0];
+    setBranchPersonId(source?.sourceId || '');
+    const matches = source ? people.filter((person) => fullName(person).trim().toLowerCase() === fullName(source).trim().toLowerCase()) : [];
+    setConnectToId(matches.length === 1 ? matches[0].id : '');
+  }, [pendingImport?.id]);
+
   return (
     <>
       {pendingImport && (
@@ -40,19 +64,50 @@ export default function AppDialogs({
             <div className="arrange-dialog-icon" aria-hidden="true">
               <Upload size={20} />
             </div>
-            <h2 id="import-data-title">Import family data?</h2>
-            <p>
-              <strong>{pendingImport.filename}</strong> contains {pendingImport.people.length} {pendingImport.people.length === 1 ? 'person' : 'people'}.
-            </p>
-            <p>Matching IDs will be updated. New IDs will be added. Existing people missing from the file will remain in the tree.</p>
-            <div>
-              <button type="button" onClick={onCancelImport} disabled={isImporting}>
-                Cancel
-              </button>
-              <button type="button" className="arrange-action" onClick={onConfirmImport} disabled={isImporting}>
-                {isImporting ? 'Importing…' : 'Import data'}
-              </button>
-            </div>
+            <h2 id="import-data-title">{branchMode ? 'Connect a family branch' : 'Import family data?'}</h2>
+            <p><strong>{pendingImport.filename}</strong> contains {pendingImport.people.length} {pendingImport.people.length === 1 ? 'person' : 'people'}.</p>
+            {branchMode ? (
+              <>
+                <label className="branch-import-field">Person from the imported family
+                  <select value={branchPersonId} onChange={(event) => {
+                    const sourceId = event.target.value;
+                    const source = pendingImport.people.find((person) => String(person.sourceId) === sourceId);
+                    const matches = source ? people.filter((person) => fullName(person).trim().toLowerCase() === fullName(source).trim().toLowerCase()) : [];
+                    setBranchPersonId(sourceId);
+                    setConnectToId(matches.length === 1 ? matches[0].id : '');
+                  }}>
+                    {pendingImport.people.map((person) => <option key={person.sourceId} value={person.sourceId}>{fullName(person)}</option>)}
+                  </select>
+                </label>
+                <label className="branch-import-field">Match to this existing person in your tree
+                  <select value={connectToId} onChange={(event) => setConnectToId(event.target.value)}>
+                    <option value="">Choose the same person…</option>
+                    {people.map((person) => <option key={person.id} value={person.id}>{fullName(person)}</option>)}
+                  </select>
+                </label>
+                <p>{selectedBranch.length} connected family members will be included. The selected person’s existing record in your tree will be kept, and the imported family relationships will be merged into it. The source tree is not changed.</p>
+                {!branchHasRelationships && <p role="status">This file has no relationship ID fields, so the imported people may not be linked to each other. Export again with the ID and relationship ID columns selected.</p>}
+                {possibleDuplicates.length > 0 && <p role="status">Possible same-person matches in the rest of the imported family will be added as new records: {possibleDuplicates.slice(0, 5).map(fullName).join(', ')}{possibleDuplicates.length > 5 ? `, and ${possibleDuplicates.length - 5} more` : ''}. Review these before merging.</p>}
+                <div>
+                  <button type="button" onClick={() => setBranchMode(false)} disabled={isImporting}>Back</button>
+                  <button type="button" onClick={onCancelImport} disabled={isImporting}>Cancel</button>
+                  <button type="button" className="arrange-action" onClick={() => onConfirmBranchImport(branchPersonId, connectToId)} disabled={isImporting || !people.length || !branchPersonId || !connectToId}>
+                    {isImporting ? 'Merging…' : 'Merge family'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p>Matching IDs will be updated. New IDs will be added. Existing people missing from the file will remain in the tree.</p>
+                <div>
+                  <button type="button" onClick={onCancelImport} disabled={isImporting}>Cancel</button>
+                  <button type="button" onClick={() => setBranchMode(true)} disabled={isImporting || !people.length || !pendingImport.people.length}>Connect as branch…</button>
+                  <button type="button" className="arrange-action" onClick={onConfirmImport} disabled={isImporting}>
+                    {isImporting ? 'Importing…' : 'Import data'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

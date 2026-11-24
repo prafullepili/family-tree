@@ -38,8 +38,8 @@ VanshLink is a responsive family-history application for building, exploring, an
 
 ### Import and export
 
-- Import CSV and Excel files.
-- Export CSV or Excel with selected columns, including readable names and relationships.
+- Import CSV and Excel files, and invite someone to merge a connected family using a person-specific link.
+- Export CSV or Excel with selected columns, including readable names, stable person IDs, and relationship IDs. Keep the ID fields selected when preparing a file to connect as a branch.
 - Download an SVG of the entire tree with node information.
 - Available export fields include names, maiden name, gender, dates, birthplace, occupation, biography, notes, photo URL, relationships, and coordinates.
 
@@ -260,6 +260,8 @@ Photos use the existing MongoDB connection and storage quota, with no additional
 
 CSV/Excel exports include photo URLs rather than image files. Private uploaded-photo URLs require an authenticated account with access to the source tree; exporting a spreadsheet does not make those photos public or bundle them.
 
+To invite someone to merge a family, select a person in the source tree and choose **Invite to merge this family**. Share the generated link with the recipient. They can match the invited person to the same person in their tree, or add the invited person as a parent of someone already there. They also choose a **Live link** or **Copy once**. A live link lets the recipient manually refresh the copied family’s details and relationships from the source tree; a copy is a one-time snapshot. Stopping a live link leaves the copied people and relationships in the recipient’s tree. The invitation expires after 7 days and can be used once, and the source tree stays unchanged. Private uploaded photos from the source tree are not copied; external photo URLs remain attached.
+
 ## Canvas controls
 
 | Action | Desktop | Touch |
@@ -305,6 +307,8 @@ Registration, login, Google sign-in, and password recovery are pre-authenticatio
 | --- | --- | --- |
 | GET / POST | `/api/trees` | List accessible trees / create a tree |
 | POST | `/api/trees/accept-invitation` | Accept an invitation using `token` |
+| POST | `/api/trees/:treeId/person-merge-invitations` | Create a 7-day, one-use invitation for a person's connected family |
+| GET | `/api/trees/person-merge-invitations/:token` | Preview an active person merge invitation |
 | GET | `/api/trees/:treeId/members` | List members |
 | PATCH / DELETE | `/api/trees/:treeId/members/:memberId` | Change role / remove a non-owner member |
 | GET / POST | `/api/trees/:treeId/invitations` | List pending invitations / invite an email with a role |
@@ -321,6 +325,10 @@ Registration, login, Google sign-in, and password recovery are pre-authenticatio
 | GET / PATCH / DELETE | `/api/people/:id` | Read / update / soft-delete a person |
 | DELETE | `/api/people/batch` | Soft-delete the supplied `ids` |
 | POST | `/api/people/import` | Import a `people` array |
+| POST | `/api/people/accept-merge-invitation` | Merge an invited connected family into a matching person or add the invited person as a parent |
+| GET | `/api/people/linked-families?personId=:id` | List active live family links attached to a person |
+| POST | `/api/people/linked-families/:linkId/refresh` | Manually refresh copied details and relationships from the source tree |
+| DELETE | `/api/people/linked-families/:linkId` | Stop future refreshes while keeping copied people in the destination tree |
 | PATCH | `/api/people/layout/positions` | Save `positions` with `id`, `treeX`, and `treeY` |
 | PATCH | `/api/people/layout/reset` | Clear active people's stored coordinates |
 | GET | `/api/layouts?familyId=...` | List saved views; optional comma-separated `personIds` |
@@ -512,4 +520,4 @@ Coverage includes local/deployed API routing, family-data loading, placement, zo
 - Ownership transfer, tree deletion, and permanent recycle-bin deletion are not exposed.
 - Activity displays the latest 100 records and has no pagination interface.
 - Collaboration uses server-validated requests; there is no live WebSocket synchronization.
-- Field-level privacy and automatic merging of independently created trees are not implemented.
+- Field-level privacy and automatic matching between trees without a person-specific invitation are not implemented.

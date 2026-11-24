@@ -24,6 +24,7 @@ import TreeToolbar from './TreeToolbar.jsx';
 import TreeSettingsControls, { DATA_COLUMNS } from './TreeSettingsControls.jsx';
 import { AppHeader, FamilySidebar } from './AppNavigation.jsx';
 import AppDialogs from './AppDialogs.jsx';
+import PersonMergeDialogs from './PersonMergeDialogs.jsx';
 import PersonDetailsPanel, { PersonModalDialog } from './PersonDetailsPanel.jsx';
 import TreeNodeLayer from './TreeNodeLayer.jsx';
 import FamilyGroupBorders from './FamilyGroupBorders.jsx';
@@ -44,7 +45,7 @@ import {
   year,
 } from './appHelpers.js';
 
-export default function App({ authUser, onLogout, workspaceActions }) {
+export default function App({ authUser, onLogout, workspaceActions, mergeToken = '' }) {
   const [isCompactViewport, setIsCompactViewport] = useState(() => window.innerWidth <= 1050);
   const workspaceKey = `${authUser?.id}:${authUser?.treeId}`;
   const readOnly = authUser?.treeRole === 'viewer';
@@ -145,6 +146,12 @@ export default function App({ authUser, onLogout, workspaceActions }) {
   const [deletingLayoutId, setDeletingLayoutId] = useState('');
   const [pendingImport, setPendingImport] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [mergeInvite, setMergeInvite] = useState(null);
+  const [mergeInvitation, setMergeInvitation] = useState(null);
+  const [isAcceptingMerge, setIsAcceptingMerge] = useState(false);
+  const [linkedFamily, setLinkedFamily] = useState(null);
+  const [isRefreshingLinkedFamily, setIsRefreshingLinkedFamily] = useState(false);
+  const [confirmDisconnectLinkedFamily, setConfirmDisconnectLinkedFamily] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteDescendants, setDeleteDescendants] = useState(() => storageGet('kinfolk-delete-descendants') === 'true');
   const drag = useRef(null);
@@ -571,7 +578,7 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     }
   }
   refreshDataRef.current = refreshFromDatabase;
-  const { updateExportColumns, exportCsv, exportExcel, exportSvg, handleImportFile, confirmDataImport } = createDataTransferActions({
+  const { updateExportColumns, exportCsv, exportExcel, exportSvg, handleImportFile, confirmDataImport, confirmBranchImport } = createDataTransferActions({
     setExportColumns,
     exportColumns,
     notify,
@@ -613,6 +620,125 @@ export default function App({ authUser, onLogout, workspaceActions }) {
     const r = await apiFetch(apiUrl('/api/people'));
     if (!r.ok) throw Error('Could not reload your family tree');
     return (await r.json()).map(fromApi);
+  }
+  async function createPersonMergeInvitation(person) {
+    if (!person?._id || readOnly || apiState !== 'connected') return notify('Connect to the database as an Editor or Owner to create a merge invitation.');
+    try {
+      const response = await apiFetch(apiUrl(`/api/trees/${authUser.treeId}/person-merge-invitations`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ personId: person._id }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw Error(result?.error || 'Could not create the merge invitation.');
+      const url = new URL(location.href);
+      url.searchParams.set('merge', result.token);
+      setMergeInvite({ token: result.token, url: url.href, personName: result.personName, expiresAt: result.expiresAt });
+    } catch (error) {
+      notify(error.message || 'Could not create the merge invitation.');
+    }
+  }
+  useEffect(() => {
+    if (!mergeToken || apiState !== 'connected') return undefined;
+    let cancelled = false;
+    setMergeInvitation({ token: mergeToken, loading: true });
+    (async () => {
+      try {
+        const response = await apiFetch(apiUrl(`/api/trees/person-merge-invitations/${encodeURIComponent(mergeToken)}`), { cache: 'no-store' });
+        const result = await response.json().catch(() => null);
+        if (!response.ok) throw Error(result?.error || 'This merge invitation is unavailable.');
+        if (!cancelled) setMergeInvitation({ token: mergeToken, ...result });
+      } catch (error) {
+        if (!cancelled) setMergeInvitation({ token: mergeToken, error: error.message || 'This merge invitation is unavailable.' });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mergeToken, apiState, authUser?.treeId]);
+  useEffect(() => {
+    if (!selected?.id || apiState !== 'connected') {
+      setLinkedFamily(null);
+      return undefined;
+    }
+    let cancelled = false;
+    setLinkedFamily(null);
+    (async () => {
+      try {
+        const response = await apiFetch(apiUrl(`/api/people/linked-families?personId=${encodeURIComponent(selected.id)}`), { cache: 'no-store' });
+        const result = await response.json().catch(() => []);
+        if (!response.ok) throw Error('Could not load linked family details.');
+        if (!cancelled) setLinkedFamily(result[0] || null);
+      } catch {
+        if (!cancelled) setLinkedFamily(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selected?.id, apiState, authUser?.treeId]);
+  function closeMergeInvitation() {
+    const url = new URL(location.href);
+    url.searchParams.delete('merge');
+    history.replaceState({}, '', url);
+    setMergeInvitation(null);
+  }
+  async function acceptMergeInvitation(targetPersonId, mode = 'match', linkMode = 'live') {
+    if (!mergeInvitation?.token || !targetPersonId || isAcceptingMerge) return;
+    setIsAcceptingMerge(true);
+    try {
+      const response = await apiFetch(apiUrl('/api/people/accept-merge-invitation'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: mergeInvitation.token, targetPersonId, mode, linkMode }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw Error(result?.error || 'Could not merge the invited family.');
+      setPeople(await refreshPeople());
+      closeMergeInvitation();
+      const mergedCount = result.importedCount + (mode === 'add-as-parent' ? 0 : 1);
+      notify(linkMode === 'live' && result.refreshAvailable
+        ? `${mergedCount} family members linked. You can refresh this family from its details.`
+        : linkMode === 'live'
+          ? `${mergedCount} family members copied, but the live link could not be created.`
+        : `${mergedCount} family members copied into your tree.`);
+    } catch (error) {
+      setMergeInvitation((current) => ({ ...current, error: error.message || 'Could not merge the invited family.' }));
+    } finally {
+      setIsAcceptingMerge(false);
+    }
+  }
+  async function refreshLinkedFamilyNow() {
+    if (!linkedFamily?.id || isRefreshingLinkedFamily) return;
+    setIsRefreshingLinkedFamily(true);
+    try {
+      const response = await apiFetch(apiUrl(`/api/people/linked-families/${encodeURIComponent(linkedFamily.id)}/refresh`), { method: 'POST' });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw Error(result?.error || 'Could not refresh the linked family.');
+      setPeople(await refreshPeople());
+      setLinkedFamily((current) => current ? { ...current, lastSyncedAt: result.lastSyncedAt, memberCount: result.memberCount } : current);
+      notify(`Family refreshed: ${result.updatedCount} updated, ${result.addedCount} added`);
+    } catch (error) {
+      notify(error.message || 'Could not refresh the linked family.');
+    } finally {
+      setIsRefreshingLinkedFamily(false);
+    }
+  }
+  function requestDisconnectLinkedFamily() {
+    if (!linkedFamily?.id || isRefreshingLinkedFamily) return;
+    setConfirmDisconnectLinkedFamily(true);
+  }
+  async function disconnectLinkedFamily() {
+    if (!linkedFamily?.id || isRefreshingLinkedFamily) return;
+    setIsRefreshingLinkedFamily(true);
+    try {
+      const response = await apiFetch(apiUrl(`/api/people/linked-families/${encodeURIComponent(linkedFamily.id)}`), { method: 'DELETE' });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw Error(result?.error || 'Could not stop this live link.');
+      setLinkedFamily(null);
+      setConfirmDisconnectLinkedFamily(false);
+      notify('Live link stopped. The copied people remain in your tree.');
+    } catch (error) {
+      notify(error.message || 'Could not stop this live link.');
+    } finally {
+      setIsRefreshingLinkedFamily(false);
+    }
   }
   useEffect(() => {
     if (!confirmDelete || !selected) return;
@@ -1371,13 +1497,20 @@ export default function App({ authUser, onLogout, workspaceActions }) {
           setMobileDetailsOpen(false);
         }}
         onRequestDelete={requestDelete}
+        onInviteToMerge={createPersonMergeInvitation}
+        linkedFamily={linkedFamily}
+        isRefreshingLinkedFamily={isRefreshingLinkedFamily}
+        onRefreshLinkedFamily={refreshLinkedFamilyNow}
+        onDisconnectLinkedFamily={requestDisconnectLinkedFamily}
       />
       <PersonModalDialog modal={modal} people={people} onClose={() => setModal(null)} onSave={saveMember} />
       <AppDialogs
         pendingImport={pendingImport}
         isImporting={isImporting}
+        people={people}
         onCancelImport={() => setPendingImport(null)}
         onConfirmImport={confirmDataImport}
+        onConfirmBranchImport={confirmBranchImport}
         confirmDelete={confirmDelete}
         selected={selected}
         selectedNodeIds={selectedNodeIds}
@@ -1403,6 +1536,30 @@ export default function App({ authUser, onLogout, workspaceActions }) {
         deletingLayoutId={deletingLayoutId}
         onRemoveLayout={removeNamedLayout}
         onApplyLayout={applyNamedLayout}
+      />
+      {confirmDisconnectLinkedFamily && linkedFamily && (
+        <div className="simple-modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !isRefreshingLinkedFamily && setConfirmDisconnectLinkedFamily(false)}>
+          <div className="delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-family-link-title" aria-describedby="delete-family-link-warning">
+            <h2 id="delete-family-link-title">Delete this live link?</h2>
+            <p id="delete-family-link-warning">Refreshing from {linkedFamily.sourceTreeName} will stop. The people and relationships already copied into your tree will remain.</p>
+            <div>
+              <button type="button" onClick={() => setConfirmDisconnectLinkedFamily(false)} disabled={isRefreshingLinkedFamily}>No, keep link</button>
+              <button type="button" className="danger-action" onClick={disconnectLinkedFamily} disabled={isRefreshingLinkedFamily}>
+                {isRefreshingLinkedFamily ? 'Deleting…' : 'Yes, delete link'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <PersonMergeDialogs
+        invite={mergeInvite}
+        preview={mergeInvitation}
+        people={people}
+        isAccepting={isAcceptingMerge}
+        error={mergeInvitation?.error || ''}
+        onCloseInvite={() => setMergeInvite(null)}
+        onClosePreview={closeMergeInvitation}
+        onAccept={acceptMergeInvitation}
       />
       {toast && <div className="simple-toast">{toast}</div>}
     </div>

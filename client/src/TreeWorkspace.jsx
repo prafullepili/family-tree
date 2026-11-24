@@ -13,6 +13,7 @@ async function request(path, method = 'GET', body) {
 }
 
 export default function TreeWorkspace({ user, onLogout, onAccount }) {
+  const mergeToken = new URLSearchParams(location.search).get('merge') || '';
   const editingLocked = useSyncExternalStore(subscribeTreeEditLock, isTreeEditingLocked, () => false);
   const [trees, setTrees] = useState([]);
   const [active, setActive] = useState(null);
@@ -78,7 +79,7 @@ export default function TreeWorkspace({ user, onLogout, onAccount }) {
   return (
     <div className={`tree-workspace ${active?.role === 'viewer' ? 'tree-workspace-viewer' : ''}`}>
       {!active && <div className="workspace-loading">{error || 'Opening your family trees…'}{error && <button onClick={() => loadTrees().catch((e) => setError(e.message))}>Retry</button>}</div>}
-      {active && <div className="workspace-content" inert={panel ? '' : undefined}><App key={`${active.id}:${canvasRevision}`} authUser={{ ...user, treeId: active.id, treeRole: active.role }} onLogout={onLogout} workspaceActions={<WorkspaceHeaderActions onAccount={onAccount} editingLocked={editingLocked} trees={trees} active={active} onSelectTree={selectTree} onOpenPanel={setPanel} />} /></div>}
+      {active && <div className="workspace-content" inert={panel ? '' : undefined}><App key={`${active.id}:${canvasRevision}`} authUser={{ ...user, treeId: active.id, treeRole: active.role }} onLogout={onLogout} mergeToken={mergeToken} workspaceActions={<WorkspaceHeaderActions onAccount={onAccount} editingLocked={editingLocked} trees={trees} active={active} onSelectTree={selectTree} onOpenPanel={setPanel} />} /></div>}
       {panel && <>
         <button className="workspace-scrim" aria-label="Close tree panel" onClick={() => setPanel('')} />
         <aside ref={panelRef} className="workspace-panel" role="dialog" aria-modal="true" aria-label={title} onKeyDown={(event) => {

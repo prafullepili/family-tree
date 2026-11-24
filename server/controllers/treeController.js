@@ -1,7 +1,8 @@
 import Person from '../models/Person.js';
-import { FamilyTree, TreeMembership, TreeInvitation, TreeActivity } from '../models/treeModels.js';
+import { FamilyTree, TreeMembership, TreeInvitation, PersonMergeInvitation, TreeActivity } from '../models/treeModels.js';
 import { ensurePersonalTree, recordActivity } from '../services/treeService.js';
 import { hashToken, randomToken, normalizeIdentity, isValidEmail } from '../authSecurity.js';
+import { connectedFamily } from '../services/personMergeService.js';
 export const listTrees = async (req, res, next) => {
   try {
     await ensurePersonalTree(req.user);
@@ -214,6 +215,51 @@ export const revokeInvitation = async (req, res, next) => {
     });
     await recordActivity(req, 'Revoked invitation');
     res.sendStatus(204);
+  } catch (error) {
+    next(error);
+  }
+};
+export const createPersonMergeInvitation = async (req, res, next) => {
+  try {
+    const person = await Person.findOne({ _id: req.body?.personId, treeId: req.tree._id, deletedAt: null }).select('_id firstName lastName');
+    if (!person) return res.status(404).json({ error: 'Choose an active person in this tree.' });
+    const token = randomToken();
+    const expiresAt = new Date(Date.now() + 7 * 86400000);
+    await PersonMergeInvitation.create({
+      sourceTreeId: req.tree._id,
+      sourcePersonId: person._id,
+      tokenHash: hashToken(token),
+      invitedBy: req.user._id,
+      expiresAt,
+    });
+    const personName = [person.firstName, person.lastName].filter(Boolean).join(' ');
+    await recordActivity(req, 'Created person merge invitation', personName);
+    res.status(201).json({ token, expiresAt, personName });
+  } catch (error) {
+    next(error);
+  }
+};
+export const getPersonMergeInvitation = async (req, res, next) => {
+  try {
+    const invitation = await PersonMergeInvitation.findOne({
+      tokenHash: hashToken(req.params.token),
+      expiresAt: { $gt: new Date() },
+      acceptedAt: null,
+      revokedAt: null,
+    }).populate('sourceTreeId', 'name');
+    if (!invitation?.sourceTreeId) return res.status(404).json({ error: 'This person merge invitation is expired or unavailable.' });
+    const [person, people] = await Promise.all([
+      Person.findOne({ _id: invitation.sourcePersonId, treeId: invitation.sourceTreeId._id, deletedAt: null }).select('_id firstName lastName'),
+      Person.find({ treeId: invitation.sourceTreeId._id, deletedAt: null }).select('_id parentIds partnerIds siblingIds relationshipLinks').lean(),
+    ]);
+    if (!person) return res.status(404).json({ error: 'The invited person is no longer in the source tree.' });
+    const familyCount = connectedFamily(people, person._id).length;
+    res.json({
+      sourceTreeName: invitation.sourceTreeId.name,
+      person: { id: String(person._id), firstName: person.firstName, lastName: person.lastName },
+      familyCount,
+      expiresAt: invitation.expiresAt,
+    });
   } catch (error) {
     next(error);
   }

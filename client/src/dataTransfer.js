@@ -20,9 +20,10 @@ function personDataRow(person, peopleById) {
     .join('; ');
   const otherRelationships = (person.relationshipLinks || []).map((link) => `${personName(link.personId)}${link.label ? ` (${link.label})` : ''}`).join('; ');
   return {
+    ID: String(person.id || person._id || ''),
     'First Name': person.firstName || '',
     'Last Name': person.lastName || '',
-    'Maiden Name': person.maidenName || '',
+    'Birth Family Name': person.maidenName || '',
     Gender: person.gender || 'unspecified',
     Born: exportDate(person.birthDate),
     Died: exportDate(person.deathDate),
@@ -32,9 +33,14 @@ function personDataRow(person, peopleById) {
     'Family Notes': person.notes || '',
     'Photo URL': person.photoUrl || '',
     Parents: namedPeople(person.parentIds),
+    'Parent IDs': JSON.stringify(person.parentIds || []),
     Partners: partners,
+    'Partner IDs': JSON.stringify(person.partnerIds || []),
     Siblings: namedPeople(person.siblingIds),
+    'Sibling IDs': JSON.stringify(person.siblingIds || []),
+    'Partner Relationships': JSON.stringify(person.partnerRelationships || []),
     'Other Relationships': otherRelationships,
+    'Other Relationship IDs': JSON.stringify(person.relationshipLinks || []),
     'Tree X': Number.isFinite(person.treeX) ? person.treeX : '',
     'Tree Y': Number.isFinite(person.treeY) ? person.treeY : '',
   };
@@ -99,7 +105,7 @@ function normalizeImportedRows(rows) {
       sourceId: String(row.ID || row.id || `import-${index + 1}`).trim(),
       firstName: String(row['First Name'] || row.firstName || '').trim(),
       lastName: String(row['Last Name'] || row.lastName || '').trim(),
-      maidenName: String(row['Maiden Name'] || row.maidenName || '').trim(),
+      maidenName: String(row['Birth Family Name'] || row['Maiden Name'] || row.maidenName || '').trim(),
       gender: ['female', 'male', 'nonbinary', 'unspecified'].includes(String(row.Gender || row.gender || '').toLowerCase()) ? String(row.Gender || row.gender).toLowerCase() : 'unspecified',
       birthDate: String(row.Born || row.birthDate || '').trim() || null,
       deathDate: String(row.Died || row.deathDate || '').trim() || null,
@@ -112,7 +118,7 @@ function normalizeImportedRows(rows) {
       partnerIds: parseJsonCell(row['Partner IDs'] ?? row.partnerIds).map(String),
       siblingIds: parseJsonCell(row['Sibling IDs'] ?? row.siblingIds).map(String),
       partnerRelationships: parseJsonCell(row['Partner Relationships'] ?? row.partnerRelationships),
-      relationshipLinks: parseJsonCell(row['Other Relationships'] ?? row.relationshipLinks),
+      relationshipLinks: parseJsonCell(row['Other Relationship IDs'] ?? row.relationshipLinks ?? row['Other Relationships']),
       treeX: row['Tree X'] === '' || row.treeX === '' ? null : Number(row['Tree X'] ?? row.treeX),
       treeY: row['Tree Y'] === '' || row.treeY === '' ? null : Number(row['Tree Y'] ?? row.treeY),
     }))

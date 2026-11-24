@@ -3450,6 +3450,59 @@ button {
   color: var(--muted);
   font-size: 12px;
 }
+.branch-import-field {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 600;
+}
+.branch-import-field select,
+.branch-import-field input {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+}
+.branch-import-search-empty { display: block; padding: 10px; color: var(--muted); font-size: 11px; font-weight: 400; }
+.merge-target-options {
+  max-height: 190px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 8px 20px #10181222;
+}
+.merge-target-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  padding: 7px 10px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.merge-target-option.active { background: var(--surface-soft); }
+.merge-target-option.selected { color: var(--accent); font-weight: 600; }
+.merge-target-option small { flex: none; color: var(--muted); font-size: 10px; font-weight: 400; }
+.merge-invitation-dialog { width: min(460px, 100%); }
+.merge-invitation-link-label { display: grid; gap: 6px; margin: 0 0 16px; color: var(--text-soft); font-size: 11px; font-weight: 600; }
+.merge-invitation-link-label input { width: 100%; min-width: 0; height: 38px; padding: 0 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); font: inherit; font-weight: 400; }
+.merge-invitation-dialog > div:not(.arrange-dialog-icon) { flex-wrap: wrap; }
+.merge-invitation-dialog > div .arrange-action { display: inline-flex; align-items: center; gap: 6px; }
+.import-data-dialog > div:not(.arrange-dialog-icon) {
+  flex-wrap: wrap;
+}
 .link-visibility-option {
   min-height: 36px;
   display: flex;
@@ -4435,6 +4488,33 @@ button {
   background: var(--accent-bg);
   color: var(--accent);
 }
+.family-merge-invite-button {
+  width: 100%;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.family-merge-invite-button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.family-merge-invite-button:disabled { opacity: .55; cursor: wait; }
+.linked-family-refresh { display: grid; gap: 7px; margin: 10px 0; }
+.linked-family-refresh > small { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.linked-family-refresh .family-merge-invite-button { margin: 0; }
+.linked-family-stop-button { justify-self: start; border: 0; padding: 2px 0; background: transparent; color: var(--muted); font: inherit; font-size: 11px; text-decoration: underline; cursor: pointer; }
+.linked-family-stop-button:disabled { opacity: .55; cursor: wait; }
+.linked-family-refresh .spin { animation: linked-family-spin 1s linear infinite; }
+@keyframes linked-family-spin { to { transform: rotate(360deg); } }
 .details-empty {
   height: 60vh;
   display: flex;

@@ -1,6 +1,10 @@
 import mongoose from 'mongoose';
 import Person from '../models/Person.js';
 import { sanitizeOwnedRelationships, syncPartners, syncSiblings, syncRelationshipLinks } from '../services/personRelationships.js';
+import { PersonMergeInvitation, TreeFamilyLink, FamilyTree } from '../models/treeModels.js';
+import { hashToken } from '../authSecurity.js';
+import { attachPersonFamilyAsParent, mergePersonFamily, refreshLinkedFamily } from '../services/personMergeService.js';
+import { recordActivity } from '../services/treeService.js';
 export const listPeople = async (req, res, next) => {
   try {
     res.json(await Person.find({
@@ -185,11 +189,133 @@ export const importPeople = async (req, res, next) => {
       ordered: false
     });
     res.json({
-      importedCount: operations.length
+      importedCount: operations.length,
+      sourceIds: Object.fromEntries([...idMap].map(([sourceId, personId]) => [sourceId, String(personId)]))
     });
   } catch (e) {
     next(e);
   }
+};
+export const acceptPersonMergeInvitation = async (req, res, next) => {
+  if (!mongoose.isValidObjectId(req.body?.targetPersonId) || !String(req.body?.token || '').trim()) {
+    return res.status(400).json({ error: 'Choose the matching person and open a valid merge invitation.' });
+  }
+  let invitation;
+  try {
+    invitation = await PersonMergeInvitation.findOneAndUpdate({
+      tokenHash: hashToken(req.body.token),
+      expiresAt: { $gt: new Date() },
+      acceptedAt: null,
+      revokedAt: null,
+    }, {
+      $set: { acceptedAt: new Date(), acceptedBy: req.user._id },
+    }, { new: true });
+    if (!invitation) return res.status(400).json({ error: 'This person merge invitation is expired or has already been used.' });
+    if (String(invitation.sourceTreeId) === String(req.tree._id)) {
+      await PersonMergeInvitation.updateOne({ _id: invitation._id }, { $unset: { acceptedAt: 1, acceptedBy: 1 } });
+      invitation = null;
+      return res.status(400).json({ error: 'Choose a different destination tree for this merge.' });
+    }
+    const [targetPerson, sourcePeople] = await Promise.all([
+      Person.findOne({ _id: req.body.targetPersonId, treeId: req.tree._id, deletedAt: null }),
+      Person.find({ treeId: invitation.sourceTreeId, deletedAt: null }).lean(),
+    ]);
+    if (!targetPerson) {
+      await PersonMergeInvitation.updateOne({ _id: invitation._id }, { $unset: { acceptedAt: 1, acceptedBy: 1 } });
+      invitation = null;
+      return res.status(404).json({ error: 'The matching person is no longer in your tree.' });
+    }
+    const mergeOptions = {
+      sourcePeople,
+      sourcePersonId: invitation.sourcePersonId,
+      targetPerson,
+      targetTreeId: req.tree._id,
+    };
+    const result = req.body?.mode === 'add-as-parent'
+      ? await attachPersonFamilyAsParent(mergeOptions)
+      : await mergePersonFamily(mergeOptions);
+    let refreshAvailable = false;
+    if (req.body?.linkMode !== 'copy') {
+      try {
+        await TreeFamilyLink.create({
+          sourceTreeId: invitation.sourceTreeId,
+          destinationTreeId: req.tree._id,
+          sourcePersonId: invitation.sourcePersonId,
+          targetPersonId: targetPerson._id,
+          relationType: req.body?.mode === 'add-as-parent' ? 'parent' : 'matched',
+          members: Object.entries(result.mapping || {}).map(([sourcePersonId, destinationPersonId]) => ({ sourcePersonId, destinationPersonId })),
+          createdBy: req.user._id,
+          lastSyncedAt: new Date(),
+        });
+        refreshAvailable = true;
+      } catch (linkError) {
+        console.error('Family merge succeeded, but the refresh link could not be saved:', linkError.message);
+      }
+    }
+    await recordActivity(req, 'Merged invited family', `${targetPerson.firstName} ${targetPerson.lastName || ''}`.trim()).catch(() => {});
+    res.json({ ...result, refreshAvailable });
+  } catch (error) {
+    if (invitation) await PersonMergeInvitation.updateOne({ _id: invitation._id, acceptedBy: req.user._id }, { $unset: { acceptedAt: 1, acceptedBy: 1 } }).catch(() => {});
+    if (error.message?.includes('no longer') || error.message?.includes('more than 5,000') || error.message?.includes('already has two parents')) return res.status(400).json({ error: error.message });
+    next(error);
+  }
+};
+
+export const listLinkedFamilies = async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.query.personId)) return res.json([]);
+    const links = await TreeFamilyLink.find({
+      destinationTreeId: req.tree._id,
+      isActive: true,
+      $or: [
+        { targetPersonId: req.query.personId },
+        { 'members.destinationPersonId': req.query.personId },
+      ],
+    }).lean();
+    const sourceTreeIds = [...new Set(links.map((link) => String(link.sourceTreeId)))];
+    const sourcePersonIds = [...new Set(links.map((link) => String(link.sourcePersonId)))];
+    const [trees, roots] = await Promise.all([
+      FamilyTree.find({ _id: { $in: sourceTreeIds } }).select('_id name').lean(),
+      Person.find({ _id: { $in: sourcePersonIds }, deletedAt: null }).select('_id firstName lastName').lean(),
+    ]);
+    const treeNames = new Map(trees.map((tree) => [String(tree._id), tree.name]));
+    const rootNames = new Map(roots.map((person) => [String(person._id), `${person.firstName} ${person.lastName || ''}`.trim()]));
+    res.json(links.map((link) => ({
+      id: String(link._id),
+      sourceTreeName: treeNames.get(String(link.sourceTreeId)) || 'Source family tree',
+      sourcePersonName: rootNames.get(String(link.sourcePersonId)) || 'Linked person',
+      targetPersonId: String(link.targetPersonId),
+      lastSyncedAt: link.lastSyncedAt || null,
+      memberCount: link.members?.length || 0,
+    })));
+  } catch (error) { next(error); }
+};
+
+export const refreshLinkedFamilyController = async (req, res, next) => {
+  try {
+    const link = await TreeFamilyLink.findOne({ _id: req.params.linkId, destinationTreeId: req.tree._id, isActive: true });
+    if (!link) return res.status(404).json({ error: 'This family refresh link is unavailable.' });
+    const sourcePeople = await Person.find({ treeId: link.sourceTreeId, deletedAt: null }).lean();
+    const result = await refreshLinkedFamily({ link, sourcePeople });
+    await recordActivity(req, 'Refreshed linked family', link.sourceTreeId).catch(() => {});
+    res.json({ ...result, lastSyncedAt: link.lastSyncedAt });
+  } catch (error) {
+    if (error.message?.includes('no longer') || error.message?.includes('more than 5,000') || error.message?.includes('could not be restored') || error.message?.includes('already has two parents')) return res.status(400).json({ error: error.message });
+    next(error);
+  }
+};
+
+export const disconnectLinkedFamilyController = async (req, res, next) => {
+  try {
+    const link = await TreeFamilyLink.findOneAndUpdate(
+      { _id: req.params.linkId, destinationTreeId: req.tree._id, isActive: true },
+      { $set: { isActive: false } },
+      { new: true },
+    );
+    if (!link) return res.status(404).json({ error: 'This family refresh link is unavailable.' });
+    await recordActivity(req, 'Stopped linked family refresh', link.sourceTreeId).catch(() => {});
+    res.json({ disconnected: true, copiedPeopleRemain: true });
+  } catch (error) { next(error); }
 };
 export const createPerson = async (req, res, next) => {
   try {

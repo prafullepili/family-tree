@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { CalendarDays, Heart, MapPin, Pencil, Trash2, UsersRound } from 'lucide-react';
+import { CalendarDays, GitMerge, Heart, MapPin, Pencil, RefreshCw, Trash2, UsersRound } from 'lucide-react';
 import { formatLongDate, fullName, relationshipLabel, year } from './appHelpers.js';
 import { PersonAvatar } from './TreeRenderComponents.jsx';
 
@@ -36,6 +36,11 @@ export default function PersonDetailsPanel({
   onOpenLinkedPerson,
   onClosePanel,
   onRequestDelete,
+  onInviteToMerge,
+  linkedFamily,
+  isRefreshingLinkedFamily = false,
+  onRefreshLinkedFamily,
+  onDisconnectLinkedFamily,
 }) {
   return (
     <>
@@ -160,6 +165,20 @@ export default function PersonDetailsPanel({
                 ) : (
                   <p className="details-links-empty">No family links added yet.</p>
                 )}
+                {linkedFamily && (
+                  <div className="linked-family-refresh">
+                    <small>Linked to {linkedFamily.sourcePersonName} in {linkedFamily.sourceTreeName}</small>
+                    <button className="family-merge-invite-button" onClick={onRefreshLinkedFamily} disabled={editingLocked || isRefreshingLinkedFamily}>
+                      <RefreshCw size={15} className={isRefreshingLinkedFamily ? 'spin' : ''} />
+                      {isRefreshingLinkedFamily ? 'Refreshing family…' : 'Refresh linked family'}
+                    </button>
+                    <small>{linkedFamily.lastSyncedAt ? `Last refreshed ${new Date(linkedFamily.lastSyncedAt).toLocaleString()}` : 'Updates appear when you refresh.'}</small>
+                    <button type="button" className="linked-family-stop-button" onClick={onDisconnectLinkedFamily} disabled={editingLocked || isRefreshingLinkedFamily}>Stop live link</button>
+                  </div>
+                )}
+                <button className="family-merge-invite-button" onClick={() => onInviteToMerge(selected)} disabled={editingLocked}>
+                  <GitMerge size={15} /> Invite to merge this family
+                </button>
                 <div className="details-actions-row">
                   <button className="details-cancel-button" onClick={onClosePanel}>
                     Cancel

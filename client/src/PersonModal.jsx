@@ -231,7 +231,7 @@ export default function PersonModal({ modal, people, onClose, onSave }) {
             <label>First name *<input required value={form.firstName} onChange={(event) => change('firstName', event.target.value)} placeholder="First name" /></label>
             <label>Last name<input value={form.lastName} onChange={(event) => change('lastName', event.target.value)} placeholder="Last name" /></label>
           </div>
-          <div className="person-form-row one-field-row maiden-name-row"><label>Maiden name<input value={form.maidenName} onChange={(event) => change('maidenName', event.target.value)} placeholder="Birth surname" /></label></div>
+          <div className="person-form-row one-field-row maiden-name-row"><label>Birth family name<input value={form.maidenName} onChange={(event) => change('maidenName', event.target.value)} placeholder="Family name at birth" /></label></div>
           <div className="person-form-row three-field-row">
             <label>Born<input type="date" value={form.birthDate} onChange={(event) => change('birthDate', event.target.value)} /></label>
             <label>Died<input type="date" value={form.deathDate} onChange={(event) => change('deathDate', event.target.value)} /></label>

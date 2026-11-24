@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { listTrees, createTree, acceptInvitation, listMembers, updateMember, removeMember, listInvitations, createInvitation, revokeInvitation, listActivity, listDeletedPeople, restorePerson } from '../controllers/treeController.js';
+import { listTrees, createTree, acceptInvitation, listMembers, updateMember, removeMember, listInvitations, createInvitation, revokeInvitation, createPersonMergeInvitation, getPersonMergeInvitation, listActivity, listDeletedPeople, restorePerson } from '../controllers/treeController.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireTree, ownerOnly } from '../middleware/treeAccess.js';
 export function createTreeRouter() {
@@ -8,6 +8,8 @@ export function createTreeRouter() {
   router.get("/", listTrees);
   router.post("/", createTree);
   router.post("/accept-invitation", acceptInvitation);
+  router.get("/person-merge-invitations/:token", getPersonMergeInvitation);
+  router.post("/:treeId/person-merge-invitations", requireTree, createPersonMergeInvitation);
   router.use('/:treeId', requireTree);
   router.get("/:treeId/members", listMembers);
   router.patch("/:treeId/members/:memberId", ownerOnly, updateMember);
