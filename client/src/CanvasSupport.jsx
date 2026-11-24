@@ -29,7 +29,7 @@ export function CanvasHelp({ open, controlRef, onToggle }) {
           </p>
           <p>
             <strong>Move and zoom the canvas</strong>
-            <span>On desktop, hold Space and drag, or drag with the middle mouse button. On phone, drag empty space. Pinch with two fingers or use Ctrl/⌘ + wheel to zoom.</span>
+            <span>On desktop, hold Space and drag, or drag with the middle mouse button. Double-click an area to zoom in there. On phone, drag empty space. Pinch with two fingers or use Ctrl/⌘ + wheel to zoom.</span>
           </p>
           <p>
             <strong>Inspect relationships</strong>

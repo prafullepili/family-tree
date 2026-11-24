@@ -5,6 +5,12 @@ export function canvasGestureHandlers({ viewport, drag, pinch, zoomValue, pendin
   const limit = (value) => Math.max(0.1, Math.min(maxCanvasZoom, value));
   const distance = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
   return {
+    dblclick(event) {
+      if (event.button !== 0 || event.target.closest('.tree-node-edit,.tree-node-info,.tree-node-quick-add,.connector-hit,input,textarea,select')) return;
+      event.preventDefault();
+      const base = pendingZoom.current?.nextZoom ?? zoomValue.current;
+      zoomAround(event.clientX, event.clientY, limit(base * (0.88 / 0.6)));
+    },
     wheel(event) {
       if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault(); event.stopPropagation();
